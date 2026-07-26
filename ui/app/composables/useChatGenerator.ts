@@ -191,7 +191,7 @@ export const useChatGenerator = (
         message: string | null = null,
         files: FileSystemObject[] | null = null,
     ) => {
-        let newNodeId: string | undefined;
+        let generatorNodeId: string | undefined;
         syncUpcomingModelDefaults();
 
         if (forcedNodeId) {
@@ -201,13 +201,17 @@ export const useChatGenerator = (
                 return;
             }
 
-            newNodeId = createNodeFromVariant(
+            const createdNodes = createNodeFromVariant(
                 lastestMessage.type,
                 openChatId.value as string,
                 [NodeTypeEnum.PROMPT],
                 getTextFromMessage(lastestMessage),
                 forcedNodeId,
             );
+            generatorNodeId = createdNodes.generatorNodeId;
+            if (createdNodes.promptNodeId) {
+                lastestMessage.prompt_node_id = createdNodes.promptNodeId;
+            }
 
             if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
                 addFilesPromptInputNodes(
@@ -216,16 +220,17 @@ export const useChatGenerator = (
                 );
             }
         } else if (message && selectedNodeType.value) {
-            newNodeId = createNodeFromVariant(
+            const createdNodes = createNodeFromVariant(
                 selectedNodeType.value.nodeType,
                 openChatId.value as string,
                 [NodeTypeEnum.PROMPT],
                 message,
             );
+            generatorNodeId = createdNodes.generatorNodeId;
 
             let filesContent: MessageContent[] = [];
             if (files && files.length > 0) {
-                addFilesPromptInputNodes(files, newNodeId || DEFAULT_NODE_ID);
+                addFilesPromptInputNodes(files, generatorNodeId || DEFAULT_NODE_ID);
                 filesContent = files.map((file) => fileToMessageContent(file));
             }
 
@@ -239,29 +244,30 @@ export const useChatGenerator = (
                     ...filesContent,
                 ],
                 model: getCurrentModelText(NodeTypeEnum.TEXT_TO_TEXT),
-                node_id: newNodeId || '',
+                node_id: generatorNodeId || '',
+                prompt_node_id: createdNodes.promptNodeId,
                 type: NodeTypeEnum.TEXT_TO_TEXT,
                 data: null,
                 usageData: null,
             });
         }
 
-        if (!newNodeId) {
+        if (!generatorNodeId) {
             console.warn('No text-to-text node ID found, skipping message send.');
             return;
         }
 
-        session.value.fromNodeId = newNodeId;
+        session.value.fromNodeId = generatorNodeId;
 
-        if (openChatId.value && openChatId.value !== newNodeId) {
-            migrateSessionId(openChatId.value, newNodeId);
-            openChatId.value = newNodeId;
+        if (openChatId.value && openChatId.value !== generatorNodeId) {
+            migrateSessionId(openChatId.value, generatorNodeId);
+            openChatId.value = generatorNodeId;
         }
 
         await waitForRender();
 
         setTimeout(() => {
-            teleportViewportToNode(graphId.value, newNodeId);
+            teleportViewportToNode(graphId.value, generatorNodeId);
         }, 100);
 
         await generate();

@@ -39,6 +39,8 @@ export const SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID =
 export const SELECTED_FETCHED_PAGE_CASE_URL = 'https://duplicate.example/article';
 export const SELECTED_FETCHED_PAGE_FIRST_CONTENT = 'FIRST_DUPLICATE_OCCURRENCE_CONTENT';
 export const SELECTED_FETCHED_PAGE_SECOND_CONTENT = 'SECOND_DUPLICATE_OCCURRENCE_CONTENT';
+export const SANDBOX_ARTIFACT_FILE_ID = '7a519687-f09e-4861-bf66-9f0530ae93de';
+export const SANDBOX_ARTIFACT_HTML_ID = '8795030b-0253-42bd-b08f-61a85e72fa9d';
 
 const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
     id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
@@ -237,6 +239,7 @@ export type MarkdownRendererFixtureCase = {
     toolCallDetails?: Record<string, unknown>;
     generatedImageIds?: string[];
     embeddedArtifactIds?: string[];
+    downloadableArtifactIds?: string[];
 };
 
 export const MARKDOWN_RENDERER_FIXTURE_CASES: Record<string, MarkdownRendererFixtureCase> = {
@@ -471,6 +474,30 @@ Inline code stays plain: ${INLINE_CODE_DELIMITER}https://code.example/path${INLI
 \`\`\`markdown
 [Code source](https://code.example/path)
 \`\`\``,
+    },
+    incrementalMermaid: {
+        key: 'incrementalMermaid',
+        nodeId: 'fixture-node-incremental-mermaid',
+        rawMessage: `# Stable introduction
+
+This prefix should retain its DOM identity while the diagram streams.
+
+\`\`\`mermaid
+graph TD
+    A[Stream] --> B[Finalize]
+\`\`\``,
+    },
+    sandboxArtifacts: {
+        key: 'sandboxArtifacts',
+        nodeId: 'fixture-node-sandbox-artifacts',
+        rawMessage: `<sandbox_artifact tool_call_id="tool-sandbox" id="${SANDBOX_ARTIFACT_FILE_ID}" kind="file" name="report.txt" path="report.txt" content_type="text/plain"></sandbox_artifact>
+<sandbox_artifact tool_call_id="tool-sandbox" id="${SANDBOX_ARTIFACT_HTML_ID}" kind="file" name="result.html" path="result.html" content_type="text/html"></sandbox_artifact>
+
+[Download report](sandbox-file://${SANDBOX_ARTIFACT_FILE_ID})
+
+[Interactive result](sandbox-html://${SANDBOX_ARTIFACT_HTML_ID})`,
+        downloadableArtifactIds: [SANDBOX_ARTIFACT_FILE_ID],
+        embeddedArtifactIds: [SANDBOX_ARTIFACT_HTML_ID],
     },
 };
 

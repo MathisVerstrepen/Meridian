@@ -1,8 +1,10 @@
 <script lang="ts" setup>
+import type { RenderedMarkdownSegment } from '@/composables/useMarkdownProcessor';
+
 const emit = defineEmits(['triggerScroll']);
 
 defineProps<{
-    thinkingHtml: string;
+    thinkingSegments: RenderedMarkdownSegment[];
     isStreaming?: boolean;
 }>();
 
@@ -65,8 +67,15 @@ const handleToggle = async (isOpen: boolean) => {
                 :class="{
                     'hide-code-scrollbar': isStreaming,
                 }"
-                v-html="thinkingHtml"
-            />
+            >
+                <div
+                    v-for="segment in thinkingSegments"
+                    :key="segment.renderKey"
+                    :data-markdown-segment-key="segment.renderKey"
+                    style="display: contents"
+                    v-html="segment.html"
+                />
+            </div>
         </div>
     </HeadlessDisclosure>
 </template>

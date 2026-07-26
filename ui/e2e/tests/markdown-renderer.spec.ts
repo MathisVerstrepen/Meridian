@@ -1,5 +1,6 @@
 import {
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
+    MARKDOWN_RENDERER_FIXTURE_CASES,
     SELECTED_FETCHED_PAGE_FIRST_CONTENT,
     SELECTED_FETCHED_PAGE_SECOND_CONTENT,
     STREAMING_IMAGE_CASE_PROMPT,
@@ -7,6 +8,7 @@ import {
 import {
     expect,
     expectNoRawMarkers,
+    getLatestMarkdownRendererPerfRun,
     mountMarkdownRendererFixture,
     test,
 } from '../support/markdownRendererFixture';
@@ -85,7 +87,37 @@ test('parses a fenced code block immediately after a tool question placeholder',
     await expect(codeBlock).toContainText('Returns a greeting for the given name.');
     await expect(codeBlock).toContainText('if __name__ == "__main__":');
 
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await responseContainer.getByRole('button', { name: 'Copy code' }).click();
+    await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toContain('def greet(name: str) -> str:');
+
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>', '```python']);
+});
+
+test('renders sandbox download and HTML artifacts declaratively', async ({ page }) => {
+    const { responseContainer } = await mountMarkdownRendererFixture(page, 'sandboxArtifacts');
+    const downloadPromise = page.waitForEvent('download');
+    await responseContainer.getByRole('button', { name: 'Download report' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('report.txt');
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString()).toBe('download fixture content');
+
+    const frame = responseContainer.locator('iframe[title="Interactive result"]');
+    await expect(frame).toHaveAttribute(
+        'src',
+        /\/api\/files\/embed\/8795030b-0253-42bd-b08f-61a85e72fa9d\?v=storage-shim-v1$/,
+    );
+    await expectNoRawMarkers(responseContainer, [
+        'sandbox-file://',
+        'sandbox-html://',
+        'sandbox-download-placeholder',
+        'sandbox-html-placeholder',
+    ]);
 });
 
 test('keeps the final answer visible when a closed THINK block follows a tool question', async ({
@@ -313,6 +345,30 @@ test('adds an external link favicon on the main-thread parser path', async ({ pa
     await expect(responseContainer.locator('a[href="https://code.example/path"]')).toHaveCount(0);
 });
 
+test('reacts to narrow message identity and text revisions', async ({ page }) => {
+    const { responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'externalLinkFaviconsMainThread',
+    );
+    const initialRun = await getLatestMarkdownRendererPerfRun(page);
+
+    await expect(responseContainer.getByRole('heading', { name: 'External sources' })).toBeVisible();
+    await page.getByTestId('apply-same-length-revision').click();
+    await expect(responseContainer.getByRole('heading', { name: 'Revision sources' })).toBeVisible();
+    await expect
+        .poll(async () => (await getLatestMarkdownRendererPerfRun(page)).parseId)
+        .toBeGreaterThan(initialRun.parseId);
+
+    const revisedRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(revisedRun.markdownLength).toBe(initialRun.markdownLength);
+
+    await page.getByTestId('replace-active-message').click();
+    await expect
+        .poll(async () => (await getLatestMarkdownRendererPerfRun(page)).nodeId)
+        .toBe('fixture-node-external-link-favicons-replacement');
+    await expect(responseContainer.getByRole('heading', { name: 'Revision sources' })).toBeVisible();
+});
+
 test('keeps one external link favicon after worker-backed streaming completes', async ({ page }) => {
     const { fixturePage, responseContainer, thinkingButton, thinkingPanel } =
         await mountMarkdownRendererFixture(page, 'externalLinkFaviconsWorkerStreaming', {
@@ -321,6 +377,13 @@ test('keeps one external link favicon after worker-backed streaming completes', 
 
     await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
     await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
+
+    const latestRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(latestRun.status).toBe('completed');
+    expect(latestRun.isStreaming).toBe(false);
+    expect(latestRun.markdownLength).toBe(
+        MARKDOWN_RENDERER_FIXTURE_CASES.externalLinkFaviconsWorkerStreaming.rawMessage.length,
+    );
 
     const workerSource = responseContainer.locator('a[href="https://worker.example/report"]');
     await expect(workerSource).toHaveAttribute('title', 'Worker title');
@@ -334,4 +397,24 @@ test('keeps one external link favicon after worker-backed streaming completes', 
     await expect(thinkingPanel).toContainText('Thinking source');
     await expect(thinkingPanel.locator('[data-external-link-favicon]')).toHaveCount(0);
     await expect(thinkingPanel.locator('a')).not.toHaveClass(/\bwhitespace-nowrap\b/);
+});
+
+test('retains sealed streaming roots and finalizes only pending Mermaid work', async ({ page }) => {
+    const { fixturePage, responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'incrementalMermaid',
+        { streaming: true },
+    );
+
+    await expect(fixturePage).toHaveAttribute('data-stable-prefix-retained', 'true');
+    await expect(responseContainer.locator('pre.mermaid svg')).toHaveCount(1);
+    const fullscreenButton = responseContainer.getByRole('button', { name: 'Enter Fullscreen' });
+    await expect(fullscreenButton).toHaveCount(1);
+    await fullscreenButton.click();
+    await expect(page.getByTestId('fullscreen-mountpoint').locator('svg')).toHaveCount(1);
+
+    const latestRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(latestRun.parsedSegmentCount).toBe(0);
+    expect(latestRun.reusedSegmentCount).toBeGreaterThan(0);
+    expect(latestRun.enhancedSegmentCount).toBe(0);
 });

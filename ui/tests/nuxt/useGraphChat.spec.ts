@@ -45,14 +45,17 @@ describe('useGraphChat createNodeFromVariant', () => {
     it('resolves the main node and attached prompt below collisions after the placement delay', async () => {
         const { createNodeFromVariant } = useGraphChat();
 
-        const mainNodeId = createNodeFromVariant(
+        const createdNodes = createNodeFromVariant(
             NodeTypeEnum.TEXT_TO_TEXT,
             'source-node-id',
             [NodeTypeEnum.PROMPT],
             'Prompt text',
         );
 
-        expect(mainNodeId).toBe('chat-main-id');
+        expect(createdNodes).toEqual({
+            generatorNodeId: 'chat-main-id',
+            promptNodeId: 'attached-prompt-id',
+        });
         expect(stubs.resolveOverlaps).not.toHaveBeenCalled();
 
         await vi.advanceTimersByTimeAsync(1);

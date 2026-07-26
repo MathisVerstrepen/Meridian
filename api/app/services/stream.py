@@ -763,6 +763,7 @@ async def resume_tool_response_to_websocket(
             reasoning_efforts=get_model_reasoning_efforts(
                 str(snapshot.get("model") or ""), available_models
             ),
+            available_models=available_models,
         )
 
         final_data_container: dict[str, Any] = {}
@@ -1013,6 +1014,7 @@ async def propagate_stream_to_websocket(
                 sandbox_input_files=sandbox_input_files,
                 sandbox_input_warnings=sandbox_input_warnings,
                 reasoning_efforts=get_model_reasoning_efforts(request_data.model, available_models),
+                available_models=available_models,
             )
 
             final_data_container: dict[str, Any] = {}
@@ -1229,6 +1231,7 @@ async def handle_chat_completion_stream(
             sandbox_input_files=sandbox_input_files,
             sandbox_input_warnings=sandbox_input_warnings,
             reasoning_efforts=get_model_reasoning_efforts(request_data.model, available_models),
+            available_models=available_models,
         )
 
     # Title generation

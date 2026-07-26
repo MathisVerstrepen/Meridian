@@ -73,18 +73,20 @@ const props = defineProps<{
 const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
 const buttonRef = ref<HTMLElement | null>(null);
+const panelRef = ref<HTMLElement | null>(null);
 const scrollerRef = ref<{ scrollToItem: (index: number) => void } | null>(null);
 const menuPosition = ref({ top: 0, left: 0, zoom: 1 });
 const activeJumpSection = ref<string | null>(null);
 
 const TELEPORTED_MENU_WIDTH = 640;
 const TELEPORTED_MENU_OFFSET = 4;
-const TELEPORTED_MENU_TOP_OFFSET = 276;
+const TELEPORTED_MENU_FALLBACK_HEIGHT = 276;
 const MODEL_ROW_HEIGHT = 40;
 const MODEL_ROW_WITH_HEADER_HEIGHT = 70;
 
 let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
+let panelResizeObserver: ResizeObserver | null = null;
 
 const compatibilityOptions = computed(() => ({
     outputModality: (props.onlyImageModels
@@ -321,6 +323,18 @@ const getTransformationPaneZoom = () => {
     }
 };
 
+const setPanelRef = (panel: unknown) => {
+    if (panel instanceof HTMLElement) {
+        panelRef.value = panel;
+        return;
+    }
+
+    panelRef.value =
+        panel && typeof panel === 'object' && '$el' in panel && panel.$el instanceof HTMLElement
+            ? panel.$el
+            : null;
+};
+
 const updatePanelPosition = () => {
     if (!buttonRef.value) {
         return;
@@ -329,12 +343,15 @@ const updatePanelPosition = () => {
     const rect = buttonRef.value.getBoundingClientRect();
     const zoom = getTransformationPaneZoom();
     const scaledMenuWidth = TELEPORTED_MENU_WIDTH * zoom;
+    const renderedMenuHeight = panelRef.value?.offsetHeight ?? 0;
+    const scaledMenuHeight =
+        (renderedMenuHeight || TELEPORTED_MENU_FALLBACK_HEIGHT) * zoom;
+    const scaledMenuOffset = TELEPORTED_MENU_OFFSET * zoom;
+    const belowTop = rect.bottom + scaledMenuOffset;
+    const opensAbove = props.from === 'top' || belowTop + scaledMenuHeight > window.innerHeight;
 
     menuPosition.value = {
-        top:
-            props.from === 'top'
-                ? rect.top - TELEPORTED_MENU_TOP_OFFSET * zoom
-                : rect.bottom + TELEPORTED_MENU_OFFSET * zoom,
+        top: opensAbove ? rect.top - scaledMenuHeight : belowTop,
         left: props.to === 'right' ? rect.right - scaledMenuWidth : rect.left,
         zoom,
     };
@@ -346,6 +363,9 @@ const clearPositionTracking = () => {
 
     buttonResizeObserver?.disconnect();
     buttonResizeObserver = null;
+
+    panelResizeObserver?.disconnect();
+    panelResizeObserver = null;
 
     window.removeEventListener('resize', updatePanelPosition);
     window.removeEventListener('scroll', updatePanelPosition, true);
@@ -369,6 +389,11 @@ const startPositionTracking = async () => {
     if (buttonRef.value) {
         buttonResizeObserver = new ResizeObserver(updatePanelPosition);
         buttonResizeObserver.observe(buttonRef.value);
+    }
+
+    if (panelRef.value) {
+        panelResizeObserver = new ResizeObserver(updatePanelPosition);
+        panelResizeObserver.observe(panelRef.value);
     }
 
     window.addEventListener('resize', updatePanelPosition);
@@ -625,6 +650,7 @@ onUnmounted(() => {
                 <Teleport to="body">
                     <HeadlessComboboxOptions
                         v-if="!disabled"
+                        :ref="setPanelRef"
                         static
                         class="ui-models-panel fixed z-40 h-fit w-160 overflow-hidden rounded-2xl
                             border text-base focus:outline-none"

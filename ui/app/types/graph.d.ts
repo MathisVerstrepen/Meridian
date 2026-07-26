@@ -154,6 +154,7 @@ interface Message {
     content: MessageContent[];
     model: string | null;
     node_id: string | null;
+    prompt_node_id?: string | null;
     type: NodeTypeEnum;
     data: dict | null;
     usageData: UsageData | null;

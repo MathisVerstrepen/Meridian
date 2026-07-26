@@ -1,4 +1,11 @@
 import type { GraphNode, Project, XYPosition } from '@vue-flow/core';
+import type { GeometryRect } from '@/utils/graphGeometry';
+import { SpatialBucketIndex } from '@/utils/spatialIndex';
+
+interface SelectableNodeEntry {
+    node: GraphNode;
+    rect: GeometryRect;
+}
 
 export function useGraphSelection(
     getNodes: Ref<GraphNode[]>,
@@ -99,39 +106,51 @@ export function useGraphSelection(
             y2: Math.max(start.y, end.y),
         };
 
-        const selectedNodes = getNodes.value.filter((node) => {
+        const nodeMap = new Map(getNodes.value.map((node) => [node.id, node]));
+        const selectionIndex = new SpatialBucketIndex<SelectableNodeEntry>();
+
+        for (const node of getNodes.value) {
             if (
                 !node.position ||
                 !node.dimensions?.width ||
                 !node.dimensions?.height ||
                 node.id.startsWith('group-')
             ) {
-                return false;
+                continue;
             }
-            const nodeBBox = {
+            const nodeRect = {
                 x: node.position.x,
                 y: node.position.y,
-                x2: node.position.x + node.dimensions.width,
-                y2: node.position.y + node.dimensions.height,
+                width: node.dimensions.width,
+                height: node.dimensions.height,
             };
 
             if (node.parentNode) {
-                const parentNode = getNodes.value.find((n) => n.id === node.parentNode);
+                const parentNode = nodeMap.get(node.parentNode);
                 if (parentNode && parentNode.position) {
-                    nodeBBox.x += parentNode.position.x;
-                    nodeBBox.y += parentNode.position.y;
-                    nodeBBox.x2 += parentNode.position.x;
-                    nodeBBox.y2 += parentNode.position.y;
+                    nodeRect.x += parentNode.position.x;
+                    nodeRect.y += parentNode.position.y;
                 }
             }
 
-            return (
-                nodeBBox.x < selectionBBox.x2 &&
-                nodeBBox.x2 > selectionBBox.x &&
-                nodeBBox.y < selectionBBox.y2 &&
-                nodeBBox.y2 > selectionBBox.y
-            );
-        });
+            selectionIndex.insert(nodeRect, { node, rect: nodeRect });
+        }
+
+        const selectedNodes = selectionIndex
+            .query({
+                x: selectionBBox.x,
+                y: selectionBBox.y,
+                width: selectionBBox.x2 - selectionBBox.x,
+                height: selectionBBox.y2 - selectionBBox.y,
+            })
+            .filter(
+                ({ rect }) =>
+                    rect.x < selectionBBox.x2 &&
+                    rect.x + rect.width > selectionBBox.x &&
+                    rect.y < selectionBBox.y2 &&
+                    rect.y + rect.height > selectionBBox.y,
+            )
+            .map(({ node }) => node);
 
         if (selectedNodes.length) {
             addSelectedNodes(selectedNodes);

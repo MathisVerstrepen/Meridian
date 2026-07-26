@@ -325,7 +325,12 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             "max_tokens": normalize_max_tokens(getattr(self.config, "max_tokens", None)),
         }
 
-        tools = get_openrouter_tools(self.selected_tools)
+        tools = get_openrouter_tools(
+            self.selected_tools,
+            include_image_inspection=(
+                self.image_inspection_enabled and _supports_image_inputs(self.model)
+            ),
+        )
         if tools:
             payload["tools"] = tools
 
@@ -336,6 +341,7 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             normalize_openai_request_message(
                 message,
                 include_tool_name=True,
+                preserve_content_parts=_supports_image_inputs(self.model),
                 strip_text=False,
             )
             for message in self.messages
@@ -362,7 +368,14 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             available_tool_names,
         )
 
-        tools = _build_anthropic_tools(get_openrouter_tools(self.selected_tools))
+        tools = _build_anthropic_tools(
+            get_openrouter_tools(
+                self.selected_tools,
+                include_image_inspection=(
+                    self.image_inspection_enabled and _supports_image_inputs(self.model)
+                ),
+            )
+        )
         if tools:
             payload["tools"] = tools
 

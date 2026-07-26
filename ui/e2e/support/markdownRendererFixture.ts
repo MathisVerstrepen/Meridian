@@ -61,6 +61,16 @@ const installMarkdownRendererFixtureRoutes = (
             return;
         }
 
+        const fileId = url.pathname.match(/^\/api\/files\/view\/(.+)$/)?.[1];
+        if (fileId && fixtureCase.downloadableArtifactIds?.includes(fileId)) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain',
+                body: 'download fixture content',
+            });
+            return;
+        }
+
         const embedId = url.pathname.match(/^\/api\/files\/embed\/(.+)$/)?.[1];
         if (embedId && fixtureCase.embeddedArtifactIds?.includes(embedId)) {
             await route.fulfill({
@@ -128,6 +138,9 @@ export type MarkdownRendererPerfRun = {
     measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
     startedAt: number;
     completedAt: number;
+    parsedSegmentCount?: number;
+    reusedSegmentCount?: number;
+    enhancedSegmentCount?: number;
 };
 
 export type MarkdownRendererPerfPhaseName =

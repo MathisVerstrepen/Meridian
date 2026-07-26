@@ -55,6 +55,7 @@ from services.tools import (
     get_tool_runtime,
     resolve_tool_status,
 )
+from services.tools.runtime_results import TransientImageContent, unwrap_tool_execution_result
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -70,6 +71,8 @@ OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60
 OPENAI_CODEX_RPC_TIMEOUT_SECONDS = 30.0
 OPENAI_CODEX_TURN_TIMEOUT_SECONDS = 300.0
 OPENAI_CODEX_MAX_TOOL_ROUNDS = 100
+MAX_SUCCESSFUL_IMAGE_INSPECTIONS_PER_ROUND = 2
+INSPECT_IMAGE_TOOL_NAME = "inspect_image"
 OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 OPENAI_CODEX_ISSUER = "https://auth.openai.com"
 OPENAI_CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
@@ -1418,11 +1421,15 @@ def _normalize_reasoning_effort(config: Any, is_title_generation: bool) -> str |
     return None
 
 
-def _build_dynamic_tools(selected_tools: list[ToolEnum]) -> list[dict[str, Any]]:
+def _build_dynamic_tools(
+    selected_tools: list[ToolEnum], *, include_image_inspection: bool = False
+) -> list[dict[str, Any]]:
     dynamic_tools: list[dict[str, Any]] = []
     seen_names: set[str] = set()
 
-    for tool_definition in get_openrouter_tools(selected_tools):
+    for tool_definition in get_openrouter_tools(
+        selected_tools, include_image_inspection=include_image_inspection
+    ):
         function_payload = tool_definition.get("function")
         if not isinstance(function_payload, dict):
             continue
@@ -1911,9 +1918,13 @@ def _build_openai_codex_direct_input(req: OpenAICodexReqChat) -> list[dict[str, 
     ]
 
 
-def _build_openai_codex_direct_tools(selected_tools: list[ToolEnum]) -> list[dict[str, Any]]:
+def _build_openai_codex_direct_tools(
+    selected_tools: list[ToolEnum], *, include_image_inspection: bool = False
+) -> list[dict[str, Any]]:
     tools: list[dict[str, Any]] = []
-    for dynamic_tool in _build_dynamic_tools(selected_tools):
+    for dynamic_tool in _build_dynamic_tools(
+        selected_tools, include_image_inspection=include_image_inspection
+    ):
         tools.append(
             {
                 "type": "function",
@@ -1962,7 +1973,10 @@ def _build_openai_codex_direct_payload(
     payload: dict[str, Any] = {
         "model": strip_model_prefix(req.model, OPENAI_CODEX_MODEL_PREFIX),
         "input": input_items,
-        "tools": _build_openai_codex_direct_tools(req.selected_tools),
+        "tools": _build_openai_codex_direct_tools(
+            req.selected_tools,
+            include_image_inspection=req.image_inspection_enabled,
+        ),
         "tool_choice": "auto",
         "parallel_tool_calls": False,
         "store": False,
@@ -2325,7 +2339,8 @@ async def _run_openai_codex_direct_tool_call(
     pending_tool_call_id_sink: dict[str, Any] | None,
     item: dict[str, Any],
     mixed_tool_round: bool = False,
-) -> dict[str, Any]:
+    inspection_allowed: bool = True,
+) -> tuple[dict[str, Any], tuple[TransientImageContent, ...]]:
     tool_name = str(item.get("name") or "").strip()
     call_id = str(item.get("call_id") or item.get("id") or "").strip()
     if not call_id:
@@ -2340,11 +2355,26 @@ async def _run_openai_codex_direct_tool_call(
         redis_manager=redis_manager,
         pending_tool_call_id_sink=pending_tool_call_id_sink,
     )
-    tool_result, duration_ms = await bridge._run_tool(handler, tool_name, arguments)
+    if tool_name == INSPECT_IMAGE_TOOL_NAME and not inspection_allowed:
+        tool_result = {
+            "error": "Image inspection limit reached or incompatible tool call in this round.",
+            "file_id": str(arguments.get("file_id") or ""),
+        }
+        duration_ms = 0
+    else:
+        tool_result, duration_ms = await bridge._run_tool(handler, tool_name, arguments)
 
     if tool_name == ASK_USER_TOOL_NAME and mixed_tool_round:
         tool_result = {"error": ASK_USER_BATCH_ERROR}
 
+    tool_result, transient_images = unwrap_tool_execution_result(tool_result)
+    if (
+        tool_name == INSPECT_IMAGE_TOOL_NAME
+        and isinstance(tool_result, dict)
+        and str(tool_result.get("error") or "").startswith("Tool execution failed:")
+    ):
+        tool_result = {"error": "Image inspection failed safely."}
+        transient_images = ()
     normalized_result = normalize_tool_storage_value(tool_result)
     status = resolve_tool_status(tool_result)
     model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
@@ -2400,11 +2430,14 @@ async def _run_openai_codex_direct_tool_call(
             arguments=arguments,
         )
 
-    return {
-        "type": "function_call_output",
-        "call_id": call_id,
-        "output": persisted_payload,
-    }
+    return (
+        {
+            "type": "function_call_output",
+            "call_id": call_id,
+            "output": persisted_payload,
+        },
+        transient_images,
+    )
 
 
 class _OpenAICodexDirectTurnRunner:
@@ -2443,6 +2476,7 @@ class _OpenAICodexDirectTurnRunner:
             client = owned_client
 
         tool_rounds = 0
+        transient_input_item: dict[str, Any] | None = None
         try:
             while True:
                 response_output = await self._stream_one_request(
@@ -2451,6 +2485,9 @@ class _OpenAICodexDirectTurnRunner:
                     headers=headers,
                     input_items=input_items,
                 )
+                if transient_input_item is not None:
+                    input_items = [item for item in input_items if item is not transient_input_item]
+                    transient_input_item = None
                 if self.state.awaiting_user_input:
                     return self._build_output()
                 function_calls = [
@@ -2462,8 +2499,15 @@ class _OpenAICodexDirectTurnRunner:
                     raise ValueError("OpenAI Codex exceeded the maximum tool continuation rounds.")
                 input_items.extend(response_output)
                 mixed_tool_round = len(function_calls) > 1
+                has_ask_user_call = any(
+                    str(item.get("name") or "").strip() == ASK_USER_TOOL_NAME
+                    for item in function_calls
+                )
+                successful_inspections = 0
+                round_transient_images: list[TransientImageContent] = []
                 for function_call in function_calls:
-                    function_output = await _run_openai_codex_direct_tool_call(
+                    tool_name = str(function_call.get("name") or "").strip()
+                    tool_call_result = await _run_openai_codex_direct_tool_call(
                         req=self.req,
                         state=self.state,
                         output=self.output,
@@ -2471,10 +2515,51 @@ class _OpenAICodexDirectTurnRunner:
                         pending_tool_call_id_sink=self.pending_tool_call_id_sink,
                         item=function_call,
                         mixed_tool_round=mixed_tool_round,
+                        inspection_allowed=(
+                            tool_name != INSPECT_IMAGE_TOOL_NAME
+                            or (
+                                not has_ask_user_call
+                                and successful_inspections
+                                < MAX_SUCCESSFUL_IMAGE_INSPECTIONS_PER_ROUND
+                            )
+                        ),
                     )
+                    if isinstance(tool_call_result, tuple):
+                        function_output, transient_images = tool_call_result
+                    else:
+                        # Preserve compatibility with existing test/provider call shims.
+                        function_output = tool_call_result
+                        transient_images = ()
                     if self.state.awaiting_user_input:
                         return self._build_output()
                     input_items.append(function_output)
+                    if transient_images:
+                        round_transient_images.extend(transient_images)
+                        successful_inspections += len(transient_images)
+                if round_transient_images:
+                    content: list[dict[str, Any]] = []
+                    for transient_image in round_transient_images:
+                        content.extend(
+                            [
+                                {
+                                    "type": "input_text",
+                                    "text": (
+                                        "Inspection image for file UUID "
+                                        f"{transient_image.file_id}:"
+                                    ),
+                                },
+                                {
+                                    "type": "input_image",
+                                    "image_url": transient_image.data_uri,
+                                },
+                            ]
+                        )
+                    transient_input_item = {
+                        "type": "message",
+                        "role": "user",
+                        "content": content,
+                    }
+                    input_items.append(transient_input_item)
                 tool_rounds += 1
                 if self.state.awaiting_user_input:
                     return self._build_output()

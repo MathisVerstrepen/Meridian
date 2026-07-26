@@ -6,6 +6,7 @@ import {
     calculateOverlapTranslation,
     type OverlapResolutionDirection,
 } from '@/utils/graphGeometry';
+import { SpatialBucketIndex } from '@/utils/spatialIndex';
 import type { ComputedRef, Ref } from 'vue';
 
 export const AUTO_PLACEMENT_GAP = 150;
@@ -14,6 +15,12 @@ interface ResolveOverlapOptions {
     direction?: OverlapResolutionDirection;
     gap?: number;
     maxIterations?: number;
+}
+
+interface BlockerEntry {
+    node: NodeWithDimensions;
+    order: number;
+    rect: Rect;
 }
 
 export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<string>) => {
@@ -86,25 +93,38 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
             return;
         }
 
+        const blockerIndex = new SpatialBucketIndex<BlockerEntry>();
+        otherNodes.forEach((node, order) => {
+            const rect = nodeToRect(node);
+            blockerIndex.insert(rect, { node, order, rect });
+        });
+
         let iteration = 0;
         while (iteration < aOptions.maxIterations) {
             const movableNodeRects = movableNodes.map(nodeToRect);
 
-            const intersectingNode = otherNodes.find((otherNode) => {
-                const otherNodeRect = nodeToRect(otherNode);
-                return movableNodeRects.some((memberRect) =>
-                    isNodeIntersecting(memberRect, otherNodeRect),
-                );
-            });
+            const candidateEntries = new Map<number, BlockerEntry>();
+            for (const memberRect of movableNodeRects) {
+                for (const candidate of blockerIndex.query(memberRect)) {
+                    candidateEntries.set(candidate.order, candidate);
+                }
+            }
 
-            if (!intersectingNode) {
+            const intersectingEntry = [...candidateEntries.values()]
+                .sort((left, right) => left.order - right.order)
+                .find((candidate) =>
+                    movableNodeRects.some((memberRect) =>
+                        isNodeIntersecting(memberRect, candidate.rect),
+                    ),
+                );
+
+            if (!intersectingEntry) {
                 return;
             }
 
-            const intersectingNodeRect = nodeToRect(intersectingNode);
             const delta = calculateOverlapTranslation(
                 movableNodeRects,
-                intersectingNodeRect,
+                intersectingEntry.rect,
                 aOptions.direction,
                 aOptions.gap,
             );

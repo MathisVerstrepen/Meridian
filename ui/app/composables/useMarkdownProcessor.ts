@@ -1,158 +1,237 @@
-import { createApp } from 'vue';
 import type { FetchedPage, WebSearch } from '@/types/webSearch';
 import { parseAssistantContent, type ParsedAutoToolSelection } from '@/utils/markdownParsing';
-import CodeBlockCopyButton from '~/components/ui/chat/utils/copyButton.vue';
-
-const FullScreenButton = defineAsyncComponent(
-    () => import('~/components/ui/chat/utils/fullScreenButton.vue'),
-);
-
-type RenderedMarkdownSections = {
-    thinkingHtml: string;
-    responseHtml: string;
-};
+import {
+    buildMarkdownSegmentParserInput,
+    collectMarkdownReferenceDefinitions,
+    createMarkdownSegmentDrafts,
+    type MarkdownSegmentChannel,
+    type MarkdownSegmentDraft,
+    type MarkdownSegmentState,
+} from '@/utils/markdownSegments';
+import type {
+    MarkdownResponseHtmlPreparer,
+    MarkdownResponseRenderToken,
+} from '@/types/markdownRenderToken';
 
 type ResponseMarkdownTransformer = (markdown: string) => string;
 
-export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
-    const thinkingHtml = ref('');
-    const responseHtml = ref('');
+export type RenderedMarkdownSegment = Readonly<{
+    id: string;
+    renderKey: string;
+    channel: MarkdownSegmentChannel;
+    start: number;
+    end: number;
+    source: string;
+    state: MarkdownSegmentState;
+    html: string;
+    tokens: readonly MarkdownResponseRenderToken[];
+    parserContextFingerprint: string;
+    enhancementFingerprint: string;
+    revision: number;
+}>;
+
+export type MarkdownProcessOptions = {
+    cacheKey?: string;
+    isStreaming?: boolean;
+    responseHtmlPreparer?: MarkdownResponseHtmlPreparer;
+};
+
+export type MarkdownProcessResult = {
+    committed: boolean;
+    changedResponseRenderKeys: string[];
+    obsoleteResponseRenderKeys: string[];
+    parsedSegmentCount: number;
+    reusedSegmentCount: number;
+};
+
+type ChannelBuild = {
+    segments: RenderedMarkdownSegment[];
+    parseJobs: Array<Promise<void>>;
+    parsedSegmentCount: number;
+    reusedSegmentCount: number;
+};
+
+const emptyResult = (committed: boolean): MarkdownProcessResult => ({
+    committed,
+    changedResponseRenderKeys: [],
+    obsoleteResponseRenderKeys: [],
+    parsedSegmentCount: 0,
+    reusedSegmentCount: 0,
+});
+
+export const useMarkdownProcessor = () => {
+    const thinkingSegments = shallowRef<RenderedMarkdownSegment[]>([]);
+    const responseSegments = shallowRef<RenderedMarkdownSegment[]>([]);
+    const thinkingHtml = computed(() => thinkingSegments.value.map((segment) => segment.html).join(''));
+    const responseHtml = computed(() => responseSegments.value.map((segment) => segment.html).join(''));
     const autoToolSelection = ref<ParsedAutoToolSelection | null>(null);
     const webSearches = ref<WebSearch[]>([]);
     const fetchedPages = ref<FetchedPage[]>([]);
     const isError = ref(false);
 
     let activeProcessId = 0;
+    let committedCacheKey: string | null = null;
+    let nextSegmentId = 0;
 
-    const resetState = () => {
-        thinkingHtml.value = '';
-        responseHtml.value = '';
-        autoToolSelection.value = null;
-        webSearches.value = [];
-        fetchedPages.value = [];
-        isError.value = false;
+    const createSegmentId = (channel: MarkdownSegmentChannel): string => {
+        nextSegmentId += 1;
+        return `${channel}-${nextSegmentId}`;
     };
 
-    const parseMarkdownSections = async (
-        thinkingMarkdown: string,
-        responseMarkdown: string,
-        markedParser: (md: string) => Promise<string>,
-    ): Promise<RenderedMarkdownSections> => {
-        if (thinkingMarkdown && responseMarkdown) {
-            const separator = `<div data-markdown-renderer-split="${crypto.randomUUID()}"></div>`;
-            const combinedHtml = await markedParser(
-                `${thinkingMarkdown}\n\n${separator}\n\n${responseMarkdown}`,
-            );
-            const splitSections = combinedHtml.split(separator);
+    const buildChannel = (
+        drafts: MarkdownSegmentDraft[],
+        previous: RenderedMarkdownSegment[],
+        parser: (markdown: string) => Promise<string>,
+        canReuseCache: boolean,
+        responseHtmlPreparer?: MarkdownResponseHtmlPreparer,
+    ): ChannelBuild => {
+        const segments: RenderedMarkdownSegment[] = [];
+        const parseJobs: Array<Promise<void>> = [];
+        let parsedSegmentCount = 0;
+        let reusedSegmentCount = 0;
 
-            if (splitSections.length === 2) {
-                return {
-                    thinkingHtml: splitSections[0],
-                    responseHtml: splitSections[1],
-                };
+        for (const [index, draft] of drafts.entries()) {
+            const prior = canReuseCache ? previous[index] : undefined;
+            const reusable = Boolean(
+                prior &&
+                    prior.channel === draft.channel &&
+                    prior.start === draft.start &&
+                    prior.end === draft.end &&
+                    prior.source === draft.source &&
+                    prior.parserContextFingerprint === draft.parserContextFingerprint &&
+                    prior.enhancementFingerprint === draft.enhancementFingerprint,
+            );
+
+            if (reusable && prior) {
+                reusedSegmentCount += 1;
+                segments.push(
+                    prior.state === draft.state
+                        ? prior
+                        : Object.freeze({ ...prior, state: draft.state }),
+                );
+                continue;
             }
+
+            const id = prior?.id ?? createSegmentId(draft.channel);
+            const revision = prior ? prior.revision + 1 : 0;
+            const renderKey = `${id}:${revision}`;
+            const candidate: { value?: RenderedMarkdownSegment } = {};
+            parsedSegmentCount += 1;
+            parseJobs.push(
+                parser(
+                    buildMarkdownSegmentParserInput(
+                        draft.source,
+                        draft.parserContextFingerprint,
+                    ),
+                ).then((html) => {
+                    const prepared =
+                        draft.channel === 'response' && responseHtmlPreparer
+                            ? responseHtmlPreparer(html, renderKey)
+                            : { html, tokens: Object.freeze([]) };
+                    candidate.value = Object.freeze({
+                        ...draft,
+                        id,
+                        renderKey,
+                        revision,
+                        html: prepared.html,
+                        tokens: prepared.tokens,
+                    });
+                }),
+            );
+            Object.defineProperty(segments, index, {
+                configurable: true,
+                enumerable: true,
+                get: () => candidate.value!,
+            });
         }
 
-        const [thinkingHtml, responseHtml] = await Promise.all([
-            thinkingMarkdown ? markedParser(thinkingMarkdown) : Promise.resolve(''),
-            responseMarkdown ? markedParser(responseMarkdown) : Promise.resolve(''),
-        ]);
+        return { segments, parseJobs, parsedSegmentCount, reusedSegmentCount };
+    };
+
+    const commitSegments = (
+        cacheKey: string,
+        nextThinking: RenderedMarkdownSegment[],
+        nextResponse: RenderedMarkdownSegment[],
+        metadata: {
+            autoToolSelection: ParsedAutoToolSelection | null;
+            webSearches: WebSearch[];
+            fetchedPages: FetchedPage[];
+            isError: boolean;
+        },
+        counts: { parsedSegmentCount: number; reusedSegmentCount: number },
+    ): MarkdownProcessResult => {
+        const previousKeys = new Set(responseSegments.value.map((segment) => segment.renderKey));
+        const nextKeys = new Set(nextResponse.map((segment) => segment.renderKey));
+        const changedResponseRenderKeys = nextResponse
+            .filter((segment) => !previousKeys.has(segment.renderKey))
+            .map((segment) => segment.renderKey);
+        const obsoleteResponseRenderKeys = responseSegments.value
+            .filter((segment) => !nextKeys.has(segment.renderKey))
+            .map((segment) => segment.renderKey);
+
+        thinkingSegments.value = nextThinking;
+        responseSegments.value = nextResponse;
+        autoToolSelection.value = metadata.autoToolSelection;
+        webSearches.value = metadata.webSearches;
+        fetchedPages.value = metadata.fetchedPages;
+        isError.value = metadata.isError;
+        committedCacheKey = cacheKey;
 
         return {
-            thinkingHtml,
-            responseHtml,
+            committed: true,
+            changedResponseRenderKeys,
+            obsoleteResponseRenderKeys,
+            ...counts,
         };
-    };
-
-    const enhanceMermaidBlocks = (rawMermaidElements: string[]) => {
-        const container = contentRef.value;
-        if (!container) {
-            return;
-        }
-
-        const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
-        mermaidBlocks.forEach((block, index) => {
-            if (block.parentElement?.classList.contains('mermaid-wrapper')) {
-                return;
-            }
-
-            const wrapper = document.createElement('div');
-            wrapper.classList.add('mermaid-wrapper', 'relative');
-
-            block.parentElement?.insertBefore(wrapper, block);
-            wrapper.appendChild(block);
-
-            const mountNode = document.createElement('div');
-            const rawMermaidElement = rawMermaidElements[index] || '';
-
-            const app = createApp(FullScreenButton, {
-                renderedElement: block.cloneNode(true),
-                rawMermaidElement,
-                class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
-            });
-            app.mount(mountNode);
-
-            wrapper.appendChild(mountNode);
-        });
-    };
-
-    const enhanceCodeBlocks = () => {
-        const container = contentRef.value;
-        if (!container) {
-            return;
-        }
-
-        const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
-            pre.querySelector('pre.replace-code-containers'),
-        );
-
-        codeBlocks.forEach((pre: Element) => {
-            if (pre.parentElement?.classList.contains('code-wrapper')) {
-                return;
-            }
-
-            const wrapper = document.createElement('div');
-            wrapper.classList.add('code-wrapper', 'relative');
-
-            pre.parentElement?.insertBefore(wrapper, pre);
-            wrapper.appendChild(pre);
-
-            pre.classList.add('overflow-x-auto', 'rounded-lg', 'custom_scroll', 'bg-[#121212]');
-            const mountNode = document.createElement('div');
-
-            const app = createApp(CodeBlockCopyButton, {
-                textToCopy: (pre as HTMLElement).innerText || '',
-                class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
-            });
-            app.mount(mountNode);
-
-            wrapper.appendChild(mountNode);
-        });
     };
 
     const processMarkdown = async (
         markdown: string,
         markedParser: (md: string) => Promise<string>,
         responseMarkdownTransformer?: ResponseMarkdownTransformer,
-    ) => {
+        options: MarkdownProcessOptions = {},
+    ): Promise<MarkdownProcessResult> => {
         const processId = ++activeProcessId;
+        const cacheKey = options.cacheKey ?? 'default';
+        const canReuseCache = committedCacheKey === cacheKey;
 
         if (!markdown) {
-            resetState();
-            return;
+            return commitSegments(
+                cacheKey,
+                [],
+                [],
+                { autoToolSelection: null, webSearches: [], fetchedPages: [], isError: false },
+                { parsedSegmentCount: 0, reusedSegmentCount: 0 },
+            );
         }
 
         const parsed = parseAssistantContent(markdown);
-
-        autoToolSelection.value = parsed.autoToolSelection;
-        webSearches.value = parsed.webSearches;
-        fetchedPages.value = parsed.fetchedPages;
-        isError.value = parsed.errorText !== null;
+        const metadata = {
+            autoToolSelection: parsed.autoToolSelection,
+            webSearches: parsed.webSearches,
+            fetchedPages: parsed.fetchedPages,
+            isError: parsed.errorText !== null,
+        };
 
         if (parsed.errorText !== null) {
-            thinkingHtml.value = '';
-            responseHtml.value = parsed.errorText;
-            return;
+            const segment = Object.freeze({
+                id: createSegmentId('response'),
+                renderKey: `response-error:${processId}`,
+                channel: 'response' as const,
+                start: 0,
+                end: parsed.errorText.length,
+                source: parsed.errorText,
+                state: 'sealed' as const,
+                html: parsed.errorText,
+                tokens: Object.freeze([]),
+                parserContextFingerprint: '',
+                enhancementFingerprint: parsed.errorText,
+                revision: 0,
+            });
+            return commitSegments(cacheKey, [], [segment], metadata, {
+                parsedSegmentCount: 0,
+                reusedSegmentCount: 0,
+            });
         }
 
         const responseMarkdown = (
@@ -160,30 +239,98 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
                 ? responseMarkdownTransformer(parsed.responseMarkdown)
                 : parsed.responseMarkdown
         ).trim();
-        try {
-            const { thinkingHtml: thinking, responseHtml: response } = await parseMarkdownSections(
-                parsed.thinkingMarkdown,
-                responseMarkdown,
-                markedParser,
-            );
+        const definitions = collectMarkdownReferenceDefinitions(
+            parsed.thinkingMarkdown,
+            responseMarkdown,
+        );
+        const thinkingDrafts = createMarkdownSegmentDrafts(
+            parsed.thinkingMarkdown,
+            'thinking',
+            definitions,
+            options.isStreaming ?? false,
+        );
+        const responseDrafts = createMarkdownSegmentDrafts(
+            responseMarkdown,
+            'response',
+            definitions,
+            options.isStreaming ?? false,
+        );
+        const thinkingBuild = buildChannel(
+            thinkingDrafts,
+            thinkingSegments.value,
+            markedParser,
+            canReuseCache,
+            undefined,
+        );
+        const responseBuild = buildChannel(
+            responseDrafts,
+            responseSegments.value,
+            markedParser,
+            canReuseCache,
+            options.responseHtmlPreparer,
+        );
 
+        try {
+            await Promise.all([...thinkingBuild.parseJobs, ...responseBuild.parseJobs]);
             if (processId !== activeProcessId) {
-                return;
+                return emptyResult(false);
             }
 
-            thinkingHtml.value = thinking;
-            responseHtml.value = response;
+            return commitSegments(
+                cacheKey,
+                [...thinkingBuild.segments],
+                [...responseBuild.segments],
+                metadata,
+                {
+                    parsedSegmentCount:
+                        thinkingBuild.parsedSegmentCount + responseBuild.parsedSegmentCount,
+                    reusedSegmentCount:
+                        thinkingBuild.reusedSegmentCount + responseBuild.reusedSegmentCount,
+                },
+            );
         } catch (err) {
             console.error('[useMarkdownProcessor] Parsing failed:', err);
             if (processId !== activeProcessId) {
-                return;
+                return emptyResult(false);
             }
-            thinkingHtml.value = '';
-            responseHtml.value = responseMarkdown;
+
+            const fallback = responseMarkdown
+                ? (() => {
+                      const renderKey = `response-fallback:${processId}`;
+                      const prepared = options.responseHtmlPreparer
+                          ? options.responseHtmlPreparer(responseMarkdown, renderKey)
+                          : { html: responseMarkdown, tokens: Object.freeze([]) };
+                      return [
+                          Object.freeze({
+                              id: createSegmentId('response'),
+                              renderKey,
+                              channel: 'response' as const,
+                              start: 0,
+                              end: responseMarkdown.length,
+                              source: responseMarkdown,
+                              state: 'active' as const,
+                              html: prepared.html,
+                              tokens: prepared.tokens,
+                              parserContextFingerprint: '',
+                              enhancementFingerprint: responseMarkdown,
+                              revision: 0,
+                          }),
+                      ];
+                  })()
+                : [];
+            const result = commitSegments(cacheKey, [], fallback, metadata, {
+                parsedSegmentCount:
+                    thinkingBuild.parsedSegmentCount + responseBuild.parsedSegmentCount,
+                reusedSegmentCount: 0,
+            });
+            committedCacheKey = null;
+            return result;
         }
     };
 
     return {
+        thinkingSegments,
+        responseSegments,
         thinkingHtml,
         responseHtml,
         autoToolSelection,
@@ -191,7 +338,5 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         fetchedPages,
         isError,
         processMarkdown,
-        enhanceMermaidBlocks,
-        enhanceCodeBlocks,
     };
 };

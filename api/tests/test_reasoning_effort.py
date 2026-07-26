@@ -43,7 +43,7 @@ def _load_openrouter_req_chat_class():
         "SQLAlchemyAsyncEngine": object,
         "OPENROUTER_CHAT_URL": "https://openrouter.test/chat",
         "build_openrouter_response_format": lambda schema: {},
-        "get_openrouter_tools": lambda tools: [],
+        "get_openrouter_tools": lambda tools, *, include_image_inspection=False: [],
         "resolve_reasoning_effort": resolve_reasoning_effort,
     }
     isolated_module = ast.Module(body=selected_nodes, type_ignores=[])

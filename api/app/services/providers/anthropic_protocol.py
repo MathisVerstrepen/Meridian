@@ -1,6 +1,7 @@
 import json
 import uuid
 from typing import Any
+from urllib.parse import unquote_to_bytes
 
 from services.providers.common import normalize_role_value
 
@@ -42,15 +43,16 @@ def build_anthropic_messages(
                 )
             continue
 
-        flush_tool_results()
-
         if role == "user":
-            content = str(message.get("content") or "").strip()
-            if content:
+            content_blocks = _build_anthropic_user_content(message.get("content"))
+            if pending_tool_results or content_blocks:
                 anthropic_messages.append(
-                    {"role": "user", "content": [{"type": "text", "text": content}]}
+                    {"role": "user", "content": [*pending_tool_results, *content_blocks]}
                 )
+                pending_tool_results = []
             continue
+
+        flush_tool_results()
 
         assistant_blocks: list[dict[str, Any]] = []
         content = str(message.get("content") or "")
@@ -85,6 +87,50 @@ def build_anthropic_messages(
     flush_tool_results()
 
     return "\n\n".join(system_parts) or None, anthropic_messages
+
+
+def _build_anthropic_user_content(content: Any) -> list[dict[str, Any]]:
+    if not isinstance(content, list):
+        text = str(content or "").strip()
+        return [{"type": "text", "text": text}] if text else []
+
+    blocks: list[dict[str, Any]] = []
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        part_type = str(part.get("type") or "")
+        if part_type in {"text", "input_text"}:
+            text = str(part.get("text") or "").strip()
+            if text:
+                blocks.append({"type": "text", "text": text})
+            continue
+        if part_type not in {"image_url", "input_image"}:
+            continue
+        image_value = part.get("image_url")
+        if isinstance(image_value, dict):
+            image_value = image_value.get("url")
+        data_uri = str(image_value or "")
+        if not data_uri.startswith("data:image/") or ";base64," not in data_uri:
+            continue
+        header, encoded = data_uri.split(",", 1)
+        media_type = header[5:].split(";", 1)[0]
+        if media_type not in {"image/jpeg", "image/png", "image/gif", "image/webp"}:
+            continue
+        try:
+            normalized_data = unquote_to_bytes(encoded).decode("ascii")
+        except (UnicodeDecodeError, ValueError):
+            continue
+        blocks.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": normalized_data,
+                },
+            }
+        )
+    return blocks
 
 
 def anthropic_tool_calls_to_openai(

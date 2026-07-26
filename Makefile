@@ -110,7 +110,7 @@ dev-ui: ## Run the UI development server.
 	cd "$(UI_DIR)" && pnpm dev
 
 infra-up: ## Start local Docker development dependencies in the background.
-	cd "$(DOCKER_DIR)" && ./run.sh dev -d
+	cd "$(DOCKER_DIR)" && ./run.sh dev -d --sandbox-manager
 
 infra-down: ## Stop local Docker development dependencies.
 	cd "$(DOCKER_DIR)" && ./run.sh dev down

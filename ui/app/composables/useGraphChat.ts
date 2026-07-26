@@ -4,6 +4,11 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeTypeEnum } from '@/types/enums';
 
+type CreatedChatNodes = {
+    generatorNodeId: string | undefined;
+    promptNodeId: string | undefined;
+};
+
 export const useGraphChat = () => {
     const route = useRoute();
     const graphId = computed(() => route.params.id as string);
@@ -303,8 +308,9 @@ export const useGraphChat = () => {
         options: NodeTypeEnum[] | undefined = undefined,
         inputText: string = '',
         forcedNodeId: string | null = null,
-    ) => {
+    ): CreatedChatNodes => {
         let newNodeId: string | undefined;
+        let promptNodeId: string | undefined;
         const optionIds: string[] = [];
 
         switch (generatorNode) {
@@ -328,7 +334,10 @@ export const useGraphChat = () => {
                 if (optionId) optionIds.push(optionId);
             } else if (option === NodeTypeEnum.PROMPT && newNodeId) {
                 const optionId = addPromptFromNodeId(inputText, newNodeId);
-                if (optionId) optionIds.push(optionId);
+                if (optionId) {
+                    optionIds.push(optionId);
+                    promptNodeId = optionId;
+                }
             } else if (option === NodeTypeEnum.GITHUB && newNodeId) {
                 const optionId = addGithubInputNodes(newNodeId);
                 if (optionId) optionIds.push(optionId);
@@ -339,7 +348,10 @@ export const useGraphChat = () => {
             resolveOverlaps(newNodeId, optionIds, { direction: 'below' });
         }, 1);
 
-        return newNodeId;
+        return {
+            generatorNodeId: newNodeId,
+            promptNodeId,
+        };
     };
 
     /**
