@@ -105,4 +105,25 @@ describe('useGraphSelection', () => {
         dragSelection(selection, { x: 300, y: 300 }, { x: 250, y: 250 });
         expect(selectedCalls).toHaveLength(0);
     });
+
+    it('renders a delayed handoff move from the original pointer origin', () => {
+        const nodes = shallowRef<GraphNode[]>([]);
+        const selection = useGraphSelection(
+            nodes,
+            ((point: { x: number; y: number }) => point) as Project,
+            vi.fn(),
+            vi.fn(() => true),
+            ref(false),
+            ref(false),
+        );
+
+        selection.onSelectionStart(
+            new MouseEvent('mousedown', { clientX: 10, clientY: 20 }),
+            new MouseEvent('mousemove', { clientX: 40, clientY: 65 }),
+        );
+
+        expect(selection.isSelecting.value).toBe(true);
+        expect(selection.selectionRect.value).toEqual({ x: 10, y: 20, width: 30, height: 45 });
+        window.dispatchEvent(new MouseEvent('mouseup'));
+    });
 });
