@@ -31,6 +31,7 @@ import {
     UiSettingsSectionToolsVisualise,
     UiSettingsSectionAdminUsers,
 } from '#components';
+import UiSettingsSectionNodePresets from '@/components/ui/settings/section/nodePresets.vue';
 import { SETTINGS_SEARCH_ENTRIES } from '@/constants/settingsEntries';
 import type { User } from '@/types/user';
 import {
@@ -52,7 +53,7 @@ const settingsStore = useSettingsStore();
 const { triggerSettingsUpdate } = settingsStore;
 
 // --- State from Stores ---
-const { hasChanged } = storeToRefs(settingsStore);
+const { hasChanged, nodePresetSaveBlocked } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { getUserSettings } = useAPI();
@@ -76,6 +77,7 @@ enum TabNames {
     REASONING = 'Reasoning',
     GLOBAL_SYSTEM_PROMPTS = 'Global System Prompts',
     CONTEXT_WHEEL = 'Quick Workflow Wheels',
+    NODE_PRESETS = 'Node Presets',
     PROMPT_IMPROVER = 'Prompt Improver',
     PROMPT_TEMPLATES = 'Prompt Templates',
     ROUTING = 'Routing',
@@ -137,6 +139,7 @@ const tabAliases: Record<string, TabNames> = {
     dropdown: TabNames.MODEL_PICKER,
     'system prompt': TabNames.GLOBAL_SYSTEM_PROMPTS,
     blocks: TabNames.CONTEXT_WHEEL,
+    presets: TabNames.NODE_PRESETS,
     history: TabNames.GENERATION_HISTORY,
     'generation history': TabNames.GENERATION_HISTORY,
     attachment: TabNames.UPLOADS_FILE_MANAGER,
@@ -263,6 +266,12 @@ const groups = computed<ISettingsGroup[]>(() => {
             name: GroupNames.WORKFLOW_NODES,
             icon: 'ClarityBlockSolid',
             tabs: [
+                createTab(
+                    GroupNames.WORKFLOW_NODES,
+                    TabNames.NODE_PRESETS,
+                    'MaterialSymbolsAccountTreeOutlineRounded',
+                    UiSettingsSectionNodePresets,
+                ),
                 createTab(
                     GroupNames.WORKFLOW_NODES,
                     TabNames.CONTEXT_WHEEL,
@@ -801,7 +810,8 @@ onMounted(() => {
                             text-soft-silk mt-3 w-full rounded-lg px-4 py-2 text-sm font-bold
                             duration-200 ease-in-out hover:cursor-pointer focus:outline-none
                             disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="!hasChanged"
+                        :disabled="!hasChanged || nodePresetSaveBlocked"
+                        :title="nodePresetSaveBlocked ? 'Fix Node Preset validation errors before saving' : ''"
                         @click="triggerSettingsUpdate"
                     >
                         Save Changes

@@ -13,7 +13,9 @@ const emit = defineEmits([
 ]);
 
 // --- Props ---
-const props = defineProps<NodeProps<DataGithub>>();
+const props = withDefaults(defineProps<NodeProps<DataGithub> & { presetEditor?: boolean }>(), {
+    presetEditor: false,
+});
 
 // --- Routing ---
 const route = useRoute();
@@ -68,6 +70,7 @@ onMounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -164,5 +167,6 @@ onMounted(() => {
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>

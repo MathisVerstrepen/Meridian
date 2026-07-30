@@ -8,6 +8,7 @@ export interface GraphQuickAction {
     accentColor?: string;
     danger?: boolean;
     locked?: boolean;
+    childrenDisplay?: 'submenu' | 'external-fan';
     children?: readonly GraphQuickAction[];
     run?: () => unknown;
 }

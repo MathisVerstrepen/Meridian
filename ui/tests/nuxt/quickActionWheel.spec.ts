@@ -20,6 +20,7 @@ const addNodeActions: GraphQuickAction[] = [
         id: 'add-node',
         label: 'Add node',
         icon: 'add',
+        childrenDisplay: 'external-fan',
         children: [
             {
                 id: 'add-prompt',
@@ -39,6 +40,25 @@ const addNodeActions: GraphQuickAction[] = [
     },
     { id: 'run-all', label: 'Run all', icon: 'run', run: () => undefined },
     { id: 'fit-graph', label: 'Fit graph', icon: 'fit', run: () => undefined },
+];
+
+const multipleFanActions: GraphQuickAction[] = [
+    addNodeActions[0]!,
+    {
+        id: 'presets',
+        label: 'Presets',
+        icon: 'presets',
+        childrenDisplay: 'external-fan',
+        children: [
+            {
+                id: 'preset-one',
+                label: 'Long accessible preset name',
+                icon: 'preset',
+                run: () => undefined,
+            },
+        ],
+    },
+    addNodeActions[1]!,
 ];
 
 afterEach(() => {
@@ -216,6 +236,43 @@ describe('quickActionWheel', () => {
         (document.querySelector('[data-action-id="add-prompt"]') as HTMLButtonElement).click();
         expect(wrapper.emitted('activate')?.[0]?.[0]).toMatchObject({ id: 'add-prompt' });
         expect(document.querySelector('button[aria-label="Back to previous quick actions"]')).toBeNull();
+        wrapper.unmount();
+    });
+
+    it('switches between generic external fans while keeping only one open', async () => {
+        const wrapper = await mountSuspended(QuickActionWheel, {
+            attachTo: document.body,
+            props: { actions: multipleFanActions, x: 500, y: 500 },
+            global: { stubs: { UiIcon: true } },
+        });
+        const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+        const addNode = document.querySelector<HTMLButtonElement>('[data-action-id="add-node"]')!;
+        const presets = document.querySelector<HTMLButtonElement>('[data-action-id="presets"]')!;
+
+        addNode.dispatchEvent(new PointerEvent('pointerenter'));
+        await nextTick();
+        expect(document.querySelector('[data-action-id="add-prompt"]')).not.toBeNull();
+
+        presets.dispatchEvent(new PointerEvent('pointerenter'));
+        await nextTick();
+        expect(document.querySelector('[data-action-id="add-prompt"]')).toBeNull();
+        const presetAction = document.querySelector<HTMLButtonElement>('[data-action-id="preset-one"]')!;
+        expect(presetAction).not.toBeNull();
+        expect(presetAction.getAttribute('aria-label')).toBe('Long accessible preset name');
+        expect(presets.getAttribute('aria-expanded')).toBe('true');
+        expect(addNode.getAttribute('aria-expanded')).toBe('false');
+
+        presets.click();
+        await nextTick();
+        await nextTick();
+        expect(document.activeElement).toBe(presetAction);
+        menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+        await nextTick();
+        expect(document.querySelectorAll('[data-external-quick-action]')).toHaveLength(0);
+        expect(document.activeElement).toBe(presets);
+
+        menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(wrapper.emitted('close')).toHaveLength(1);
         wrapper.unmount();
     });
 });

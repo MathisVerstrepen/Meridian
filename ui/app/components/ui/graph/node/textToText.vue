@@ -38,7 +38,12 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: boolean }>();
+const props = withDefaults(
+    defineProps<
+        NodeProps<DataTextToText> & { isGraphNameDefault: boolean; presetEditor?: boolean }
+    >(),
+    { presetEditor: false },
+);
 
 // --- Local State ---
 const isStreaming = ref(false);
@@ -102,6 +107,8 @@ const handleCancelStream = async () => {
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
+    if (props.presetEditor) return;
+
     // when a new text-to-text node is created in chat view, we attach the
     //  callback so that the text generated in the chat is also displayed in the node
     if (openChatId.value === props.id) {
@@ -122,18 +129,20 @@ onMounted(() => {
     }
 });
 
-watch(
-    () => isNodeStreaming.value(props.id),
-    (streaming) => {
-        if (!streaming) {
-            isStreaming.value = false;
-        }
-    },
-    { immediate: true },
-);
+if (!props.presetEditor) {
+    watch(
+        () => isNodeStreaming.value(props.id),
+        (streaming) => {
+            if (!streaming) {
+                isStreaming.value = false;
+            }
+        },
+        { immediate: true },
+    );
+}
 
 onUnmounted(() => {
-    nodeRegistry.unregister(props.id);
+    if (!props.presetEditor) nodeRegistry.unregister(props.id);
 });
 </script>
 
@@ -147,6 +156,7 @@ onUnmounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -166,7 +176,7 @@ onUnmounted(() => {
             'animate-pulse': isStreaming,
             'shadow-olive-grove-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
-        @dblclick="openChat"
+        @dblclick="!props.presetEditor && openChat()"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -183,7 +193,7 @@ onUnmounted(() => {
                 </span>
                 <UiGraphNodeUtilsSelectedTools :data="props.data" theme="dark" />
             </label>
-            <div class="flex items-center space-x-2">
+            <div v-if="!props.presetEditor" class="flex items-center space-x-2">
                 <UiGenerationHistoryPopover
                     :graph-id="graphId"
                     :node-id="props.id"
@@ -235,7 +245,7 @@ onUnmounted(() => {
 
             <!-- Send Prompt -->
             <button
-                v-if="!isStreaming"
+                v-if="!props.presetEditor && !isStreaming"
                 :disabled="!props.data?.model || protectedMode"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
                     text-anthracite flex h-8 w-8 shrink-0 cursor-pointer items-center
@@ -247,7 +257,7 @@ onUnmounted(() => {
             </button>
 
             <button
-                v-else
+                v-else-if="!props.presetEditor"
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
                     text-anthracite relative flex h-8 w-8 shrink-0 cursor-pointer items-center
@@ -291,6 +301,7 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :multiple-input="true"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandlePrompt
         :id="props.id"
@@ -298,17 +309,20 @@ onUnmounted(() => {
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleAttachment
         :id="props.id"
         type="target"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>

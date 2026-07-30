@@ -14,7 +14,6 @@ const emit = defineEmits<{
 
 const WHEEL_CLEARANCE = 208;
 const EXTERNAL_WHEEL_CLEARANCE = 304;
-const EXTERNAL_PARENT_ID = 'add-node';
 const ROOT_SIZE = 408;
 const ROOT_INNER_RADIUS = 66;
 const ROOT_OUTER_RADIUS = 184;
@@ -34,8 +33,8 @@ const externalOpenMode = ref<'pointer' | 'keyboard' | null>(null);
 const activeIndex = ref(0);
 let arcLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-const hasExternalAddNode = computed(() =>
-    props.actions.some((action) => action.id === EXTERNAL_PARENT_ID && action.children?.length),
+const hasExternalFan = computed(() =>
+    props.actions.some((action) => action.childrenDisplay === 'external-fan' && action.children?.length),
 );
 const externalActions = computed(() => externalParent.value?.children ?? []);
 const externalParentIndex = computed(() =>
@@ -43,7 +42,7 @@ const externalParentIndex = computed(() =>
 );
 
 const clampedPosition = computed(() => {
-    const clearance = hasExternalAddNode.value ? EXTERNAL_WHEEL_CLEARANCE : WHEEL_CLEARANCE;
+    const clearance = hasExternalFan.value ? EXTERNAL_WHEEL_CLEARANCE : WHEEL_CLEARANCE;
     const maxX = Math.max(clearance, window.innerWidth - clearance);
     const maxY = Math.max(clearance, window.innerHeight - clearance);
     return {
@@ -185,7 +184,8 @@ const enterSubmenu = (action: GraphQuickAction) => {
 };
 
 const isExternalParent = (action: GraphQuickAction) =>
-    !parentLevels.value.length && action.id === EXTERNAL_PARENT_ID && !!action.children?.length;
+    !parentLevels.value.length &&
+    action.childrenDisplay === 'external-fan' && !!action.children?.length;
 
 const cancelArcClose = () => {
     if (arcLeaveTimer) clearTimeout(arcLeaveTimer);
@@ -225,7 +225,7 @@ const closeExternalChildren = () => {
 
 const onRootFocus = (action: GraphQuickAction, index: number) => {
     activeIndex.value = index;
-    if (externalParent.value && action.id !== EXTERNAL_PARENT_ID) hideExternalChildren();
+    if (externalParent.value && action.id !== externalParent.value.id) hideExternalChildren();
 };
 
 const goBack = () => {
@@ -298,7 +298,7 @@ onUnmounted(() => {
             role="menu"
             aria-label="Canvas quick actions"
             data-testid="quick-action-wheel"
-            :data-wheel-outer-radius="hasExternalAddNode ? ARC_OUTER_RADIUS : ROOT_OUTER_RADIUS"
+            :data-wheel-outer-radius="hasExternalFan ? ARC_OUTER_RADIUS : ROOT_OUTER_RADIUS"
             :data-main-outer-radius="ROOT_OUTER_RADIUS"
             :data-outer-inner-radius="ARC_INNER_RADIUS"
             :data-outer-label-radius="ARC_LABEL_RADIUS"
@@ -423,7 +423,7 @@ onUnmounted(() => {
                     :style="rootLabelStyle(index)"
                 >
                     <UiIcon :name="action.icon" class="h-5 w-5 shrink-0" />
-                    <span>{{ action.label }}</span>
+                    <span class="line-clamp-2">{{ action.label }}</span>
                     <UiIcon
                         v-if="action.children?.length"
                         name="FlowbiteChevronDownOutline"
@@ -466,7 +466,7 @@ onUnmounted(() => {
                     :style="externalLabelStyle(index)"
                 >
                     <UiIcon :name="action.icon" class="h-5 w-5 shrink-0" />
-                    <span>{{ action.label }}</span>
+                    <span class="line-clamp-2">{{ action.label }}</span>
                     <UiIcon
                         v-if="action.locked"
                         name="MaterialSymbolsLockOutline"

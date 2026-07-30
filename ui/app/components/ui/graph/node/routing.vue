@@ -40,7 +40,10 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean }>();
+const props = withDefaults(
+    defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean; presetEditor?: boolean }>(),
+    { presetEditor: false },
+);
 
 // --- Local State ---
 const isStreaming = ref(false);
@@ -149,32 +152,36 @@ const handleCancelStream = async () => {
 };
 
 // --- Watchers ---
-watch(
-    isReady,
-    (ready) => {
-        if (ready) {
-            selectedRoute.value =
-                blockRoutingSettings.value.routeGroups
-                    .find((group) => group.id === props.data.routeGroupId)
-                    ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
-        }
-    },
-    { immediate: true },
-);
+if (!props.presetEditor) {
+    watch(
+        isReady,
+        (ready) => {
+            if (ready) {
+                selectedRoute.value =
+                    blockRoutingSettings.value.routeGroups
+                        .find((group) => group.id === props.data.routeGroupId)
+                        ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+            }
+        },
+        { immediate: true },
+    );
 
-watch(
-    () => isNodeStreaming.value(props.id),
-    (streaming) => {
-        if (!streaming) {
-            isFetchingModel.value = false;
-            isStreaming.value = false;
-        }
-    },
-    { immediate: true },
-);
+    watch(
+        () => isNodeStreaming.value(props.id),
+        (streaming) => {
+            if (!streaming) {
+                isFetchingModel.value = false;
+                isStreaming.value = false;
+            }
+        },
+        { immediate: true },
+    );
+}
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
+    if (props.presetEditor) return;
+
     nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
 
     if (props.isGraphNameDefault) {
@@ -190,7 +197,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    nodeRegistry.unregister(props.id);
+    if (!props.presetEditor) nodeRegistry.unregister(props.id);
 });
 </script>
 
@@ -204,6 +211,7 @@ onUnmounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -222,7 +230,7 @@ onUnmounted(() => {
             'animate-pulse': isStreaming,
             'shadow-sunbaked-sand/70 shadow-[0px_0px_15px_3px]!': props.selected,
         }"
-        @dblclick="openChat"
+        @dblclick="!props.presetEditor && openChat()"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -236,7 +244,7 @@ onUnmounted(() => {
                 </span>
                 <UiGraphNodeUtilsSelectedTools :data="props.data" theme="light" />
             </label>
-            <div class="flex items-center space-x-2">
+            <div v-if="!props.presetEditor" class="flex items-center space-x-2">
                 <UiGenerationHistoryPopover
                     :graph-id="graphId"
                     :node-id="props.id"
@@ -270,13 +278,14 @@ onUnmounted(() => {
             />
 
             <UiGraphNodeUtilsRoutingSelectedModel
+                v-if="!props.presetEditor"
                 :is-fetching-model="isFetchingModel"
                 :selected-route="selectedRoute"
             />
 
             <!-- Send Prompt -->
             <button
-                v-if="!isStreaming"
+                v-if="!props.presetEditor && !isStreaming"
                 :disabled="!props.data?.routeGroupId || protectedMode"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
                     shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
@@ -287,7 +296,7 @@ onUnmounted(() => {
             </button>
 
             <button
-                v-else
+                v-else-if="!props.presetEditor"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8
                     w-8 shrink-0 cursor-pointer items-center justify-center rounded-2xl
                     transition-all duration-200 ease-in-out"
@@ -327,6 +336,7 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :multiple-input="true"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandlePrompt
         :id="props.id"
@@ -334,17 +344,20 @@ onUnmounted(() => {
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleAttachment
         :id="props.id"
         type="target"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>

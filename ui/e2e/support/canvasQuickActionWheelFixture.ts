@@ -15,6 +15,22 @@ interface WorkerFixtures {
 export interface CanvasQuickActionState {
     nodeIds: string[];
     selectedIds: string[];
+    nodes: Array<{
+        id: string;
+        type?: string;
+        position: { x: number; y: number };
+        parentNode?: string;
+        data: Record<string, unknown>;
+    }>;
+    edges: Array<{
+        id: string;
+        source: string;
+        target: string;
+        sourceHandle?: string | null;
+        targetHandle?: string | null;
+    }>;
+    presetNames: string[];
+    plan: 'free' | 'premium' | null;
     actions: string[];
     selecting: boolean;
 }

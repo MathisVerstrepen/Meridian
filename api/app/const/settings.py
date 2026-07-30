@@ -3,6 +3,7 @@ import uuid
 from const.prompts import PARALLELIZATION_AGGREGATOR_PROMPT
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
+from models.node_preset_dto import NodePresetSettingsDTO
 from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
@@ -130,6 +131,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         standardModel="google/gemini-3-flash-preview",
         expertModel="anthropic/claude-sonnet-4.6",
     ),
+    nodePresets=NodePresetSettingsDTO(schemaVersion=1, presets=[]),
 )
 
 

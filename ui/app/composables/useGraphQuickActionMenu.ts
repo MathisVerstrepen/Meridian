@@ -2,6 +2,7 @@ import type { GraphNode, XYPosition } from '@vue-flow/core';
 
 import type { GraphQuickAction } from '@/composables/useGraphQuickActions';
 import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
+import { useNodePresets } from '@/composables/useNodePresets';
 import { ExecutionPlanDirectionEnum, NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
@@ -48,6 +49,7 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
     const { user } = useUserSession();
     const { error } = useToast();
     const graphEvents = useGraphEvents();
+    const { placeablePresets, placePreset } = useNodePresets(options.graphId);
 
     const nodeStillExists = (nodeId: string) =>
         options.getNodes.value.some((node) => node.id === nodeId);
@@ -92,9 +94,26 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
                 id: 'add-node',
                 label: 'Add node',
                 icon: 'Fa6SolidPlus',
+                childrenDisplay: 'external-fan',
                 children: createAddActions(),
             },
         ];
+        if (placeablePresets.value.length) {
+            result.push({
+                id: 'presets',
+                label: 'Presets',
+                icon: 'MaterialSymbolsDashboardCustomizeOutlineRounded',
+                childrenDisplay: 'external-fan',
+                children: placeablePresets.value.map(({ preset, locked }) => ({
+                    id: `preset-${preset.id}`,
+                    label: locked ? `${preset.name} (Premium)` : preset.name,
+                    icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+                    accentColor: preset.accentColor,
+                    locked,
+                    run: () => placePreset(preset, options.invocationPosition()),
+                })),
+            });
+        }
         if (localStorage.getItem('copiedNode')) {
             result.push({
                 id: 'paste-here',

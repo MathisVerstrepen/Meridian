@@ -28,7 +28,9 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const blockDefinition = getBlockById('primary-prompt-file');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataFilePrompt>>();
+const props = withDefaults(defineProps<NodeProps<DataFilePrompt> & { presetEditor?: boolean }>(), {
+    presetEditor: false,
+});
 
 // --- Local State ---
 const isDraggingOver = ref(false);
@@ -120,6 +122,7 @@ onMounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -194,6 +197,7 @@ onMounted(() => {
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>
 

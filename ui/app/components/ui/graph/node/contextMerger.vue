@@ -16,7 +16,10 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataContextMerger>>();
+const props = withDefaults(
+    defineProps<NodeProps<DataContextMerger> & { presetEditor?: boolean }>(),
+    { presetEditor: false },
+);
 
 // --- Methods ---
 const modeConfig = {
@@ -58,6 +61,7 @@ const activeContextIndex = computed(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -163,11 +167,13 @@ const activeContextIndex = computed(() => {
         :is-dragging="props.dragging"
         class="handletopcustom"
         multiple-input
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="source"
         :is-dragging="props.dragging"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>
 

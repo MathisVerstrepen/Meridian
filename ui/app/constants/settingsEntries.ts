@@ -25,6 +25,7 @@ export const SETTINGS_TABS = {
     REASONING: 'Reasoning',
     GLOBAL_SYSTEM_PROMPTS: 'Global System Prompts',
     CONTEXT_WHEEL: 'Quick Workflow Wheels',
+    NODE_PRESETS: 'Node Presets',
     PROMPT_IMPROVER: 'Prompt Improver',
     PROMPT_TEMPLATES: 'Prompt Templates',
     ROUTING: 'Routing',
@@ -407,6 +408,16 @@ export const SETTINGS_ENTRY = {
         description:
             'Configure independent context, prompt, and attachment wheels for input and output handles. Use Ctrl/Meta+Hover to create compatible workflows upstream or downstream.',
         keywords: ['blocks', 'workflow', 'wheel menu', 'ctrl hover', 'meta hover', 'quick options', 'wheel slots', 'input', 'output'],
+    },
+    nodePresets: {
+        id: 'blocks.node_presets',
+        group: SETTINGS_GROUPS.WORKFLOW_NODES,
+        tab: SETTINGS_TABS.NODE_PRESETS,
+        title: 'Node Presets',
+        description:
+            'Create, configure, group, and reorder reusable node workflows in an account-synced mini-canvas.',
+        keywords: ['preset', 'workflow template', 'node group', 'mini canvas', 'quick wheel'],
+        options: ['create', 'rename', 'delete', 'reorder', 'group nodes'],
     },
     blocksPromptImproverOverride: {
         id: 'blocks.prompt_improver.override',

@@ -43,7 +43,12 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataParallelization> & { isGraphNameDefault: boolean }>();
+const props = withDefaults(
+    defineProps<
+        NodeProps<DataParallelization> & { isGraphNameDefault: boolean; presetEditor?: boolean }
+    >(),
+    { presetEditor: false },
+);
 
 // --- Local State ---
 const isStreaming = ref(false);
@@ -220,6 +225,8 @@ const handleCancelStream = async () => {
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
+    if (props.presetEditor) return;
+
     nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
 
     if (props.isGraphNameDefault) {
@@ -234,19 +241,21 @@ onMounted(() => {
     }
 });
 
-watch(
-    () => isNodeStreaming.value(props.id),
-    (streaming) => {
-        if (!streaming) {
-            doneModels.value = 0;
-            isStreaming.value = false;
-        }
-    },
-    { immediate: true },
-);
+if (!props.presetEditor) {
+    watch(
+        () => isNodeStreaming.value(props.id),
+        (streaming) => {
+            if (!streaming) {
+                doneModels.value = 0;
+                isStreaming.value = false;
+            }
+        },
+        { immediate: true },
+    );
+}
 
 onUnmounted(() => {
-    nodeRegistry.unregister(props.id);
+    if (!props.presetEditor) nodeRegistry.unregister(props.id);
 });
 </script>
 
@@ -260,6 +269,7 @@ onUnmounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -279,7 +289,7 @@ onUnmounted(() => {
             'animate-pulse': isStreaming,
             'shadow-terracotta-clay-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
-        @dblclick="openChat"
+        @dblclick="!props.presetEditor && openChat()"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -296,7 +306,7 @@ onUnmounted(() => {
                 {{ blockDefinition?.name }}
             </label>
 
-            <div class="flex items-center space-x-2">
+            <div v-if="!props.presetEditor" class="flex items-center space-x-2">
                 <UiGenerationHistoryPopover
                     :graph-id="graphId"
                     :node-id="props.id"
@@ -359,7 +369,7 @@ onUnmounted(() => {
                             group-hover:opacity-100"
                     >
                         <button
-                            v-if="!isStreaming"
+                            v-if="!props.presetEditor && !isStreaming"
                             class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk
                                 text-anthracite flex h-5 w-5 cursor-pointer items-center
                                 justify-center rounded-full p-1 backdrop-blur transition-colors
@@ -425,7 +435,7 @@ onUnmounted(() => {
 
             <!-- Send Prompt -->
             <button
-                v-if="!isStreaming"
+                v-if="!props.presetEditor && !isStreaming"
                 :disabled="
                     !props.data?.aggregator.model || props.data.models.length === 0 || protectedMode
                 "
@@ -449,7 +459,7 @@ onUnmounted(() => {
             </button>
 
             <button
-                v-else
+                v-else-if="!props.presetEditor"
                 :disabled="!props.data?.aggregator.model"
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk
                     text-anthracite relative flex h-8 w-8 shrink-0 cursor-pointer items-center
@@ -476,7 +486,7 @@ onUnmounted(() => {
                     opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100"
             >
                 <button
-                    v-if="!isStreaming"
+                    v-if="!props.presetEditor && !isStreaming"
                     class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer
                         items-center justify-center rounded-full p-1 text-white backdrop-blur
                         transition-colors duration-200 ease-in-out"
@@ -500,6 +510,7 @@ onUnmounted(() => {
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
@@ -508,18 +519,21 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :multiple-input="true"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleAttachment
         :id="props.id"
         type="target"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>
 

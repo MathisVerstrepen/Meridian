@@ -21,6 +21,9 @@ import type {
     ToolsImageGenerationSettings,
     ToolsVisualiseSettings,
 } from '@/types/settings';
+import { NODE_PRESET_SCHEMA_VERSION, type NodePresetSettings } from '@/types/nodePresets';
+import type { NodePresetValidationIssue } from '@/utils/nodePresets';
+import { validateNodePresetSettings } from '@/utils/nodePresets';
 
 export const useSettingsStore = defineStore('settings', () => {
     const { updateUserSettings } = useAPI();
@@ -29,6 +32,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const settings = ref<Settings | null>(null);
     const isReady = ref(false);
     const hasChanged = ref(false);
+    const nodePresetEditorIssues = ref<NodePresetValidationIssue[]>([]);
 
     const generalSettings = computed<GeneralSettings>(
         () => settings.value?.general ?? ({} as GeneralSettings),
@@ -84,6 +88,18 @@ export const useSettingsStore = defineStore('settings', () => {
     const toolsVisualiseSettings = computed<ToolsVisualiseSettings>(
         () => settings.value?.toolsVisualise ?? ({} as ToolsVisualiseSettings),
     );
+    const nodePresetSettings = computed<NodePresetSettings>(() =>
+        settings.value?.nodePresets ?? {
+            schemaVersion: NODE_PRESET_SCHEMA_VERSION,
+            presets: [],
+        },
+    );
+    const nodePresetValidation = computed(() =>
+        validateNodePresetSettings(nodePresetSettings.value),
+    );
+    const nodePresetSaveBlocked = computed(
+        () => !nodePresetValidation.value.valid || nodePresetEditorIssues.value.length > 0,
+    );
 
     let isInitial = true;
     watch(
@@ -133,13 +149,30 @@ export const useSettingsStore = defineStore('settings', () => {
             return;
         }
         settings.value = newSettings;
+        nodePresetEditorIssues.value = [];
         isReady.value = true;
         hasChanged.value = false;
     };
 
+    const setNodePresetEditorIssues = (issues: NodePresetValidationIssue[]) => {
+        nodePresetEditorIssues.value = issues;
+    };
+
+    const markSettingsChanged = () => {
+        hasChanged.value = true;
+    };
+
     const triggerSettingsUpdate = async () => {
         if (!settings.value) {
-            return;
+            return false;
+        }
+
+        const presetValidation = validateNodePresetSettings(settings.value.nodePresets);
+        if (!presetValidation.valid || nodePresetEditorIssues.value.length > 0) {
+            error('Fix Node Preset validation errors before saving.', {
+                title: 'Invalid Node Presets',
+            });
+            return false;
         }
 
         // For each models.systemPrompt, if reference is not null, set prompt to ""
@@ -159,11 +192,13 @@ export const useSettingsStore = defineStore('settings', () => {
                 title: 'Update Success',
             });
             hasChanged.value = false;
+            return true;
         } catch (err) {
             console.error('Failed to update user settings:', err);
             error('Failed to update user settings: ' + (err as Error).message, {
                 title: 'Update Error',
             });
+            return false;
         }
     };
 
@@ -186,10 +221,16 @@ export const useSettingsStore = defineStore('settings', () => {
         toolsLinkExtractionSettings,
         toolsImageGenerationSettings,
         toolsVisualiseSettings,
+        nodePresetSettings,
+        nodePresetValidation,
+        nodePresetEditorIssues,
+        nodePresetSaveBlocked,
         isReady,
         hasChanged,
 
         setUserSettings,
+        setNodePresetEditorIssues,
+        markSettingsChanged,
         triggerSettingsUpdate,
     };
 });

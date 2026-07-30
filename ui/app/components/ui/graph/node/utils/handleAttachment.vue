@@ -4,13 +4,17 @@ import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
 import { Position, Handle, useVueFlow } from '@vue-flow/core';
 
 // --- Props ---
-const props = defineProps<{
-    type: 'source' | 'target';
-    id: string;
-    style?: Record<string, string>;
-    isDragging: boolean;
-    isVisible?: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        type: 'source' | 'target';
+        id: string;
+        style?: Record<string, string>;
+        isDragging: boolean;
+        isVisible?: boolean;
+        showQuickWorkflowWheel?: boolean;
+    }>(),
+    { style: () => ({}), showQuickWorkflowWheel: true },
+);
 
 // --- Stores ---
 const dragStore = useDragStore();
@@ -90,6 +94,7 @@ const wheelOptions = computed(() =>
             :handle-id="`attachment_${props.id}`"
         />
         <UiGraphNodeUtilsWheel
+            v-if="props.showQuickWorkflowWheel"
             :node-id="props.id"
             :options="wheelOptions"
             :is-hovering="isHovering"
