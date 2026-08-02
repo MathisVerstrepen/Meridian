@@ -245,6 +245,9 @@ async def stream_openai_compatible_response(
     final_data_container: Optional[dict[str, Any]] = None,
     span_description: str,
     on_rejected_request: Callable[[Any], None] | None = None,
+    rejected_response_observer: (
+        Callable[[Any, httpx.Response, dict[str, Any], bytes], None] | None
+    ) = None,
     preserve_reasoning_content: bool = False,
 ) -> AsyncIterator[str]:
     from services.openrouter import _merge_tool_call_chunks, _process_tool_calls_and_continue
@@ -279,6 +282,15 @@ async def stream_openai_compatible_response(
                     error_message = error_parser(error_content)
                     if on_rejected_request is not None:
                         on_rejected_request(req)
+                    if rejected_response_observer is not None:
+                        try:
+                            rejected_response_observer(req, response, payload, error_content)
+                        except Exception:
+                            logger.warning(
+                                "%s rejected-response observer failed.",
+                                provider_label,
+                                exc_info=True,
+                            )
                     yield (
                         f"[ERROR]Stream Error: Failed to get response from {provider_label} "
                         f"(Status: {response.status_code}). \n{error_message}[!ERROR]"
