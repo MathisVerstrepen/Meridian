@@ -1,5 +1,6 @@
 import json
 import uuid
+from enum import Enum
 from typing import Any
 from urllib.parse import unquote_to_bytes
 
@@ -25,9 +26,9 @@ def build_anthropic_messages(
             continue
 
         if role == "system":
-            content = str(message.get("content") or "").strip()
-            if content:
-                system_parts.append(content)
+            system_parts.extend(
+                block["text"] for block in _build_anthropic_text_content(message.get("content"))
+            )
             continue
 
         if role == "tool":
@@ -54,10 +55,10 @@ def build_anthropic_messages(
 
         flush_tool_results()
 
-        assistant_blocks: list[dict[str, Any]] = []
-        content = str(message.get("content") or "")
-        if content.strip():
-            assistant_blocks.append({"type": "text", "text": content})
+        assistant_blocks = _build_anthropic_text_content(
+            message.get("content"),
+            strip_text=False,
+        )
 
         tool_calls = message.get("tool_calls")
         if isinstance(tool_calls, list):
@@ -98,7 +99,7 @@ def _build_anthropic_user_content(content: Any) -> list[dict[str, Any]]:
     for part in content:
         if not isinstance(part, dict):
             continue
-        part_type = str(part.get("type") or "")
+        part_type = _normalize_content_part_type(part.get("type"))
         if part_type in {"text", "input_text"}:
             text = str(part.get("text") or "").strip()
             if text:
@@ -131,6 +132,35 @@ def _build_anthropic_user_content(content: Any) -> list[dict[str, Any]]:
             }
         )
     return blocks
+
+
+def _build_anthropic_text_content(
+    content: Any,
+    *,
+    strip_text: bool = True,
+) -> list[dict[str, str]]:
+    if not isinstance(content, list):
+        raw_text = str(content or "")
+        text = raw_text.strip() if strip_text else raw_text
+        return [{"type": "text", "text": text}] if raw_text.strip() else []
+
+    blocks: list[dict[str, str]] = []
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        if _normalize_content_part_type(part.get("type")) not in {"text", "input_text"}:
+            continue
+        raw_text = str(part.get("text") or "")
+        text = raw_text.strip() if strip_text else raw_text
+        if raw_text.strip():
+            blocks.append({"type": "text", "text": text})
+    return blocks
+
+
+def _normalize_content_part_type(value: Any) -> str:
+    if isinstance(value, Enum):
+        return str(value.value or "").strip()
+    return str(value or "").strip()
 
 
 def anthropic_tool_calls_to_openai(

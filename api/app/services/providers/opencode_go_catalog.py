@@ -18,8 +18,14 @@ OPENCODE_GO_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
 # models.dev exposes `temperature: false` for this model, but the API expects
 # fixed sampling values instead of omitted sampling fields.
-OPENCODE_GO_TEMPERATURE_OVERRIDES = {"kimi-k2.7-code": 1.0}
-OPENCODE_GO_TOP_P_OVERRIDES = {"kimi-k2.7-code": 0.95}
+OPENCODE_GO_TEMPERATURE_OVERRIDES = {
+    "kimi-k2.7-code": 1.0,
+    "kimi-k3": 1.0,
+}
+OPENCODE_GO_TOP_P_OVERRIDES = {
+    "kimi-k2.7-code": 0.95,
+    "kimi-k3": 0.95,
+}
 
 
 def _normalize_modalities(modalities: Any) -> list[str]:
