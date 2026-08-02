@@ -12,7 +12,15 @@ from services.admin_user_creation import (
     AdminUserCreationMode,
     should_create_initial_userpass_as_admin,
 )
-from sqlalchemy import Column, ForeignKeyConstraint, Index, PrimaryKeyConstraint, func, select
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    ForeignKeyConstraint,
+    Index,
+    PrimaryKeyConstraint,
+    func,
+    select,
+)
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -63,7 +71,10 @@ class UserStorageUsage(SQLModel, table=True):
             unique=True,
         )
     )
-    total_bytes_used: int = Field(default=0, nullable=False)
+    total_bytes_used: int = Field(
+        default=0,
+        sa_column=Column(BigInteger, nullable=False),
+    )
     updated_at: Optional[datetime.datetime] = Field(
         default=None,
         sa_column=Column(

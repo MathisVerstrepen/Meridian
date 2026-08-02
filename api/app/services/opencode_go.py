@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
 from dataclasses import dataclass, field
@@ -12,7 +13,7 @@ import sentry_sdk
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from services.openrouter import _parse_openrouter_error, _process_tool_calls_and_continue
+from services.openrouter import _process_tool_calls_and_continue
 from services.providers.anthropic_protocol import (
     anthropic_tool_calls_to_openai,
     build_anthropic_messages,
@@ -34,6 +35,13 @@ from services.providers.openai_protocol import (
     sanitize_openai_messages,
     stream_openai_compatible_response,
 )
+from services.providers.openai_responses_protocol import (
+    build_openai_responses_payload,
+    extract_openai_responses_function_calls,
+    extract_openai_responses_text,
+    normalize_openai_responses_usage,
+    stream_openai_responses_response,
+)
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_MODEL_PREFIX,
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
@@ -51,6 +59,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 OPENCODE_GO_OPENAI_CHAT_URL = "https://opencode.ai/zen/go/v1/chat/completions"
+OPENCODE_GO_OPENAI_RESPONSES_URL = "https://opencode.ai/zen/go/v1/responses"
 OPENCODE_GO_ANTHROPIC_MESSAGES_URL = "https://opencode.ai/zen/go/v1/messages"
 OPENCODE_GO_VALIDATION_MODEL = f"{OPENCODE_GO_MODEL_PREFIX}qwen3.5-plus"
 OPENCODE_GO_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
@@ -62,6 +71,14 @@ OPENCODE_GO_REASONING_CONTENT_MODEL_IDS = {
     "kimi-k2.5",
     "kimi-k2.6",
 }
+OPENCODE_GO_ERROR_MESSAGE_LIMIT = 500
+OPENCODE_GO_CORRELATION_HEADERS = (
+    "x-request-id",
+    "request-id",
+    "x-correlation-id",
+    "cf-ray",
+    "traceparent",
+)
 
 
 def _normalize_selected_tool_names(selected_tools: list[Any]) -> list[str]:
@@ -104,6 +121,10 @@ def _build_opencode_go_authoritative_system_prompt(
 def _uses_anthropic_protocol(model_id: str) -> bool:
     model_key = strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
     return model_key.startswith(("minimax-", "qwen"))
+
+
+def _uses_openai_responses_protocol(model_id: str) -> bool:
+    return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) == "grok-4.5"
 
 
 def _supports_image_inputs(model_id: str) -> bool:
@@ -168,6 +189,209 @@ def _parse_anthropic_error(error_content: bytes) -> str:
     return str(error_payload or error_json)
 
 
+def _parse_opencode_go_error(error_content: bytes) -> str:
+    message: str | None = None
+    try:
+        payload = json.loads(error_content)
+        if isinstance(payload, dict):
+            message = _extract_opencode_go_error_message(payload)
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        pass
+
+    if not message:
+        return "OpenCode Go returned an unknown API error."
+    return _sanitize_opencode_go_error_message(message)
+
+
+def _extract_opencode_go_error_message(
+    payload: dict[str, Any],
+    *,
+    raw_depth: int = 0,
+) -> str | None:
+    error = payload.get("error")
+    if isinstance(error, str) and error.strip():
+        return error
+
+    top_level_message = payload.get("message")
+    if isinstance(top_level_message, str) and top_level_message.strip():
+        return top_level_message
+
+    if not isinstance(error, dict):
+        return None
+    nested_message = error.get("message")
+    if isinstance(nested_message, str) and nested_message.strip():
+        return nested_message
+
+    metadata = error.get("metadata")
+    raw_error = metadata.get("raw") if isinstance(metadata, dict) else None
+    if not isinstance(raw_error, str) or raw_depth >= 1:
+        return None
+    try:
+        decoded_raw_error = json.loads(raw_error)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(decoded_raw_error, dict):
+        return None
+    return _extract_opencode_go_error_message(decoded_raw_error, raw_depth=raw_depth + 1)
+
+
+def _sanitize_opencode_go_error_message(message: str) -> str:
+    sanitized = " ".join(message.split())
+    sanitized = re.sub(
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
+        "Bearer [REDACTED]",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"(?i)\b(api[_ -]?key|access[_ -]?token|authorization|auth|token)"
+        r"\s*[:=]\s*['\"]?[^\s,'\"]+",
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        sanitized,
+    )
+    sanitized = re.sub(r"\bsk-[A-Za-z0-9._~+/=-]+", "[REDACTED]", sanitized)
+    return sanitized[:OPENCODE_GO_ERROR_MESSAGE_LIMIT]
+
+
+def _bounded_structure_keys(payload: dict[Any, Any]) -> list[str]:
+    return sorted({str(key)[:64] for key in payload})[:20]
+
+
+def _bounded_scalar(value: Any, limit: int) -> str | None:
+    if not isinstance(value, (str, int, float, bool)):
+        return None
+    normalized = " ".join(str(value).split())
+    return normalized[:limit] or None
+
+
+def _build_opencode_go_rejection_diagnostic(
+    req: Any,
+    response: httpx.Response,
+    request_payload: dict[str, Any],
+    response_content: bytes,
+) -> dict[str, Any]:
+    response_payload: dict[str, Any] = {}
+    try:
+        parsed_response = json.loads(response_content)
+        if isinstance(parsed_response, dict):
+            response_payload = parsed_response
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        pass
+
+    error_payload = response_payload.get("error")
+    nested_error = error_payload if isinstance(error_payload, dict) else {}
+    correlation_headers = {
+        header_name: bounded_value
+        for header_name in OPENCODE_GO_CORRELATION_HEADERS
+        if (bounded_value := _bounded_scalar(response.headers.get(header_name), 256)) is not None
+    }
+
+    messages = request_payload.get("messages")
+    request_messages = messages if isinstance(messages, list) else []
+    role_counts: dict[str, int] = {}
+    for message in request_messages:
+        role = str(message.get("role") or "") if isinstance(message, dict) else ""
+        normalized_role = role if role in {"system", "user", "assistant", "tool"} else "other"
+        role_counts[normalized_role] = role_counts.get(normalized_role, 0) + 1
+
+    input_items = request_payload.get("input")
+    request_input = input_items if isinstance(input_items, list) else []
+    input_role_counts: dict[str, int] = {}
+    for item in request_input:
+        role = str(item.get("role") or "") if isinstance(item, dict) else ""
+        normalized_role = role if role in {"user", "assistant"} else "other"
+        input_role_counts[normalized_role] = input_role_counts.get(normalized_role, 0) + 1
+
+    tools = request_payload.get("tools")
+    token_field = next(
+        (
+            field_name
+            for field_name in ("max_tokens", "max_completion_tokens", "max_output_tokens")
+            if field_name in request_payload
+        ),
+        None,
+    )
+    content_type = str(response.headers.get("content-type") or "").split(";", 1)[0].strip()
+    diagnostic = {
+        "response_status": response.status_code,
+        "response_content_type": content_type[:128],
+        "response_byte_length": len(response_content),
+        "response_top_level_keys": _bounded_structure_keys(response_payload),
+        "response_error_keys": _bounded_structure_keys(nested_error),
+        "response_error_type": _bounded_scalar(
+            nested_error.get("type") or response_payload.get("type"), 128
+        ),
+        "response_error_code": _bounded_scalar(
+            nested_error.get("code") or response_payload.get("code"), 128
+        ),
+        "response_correlation_headers": correlation_headers,
+        "request_model": strip_model_prefix(req.model, OPENCODE_GO_MODEL_PREFIX)[:128],
+        "request_payload_keys": _bounded_structure_keys(request_payload),
+        "request_message_count": (len(request_messages) if "messages" in request_payload else None),
+        "request_message_role_counts": (
+            dict(sorted(role_counts.items())) if "messages" in request_payload else None
+        ),
+        "request_input_count": len(request_input) if "input" in request_payload else None,
+        "request_input_role_counts": (
+            dict(sorted(input_role_counts.items())) if "input" in request_payload else None
+        ),
+        "request_tool_count": len(tools) if isinstance(tools, list) else 0,
+        "request_token_field": token_field,
+    }
+    return {key: value for key, value in diagnostic.items() if value is not None}
+
+
+def _log_opencode_go_rejection(
+    req: Any,
+    response: httpx.Response,
+    request_payload: dict[str, Any],
+    response_content: bytes,
+) -> None:
+    diagnostic = _build_opencode_go_rejection_diagnostic(
+        req,
+        response,
+        request_payload,
+        response_content,
+    )
+    logger.warning("OpenCode Go request rejected: %s", json.dumps(diagnostic, sort_keys=True))
+
+
+def _log_opencode_go_terminal_event(
+    event_type: str,
+    event_payload: dict[str, Any],
+    event_counts: dict[str, int],
+) -> None:
+    response = event_payload.get("response")
+    response_payload = response if isinstance(response, dict) else {}
+    error = event_payload.get("error")
+    if not isinstance(error, dict):
+        response_error = response_payload.get("error")
+        error = response_error if isinstance(response_error, dict) else {}
+    incomplete = response_payload.get("incomplete_details")
+    incomplete_payload = incomplete if isinstance(incomplete, dict) else {}
+    output = response_payload.get("output")
+    diagnostic = {
+        "event_type": str(event_type)[:128],
+        "event_keys": _bounded_structure_keys(event_payload),
+        "response_keys": _bounded_structure_keys(response_payload),
+        "error_type": _bounded_scalar(error.get("type"), 128),
+        "error_code": _bounded_scalar(error.get("code"), 128),
+        "response_status": _bounded_scalar(response_payload.get("status"), 128),
+        "incomplete_reason": _bounded_scalar(incomplete_payload.get("reason"), 128),
+        "output_count": len(output) if isinstance(output, list) else None,
+        "event_counts": {
+            str(key)[:128]: min(max(int(value), 0), 9999)
+            for key, value in list(event_counts.items())[:20]
+        },
+    }
+    logger.warning(
+        "OpenCode Go Responses stream terminated: %s",
+        json.dumps(
+            {key: value for key, value in diagnostic.items() if value is not None},
+            sort_keys=True,
+        ),
+    )
+
+
 def _normalize_anthropic_usage_payload(usage: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(usage, dict):
         return None
@@ -227,11 +451,13 @@ class OpenCodeGoReq:
         self.model = model
         self.http_client = http_client
         self.uses_anthropic_protocol = _uses_anthropic_protocol(model)
-        self.api_url = (
-            OPENCODE_GO_ANTHROPIC_MESSAGES_URL
-            if self.uses_anthropic_protocol
-            else OPENCODE_GO_OPENAI_CHAT_URL
-        )
+        self.uses_openai_responses_protocol = _uses_openai_responses_protocol(model)
+        if self.uses_anthropic_protocol:
+            self.api_url = OPENCODE_GO_ANTHROPIC_MESSAGES_URL
+        elif self.uses_openai_responses_protocol:
+            self.api_url = OPENCODE_GO_OPENAI_RESPONSES_URL
+        else:
+            self.api_url = OPENCODE_GO_OPENAI_CHAT_URL
 
     @property
     def headers(self) -> dict[str, str]:
@@ -275,7 +501,10 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
     def get_payload(self) -> dict[str, Any]:
         if self.uses_anthropic_protocol:
             return self._get_anthropic_payload()
-        return self._get_openai_payload()
+        openai_payload = self._get_openai_payload()
+        if self.uses_openai_responses_protocol:
+            return build_openai_responses_payload(openai_payload)
+        return openai_payload
 
     def _get_openai_payload(self) -> dict[str, Any]:
         raw_messages = [
@@ -349,6 +578,13 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
         ]
         available_tool_names = _normalize_selected_tool_names(self.selected_tools)
         system_prompt, anthropic_messages = build_anthropic_messages(raw_messages)
+        if not anthropic_messages:
+            anthropic_messages.append(
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": OPENCODE_GO_FALLBACK_USER_CONTENT}],
+                }
+            )
         payload: dict[str, Any] = {
             "model": strip_model_prefix(self.model, OPENCODE_GO_MODEL_PREFIX),
             "messages": anthropic_messages,
@@ -400,7 +636,7 @@ async def validate_opencode_go_api_key(
             json=payload,
         )
         if response.status_code != 200:
-            error_message = _parse_openrouter_error(response.content)
+            error_message = _parse_opencode_go_error(response.content)
             raise ValueError(
                 f"OpenCode Go validation failed (status {response.status_code}): {error_message}"
             )
@@ -420,7 +656,95 @@ async def make_opencode_go_request_non_streaming(
     req.validate_request()
     if req.uses_anthropic_protocol:
         return await _make_opencode_go_anthropic_request_non_streaming(req, pg_engine)
+    if req.uses_openai_responses_protocol:
+        return await _make_opencode_go_responses_request_non_streaming(req, pg_engine)
     return await _make_opencode_go_openai_request_non_streaming(req, pg_engine)
+
+
+async def _make_opencode_go_responses_request_non_streaming(
+    req: OpenCodeGoReqChat,
+    pg_engine: SQLAlchemyAsyncEngine,
+) -> str:
+    client = req.http_client
+    if client is None:
+        raise ValueError("http_client must be provided")
+
+    with sentry_sdk.start_span(
+        op="ai.request", description="OpenCode Go Responses request"
+    ) as span:
+        span.set_tag("chat.model", req.model)
+        try:
+            payload = req.get_payload()
+            response = await client.post(
+                req.api_url,
+                headers=req.headers,
+                json=payload,
+                timeout=OPENCODE_GO_NON_STREAMING_TIMEOUT,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, dict):
+                raise ValueError("OpenCode Go returned an invalid Responses payload.")
+            status = str(data.get("status") or "completed")
+            if status in {"failed", "incomplete"}:
+                _log_opencode_go_terminal_event(
+                    f"response.{status}", {"response": data}, {f"response.{status}": 1}
+                )
+                error_message = _extract_opencode_go_error_message(data)
+                if error_message:
+                    raise ValueError(_sanitize_opencode_go_error_message(error_message))
+                raise ValueError("OpenCode Go returned an incomplete response.")
+            output = data.get("output")
+            if not isinstance(output, list):
+                _log_opencode_go_terminal_event(
+                    "invalid_output", {"response": data}, {"invalid_output": 1}
+                )
+                raise ValueError("OpenCode Go returned an invalid Responses output.")
+            if extract_openai_responses_function_calls(output):
+                _log_opencode_go_terminal_event(
+                    "unexpected_function_call",
+                    {"response": data},
+                    {"unexpected_function_call": 1},
+                )
+                raise ValueError("OpenCode Go tool execution requires streaming mode.")
+            content = extract_openai_responses_text(output)
+            if not content:
+                _log_opencode_go_terminal_event(
+                    "empty_output", {"response": data}, {"empty_output": 1}
+                )
+                raise ValueError("OpenCode Go returned an empty Responses output.")
+
+            usage_data = normalize_openai_responses_usage(data.get("usage"))
+            if usage_data and req.graph_id and req.node_id and not req.is_title_generation:
+                await update_node_usage_data(
+                    pg_engine=pg_engine,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    usage_data=usage_data,
+                    node_type=req.node_type,
+                    model_id=req.model_id,
+                )
+            return content
+        except HTTPStatusError as exc:
+            error_message = _parse_opencode_go_error(exc.response.content)
+            _log_opencode_go_rejection(req, exc.response, payload, exc.response.content)
+            span.set_status("internal_error")
+            raise ValueError(
+                f"API Error (Status: {exc.response.status_code}): {error_message}"
+            ) from exc
+        except ValueError:
+            span.set_status("internal_error")
+            raise
+        except (ConnectError, TimeoutException, AsyncTimeoutError) as exc:
+            logger.error("Network/Timeout error connecting to OpenCode Go: %s", exc)
+            span.set_status("unavailable")
+            raise ConnectionError(
+                "Could not connect to the AI service. Please check your network."
+            ) from exc
+        except Exception as exc:
+            logger.error("Unexpected OpenCode Go Responses error: %s", exc, exc_info=True)
+            span.set_status("internal_error")
+            raise RuntimeError("An unexpected server error occurred.") from exc
 
 
 async def _make_opencode_go_openai_request_non_streaming(
@@ -462,11 +786,12 @@ async def _make_opencode_go_openai_request_non_streaming(
 
             return content
         except HTTPStatusError as exc:
-            error_message = _parse_openrouter_error(exc.response.content)
-            logger.error(
-                "HTTP error from OpenCode Go (OpenAI protocol): %s - %s",
-                exc.response.status_code,
-                error_message,
+            error_message = _parse_opencode_go_error(exc.response.content)
+            _log_opencode_go_rejection(
+                req,
+                exc.response,
+                payload,
+                exc.response.content,
             )
             span.set_status("internal_error")
             raise ValueError(
@@ -577,6 +902,16 @@ async def stream_opencode_go_response(
             yield chunk
         return
 
+    if req.uses_openai_responses_protocol:
+        async for chunk in _stream_opencode_go_responses_response(
+            req,
+            pg_engine,
+            redis_manager,
+            final_data_container,
+        ):
+            yield chunk
+        return
+
     async for chunk in _stream_opencode_go_openai_response(
         req,
         pg_engine,
@@ -597,10 +932,32 @@ async def _stream_opencode_go_openai_response(
         pg_engine,
         redis_manager,
         provider_label="OpenCode Go",
-        error_parser=_parse_openrouter_error,
+        error_parser=_parse_opencode_go_error,
         final_data_container=final_data_container,
         span_description="Stream OpenCode Go response",
+        rejected_response_observer=_log_opencode_go_rejection,
         preserve_reasoning_content=_requires_reasoning_content_round_trip(req.model),
+    ):
+        yield chunk
+
+
+async def _stream_opencode_go_responses_response(
+    req: OpenCodeGoReqChat,
+    pg_engine: SQLAlchemyAsyncEngine,
+    redis_manager: RedisManager,
+    final_data_container: Optional[dict[str, Any]] = None,
+):
+    async for chunk in stream_openai_responses_response(
+        req,
+        pg_engine,
+        redis_manager,
+        provider_label="OpenCode Go",
+        error_parser=_parse_opencode_go_error,
+        error_sanitizer=_sanitize_opencode_go_error_message,
+        final_data_container=final_data_container,
+        span_description="Stream OpenCode Go Responses response",
+        rejected_response_observer=_log_opencode_go_rejection,
+        terminal_event_observer=_log_opencode_go_terminal_event,
     ):
         yield chunk
 
