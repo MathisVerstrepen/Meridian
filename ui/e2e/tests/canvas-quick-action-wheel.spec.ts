@@ -106,8 +106,31 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     await expect(quickWorkflows).toBeVisible();
     await quickWorkflows.locator('[data-root-action-label]').hover();
     await expect(page.locator('[data-external-quick-action]')).toHaveCount(9);
+    expect(
+        await page.locator('[data-external-quick-action]').evaluateAll((actions) =>
+            actions.map((action) => (action as HTMLElement).dataset.actionId),
+        ),
+    ).toEqual([
+        'workflow-attachment-target-0',
+        'workflow-attachment-target-1',
+        'workflow-context-target-0',
+        'workflow-context-target-1',
+        'workflow-context-target-2',
+        'workflow-prompt-target-0',
+        'workflow-context-source-0',
+        'workflow-context-source-1',
+        'workflow-context-source-2',
+    ]);
     const workflow = page.locator('[data-action-id="workflow-context-target-0"]');
-    await expect(workflow).toHaveAttribute('aria-label', 'Slot 1 · context target');
+    await expect(workflow).toHaveAttribute('aria-label', 'Context input handle · Text to Text node');
+    await expect(workflow).toHaveAttribute('title', 'Context input handle · Text to Text node');
+    await expect(workflow.locator('[data-compact-workflow-label]')).toHaveText('');
+    const handleIndicator = workflow.locator('[data-workflow-handle-indicator]');
+    await expect(handleIndicator).toHaveAttribute('data-handle-category', 'context');
+    await expect(handleIndicator).toHaveAttribute('data-handle-direction', 'target');
+    expect(await handleIndicator.evaluate((element) => (element as HTMLElement).style.backgroundColor)).toBe(
+        'var(--color-node-cat-context)',
+    );
     expect(
         await workflow.evaluate((element) =>
             (element as HTMLElement).style.getPropertyValue('--quick-action-accent'),

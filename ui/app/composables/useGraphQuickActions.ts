@@ -9,6 +9,10 @@ export interface GraphQuickAction {
     danger?: boolean;
     locked?: boolean;
     childrenDisplay?: 'submenu' | 'external-fan';
+    compactHandle?: {
+        category: 'prompt' | 'context' | 'attachment';
+        direction: 'target' | 'source';
+    };
     children?: readonly GraphQuickAction[];
     run?: () => unknown;
 }

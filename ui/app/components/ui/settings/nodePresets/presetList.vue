@@ -214,7 +214,7 @@ const onCardKeydown = (event: KeyboardEvent, index: number) => {
                                 @dragstart.stop.prevent
                                 @keydown.esc.stop.prevent="closeColorPicker"
                             />
-                            <button type="button" aria-label="Delete preset" title="Delete preset" class="text-stone-gray/55 hover:bg-red-400/10 hover:text-red-400 focus-visible:ring-red-400/60 shrink-0 rounded-md p-1.5 focus-visible:ring-2 focus-visible:outline-none" @click.stop="emit('delete', preset.id)">
+                            <button type="button" aria-label="Delete preset" title="Delete preset" class="text-stone-gray/55 hover:bg-red-400/10 hover:text-red-400 focus-visible:ring-red-400/60 shrink-0 rounded-md h-7 w-7 focus-visible:ring-2 focus-visible:outline-none flex items-center justify-center" @click.stop="emit('delete', preset.id)">
                                 <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
                             </button>
                         </div>

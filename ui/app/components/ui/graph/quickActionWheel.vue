@@ -163,6 +163,19 @@ const externalLabelStyle = (index: number) => {
     };
 };
 
+const compactHandleColor = (action: GraphQuickAction) => {
+    if (action.compactHandle?.category === 'prompt') return 'var(--color-node-cat-prompt)';
+    if (action.compactHandle?.category === 'context') return 'var(--color-node-cat-context)';
+    return 'var(--color-node-cat-attachment)';
+};
+
+const compactHandleArrowClass = (action: GraphQuickAction) => {
+    if (action.compactHandle?.category === 'attachment') {
+        return action.compactHandle.direction === 'target' ? '-rotate-90' : 'rotate-90';
+    }
+    return action.compactHandle?.direction === 'source' ? 'rotate-180' : '';
+};
+
 const actionButtons = () =>
     Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('[data-quick-action]') ?? []);
 
@@ -447,8 +460,10 @@ onUnmounted(() => {
                 data-wheel-layer="outer"
                 data-wheel-glass-surface
                 :data-action-id="action.id"
+                :data-compact-handle="action.compactHandle ? '' : undefined"
                 :tabindex="currentActions.length + index === activeIndex ? 0 : -1"
                 :aria-label="action.label"
+                :title="action.compactHandle ? action.label : undefined"
                 :style="externalItemStyle(index, action)"
                 class="quick-action-colored-segment bg-anthracite/64 text-soft-silk absolute top-1/2 left-1/2 z-0 cursor-pointer
                     backdrop-blur-xl backdrop-saturate-150 motion-safe:transition-colors focus-visible:outline-none
@@ -460,6 +475,32 @@ onUnmounted(() => {
                 @click="emit('activate', action)"
             >
                 <span
+                    v-if="action.compactHandle"
+                    data-external-action-label
+                    data-compact-workflow-label
+                    class="absolute -translate-x-1/2 -translate-y-1/2"
+                    :style="externalLabelStyle(index)"
+                >
+                    <span class="relative block">
+                        <UiIcon :name="action.icon" class="h-6 w-6 shrink-0" />
+                        <span
+                            data-workflow-handle-indicator
+                            :data-handle-category="action.compactHandle.category"
+                            :data-handle-direction="action.compactHandle.direction"
+                            class="border-anthracite absolute -right-2 -bottom-1 flex h-3.5 w-3.5 items-center justify-center rounded-full
+                                border shadow-sm"
+                            :style="{ backgroundColor: compactHandleColor(action) }"
+                        >
+                            <UiIcon
+                                name="MdiArrowUp"
+                                class="text-anthracite h-2.5 w-2.5"
+                                :class="compactHandleArrowClass(action)"
+                            />
+                        </span>
+                    </span>
+                </span>
+                <span
+                    v-else
                     data-external-action-label
                     class="absolute flex w-18 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-center
                         text-[11px] leading-tight font-semibold tracking-tight"

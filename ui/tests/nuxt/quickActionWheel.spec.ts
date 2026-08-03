@@ -52,9 +52,31 @@ const multipleFanActions: GraphQuickAction[] = [
         children: [
             {
                 id: 'workflow-context-target-0',
-                label: 'Summarize · context target',
+                label: 'Context input handle · Routing node',
                 icon: 'routing-icon',
                 accentColor: '#735f9c',
+                compactHandle: { category: 'context', direction: 'target' },
+                run: () => undefined,
+            },
+            {
+                id: 'workflow-prompt-source-0',
+                label: 'Prompt output handle · Routing node',
+                icon: 'routing-icon',
+                compactHandle: { category: 'prompt', direction: 'source' },
+                run: () => undefined,
+            },
+            {
+                id: 'workflow-attachment-target-0',
+                label: 'Attachment input handle · Routing node',
+                icon: 'routing-icon',
+                compactHandle: { category: 'attachment', direction: 'target' },
+                run: () => undefined,
+            },
+            {
+                id: 'workflow-attachment-source-0',
+                label: 'Attachment output handle · Routing node',
+                icon: 'routing-icon',
+                compactHandle: { category: 'attachment', direction: 'source' },
                 run: () => undefined,
             },
         ],
@@ -277,9 +299,33 @@ describe('quickActionWheel', () => {
         const workflowAction = document.querySelector<HTMLButtonElement>(
             '[data-action-id="workflow-context-target-0"]',
         )!;
-        expect(workflowAction.getAttribute('aria-label')).toBe('Summarize · context target');
+        expect(workflowAction.getAttribute('aria-label')).toBe('Context input handle · Routing node');
+        expect(workflowAction.getAttribute('title')).toBe('Context input handle · Routing node');
         expect(workflowAction.style.getPropertyValue('--quick-action-accent')).toBe('#735f9c');
         expect(workflowAction.querySelector('ui-icon-stub')?.getAttribute('name')).toBe('routing-icon');
+        expect(workflowAction.querySelector('[data-compact-workflow-label]')?.textContent?.trim()).toBe('');
+        const handleIndicator = workflowAction.querySelector<HTMLElement>(
+            '[data-workflow-handle-indicator]',
+        )!;
+        expect(handleIndicator.dataset.handleCategory).toBe('context');
+        expect(handleIndicator.dataset.handleDirection).toBe('target');
+        expect(handleIndicator.style.backgroundColor).toBe('var(--color-node-cat-context)');
+        expect(handleIndicator.querySelector('ui-icon-stub')?.getAttribute('name')).toBe('MdiArrowUp');
+        expect(handleIndicator.querySelector('ui-icon-stub')?.className).not.toContain('rotate-180');
+        const promptSourceArrow = document.querySelector<HTMLElement>(
+            '[data-action-id="workflow-prompt-source-0"] [data-workflow-handle-indicator]',
+        )!;
+        expect(promptSourceArrow.style.backgroundColor).toBe('var(--color-node-cat-prompt)');
+        expect(promptSourceArrow.querySelector('ui-icon-stub')?.className).toContain('rotate-180');
+        const attachmentTargetArrow = document.querySelector<HTMLElement>(
+            '[data-action-id="workflow-attachment-target-0"] [data-workflow-handle-indicator]',
+        )!;
+        expect(attachmentTargetArrow.style.backgroundColor).toBe('var(--color-node-cat-attachment)');
+        expect(attachmentTargetArrow.querySelector('ui-icon-stub')?.className).toContain('-rotate-90');
+        const attachmentSourceArrow = document.querySelector<HTMLElement>(
+            '[data-action-id="workflow-attachment-source-0"] [data-workflow-handle-indicator]',
+        )!;
+        expect(attachmentSourceArrow.querySelector('ui-icon-stub')?.className).toContain('rotate-90');
         expect(quickWorkflows.getAttribute('aria-expanded')).toBe('true');
         expect(addNode.getAttribute('aria-expanded')).toBe('false');
 

@@ -43,6 +43,7 @@ describe('graph quick-action target classification', () => {
             options: [NodeTypeEnum.PROMPT],
         };
         const routingBlock = {
+            name: 'Routing',
             icon: 'routing-icon',
             color: 'var(--color-slate-blue)',
         } as BlockDefinition;
@@ -57,9 +58,10 @@ describe('graph quick-action target classification', () => {
             ),
         ).toEqual({
             id: 'workflow-context-source-2',
-            label: 'Summarize first · context source',
+            label: 'Context output handle · Routing node',
             icon: 'routing-icon',
             accentColor: 'var(--color-slate-blue)',
+            compactHandle: { category: 'context', direction: 'source' },
         });
     });
 

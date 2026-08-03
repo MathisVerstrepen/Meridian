@@ -25,12 +25,21 @@ const GENERATOR_TYPES = new Set<string>([
     NodeTypeEnum.PARALLELIZATION,
     NodeTypeEnum.ROUTING,
 ]);
-const QUICK_WORKFLOW_CATEGORIES = [
-    NodeCategoryEnum.CONTEXT,
-    NodeCategoryEnum.PROMPT,
-    NodeCategoryEnum.ATTACHMENT,
-] as const;
-const QUICK_WORKFLOW_DIRECTIONS: QuickWorkflowDirection[] = ['target', 'source'];
+const QUICK_WORKFLOW_ACTION_GROUPS: ReadonlyArray<
+    readonly [NodeCategoryEnum, QuickWorkflowDirection]
+> = [
+    [NodeCategoryEnum.ATTACHMENT, 'target'],
+    [NodeCategoryEnum.CONTEXT, 'target'],
+    [NodeCategoryEnum.PROMPT, 'target'],
+    [NodeCategoryEnum.ATTACHMENT, 'source'],
+    [NodeCategoryEnum.CONTEXT, 'source'],
+    [NodeCategoryEnum.PROMPT, 'source'],
+];
+const QUICK_WORKFLOW_CATEGORY_LABELS: Record<NodeCategoryEnum, string> = {
+    [NodeCategoryEnum.PROMPT]: 'Prompt',
+    [NodeCategoryEnum.CONTEXT]: 'Context',
+    [NodeCategoryEnum.ATTACHMENT]: 'Attachment',
+};
 
 export const createAddQuickActionMetadata = (block: BlockDefinition, locked: boolean) => ({
     id: `add-${block.id}`,
@@ -48,11 +57,14 @@ export const createQuickWorkflowActionMetadata = (
     getBlockByNodeType: (nodeType: NodeTypeEnum) => BlockDefinition | undefined,
 ) => {
     const mainBlock = slot.mainBloc ? getBlockByNodeType(slot.mainBloc) : undefined;
+    const handleDirection = direction === 'target' ? 'input' : 'output';
+    const mainNodeName = mainBlock?.name ?? slot.mainBloc ?? 'Workflow';
     return {
         id: `workflow-${category}-${direction}-${index}`,
-        label: `${slot.name} · ${category} ${direction}`,
+        label: `${QUICK_WORKFLOW_CATEGORY_LABELS[category]} ${handleDirection} handle · ${mainNodeName} node`,
         icon: mainBlock?.icon ?? 'MaterialSymbolsAccountTreeOutlineRounded',
         accentColor: mainBlock?.color,
+        compactHandle: { category, direction },
     };
 };
 
@@ -229,29 +241,27 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
 
     const createQuickWorkflowActions = (nodeId: string): GraphQuickAction[] => {
         const result: GraphQuickAction[] = [];
-        for (const category of QUICK_WORKFLOW_CATEGORIES) {
-            for (const direction of QUICK_WORKFLOW_DIRECTIONS) {
-                const slots = getQuickWorkflowSlots(blockSettings.value, category, direction) ?? [];
-                slots.forEach((slot, index) => {
-                    const payload: QuickWorkflowCreatePayload = {
-                        fromNodeId: nodeId,
+        for (const [category, direction] of QUICK_WORKFLOW_ACTION_GROUPS) {
+            const slots = getQuickWorkflowSlots(blockSettings.value, category, direction) ?? [];
+            slots.forEach((slot, index) => {
+                const payload: QuickWorkflowCreatePayload = {
+                    fromNodeId: nodeId,
+                    category,
+                    direction,
+                    slot,
+                };
+                if (!canCreateQuickWorkflow(payload)) return;
+                result.push({
+                    ...createQuickWorkflowActionMetadata(
+                        slot,
                         category,
                         direction,
-                        slot,
-                    };
-                    if (!canCreateQuickWorkflow(payload)) return;
-                    result.push({
-                        ...createQuickWorkflowActionMetadata(
-                            slot,
-                            category,
-                            direction,
-                            index,
-                            getBlockByNodeType,
-                        ),
-                        run: () => createQuickWorkflow(payload),
-                    });
+                        index,
+                        getBlockByNodeType,
+                    ),
+                    run: () => createQuickWorkflow(payload),
                 });
-            }
+            });
         }
         return result;
     };
