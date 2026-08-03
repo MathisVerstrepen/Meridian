@@ -36,6 +36,7 @@ Quick workflows and preset settings now communicate more with less space.
 Meridian `1.7.4-beta` is a non-breaking application update with no database migration, new configuration keys, new secrets, or dependency-file changes.
 
 - Redeploy or restart matching API and UI versions so both services use the same schema-v1 preset validation and quick-action behavior.
+- Frontend Docker builds now use project-pinned pnpm through Corepack for reproducible frozen-lockfile installs.
 - Existing users' settings hydrate with an empty schema-v1 preset collection by default. Presets use the existing account settings payload and persistence rather than a new table or migration.
 - Preset collections support up to 8 presets per account, 20 nodes and 40 edges per preset, and 512 KiB for the complete collection.
 - GitHub nodes inside presets continue to require premium access when placed; other valid preset content remains available according to the account's existing permissions.
