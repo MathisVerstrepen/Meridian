@@ -101,6 +101,63 @@ test('builds, validates, saves, and reloads account-synced presets', async ({ pa
     expect((await readNodePresetsFixtureState(page)).nodePresets.presets[0]?.nodes).toHaveLength(3);
 });
 
+test('keeps desktop overflow inside the preset rail list', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+    const { fixture } = await mountNodePresetsFixture(page);
+    const create = page.getByRole('button', { name: 'New', exact: true });
+    await create.click();
+
+    const rail = page.getByLabel('Preset rail');
+    const list = page.getByLabel('Node presets');
+    const canvas = page.getByLabel('Node preset canvas');
+    const [railBefore, canvasBefore, fixtureBefore] = await Promise.all([
+        rail.boundingBox(),
+        canvas.boundingBox(),
+        fixture.evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+            scrollTop: element.scrollTop,
+        })),
+    ]);
+
+    for (let index = 1; index < 8; index += 1) await create.click();
+    await expect(page.getByLabel('Preset name')).toHaveCount(8);
+
+    const [railAfter, canvasAfter, fixtureAfter, listBeforeScroll] = await Promise.all([
+        rail.boundingBox(),
+        canvas.boundingBox(),
+        fixture.evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+            scrollTop: element.scrollTop,
+        })),
+        list.evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+        })),
+    ]);
+    expect(railBefore).not.toBeNull();
+    expect(railAfter).not.toBeNull();
+    expect(canvasBefore).not.toBeNull();
+    expect(canvasAfter).not.toBeNull();
+    expect(Math.abs(railAfter!.height - railBefore!.height)).toBeLessThan(1);
+    expect(Math.abs(canvasAfter!.height - canvasBefore!.height)).toBeLessThan(1);
+    expect(listBeforeScroll.scrollHeight).toBeGreaterThan(listBeforeScroll.clientHeight);
+    expect(fixtureAfter.clientHeight).toBe(fixtureBefore.clientHeight);
+    expect(fixtureAfter.scrollHeight).toBe(fixtureBefore.scrollHeight);
+    expect(fixtureAfter.scrollHeight).toBe(fixtureAfter.clientHeight);
+    expect(fixtureAfter.scrollTop).toBe(0);
+
+    await list.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+    await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await fixture.evaluate((element) => element.scrollTop)).toBe(0);
+    expect(
+        await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
+    ).toBe(true);
+});
+
 test('keeps free-plan GitHub locked and remains usable at narrow keyboard layouts', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 720, height: 900 });

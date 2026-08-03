@@ -5,6 +5,7 @@ import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
 import { useNodePresets } from '@/composables/useNodePresets';
 import { ExecutionPlanDirectionEnum, NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
+import type { WheelSlot } from '@/types/settings';
 import type { User } from '@/types/user';
 import { getQuickWorkflowSlots, type QuickWorkflowDirection } from '@/utils/quickWorkflow';
 
@@ -39,8 +40,24 @@ export const createAddQuickActionMetadata = (block: BlockDefinition, locked: boo
     locked,
 });
 
+export const createQuickWorkflowActionMetadata = (
+    slot: WheelSlot,
+    category: NodeCategoryEnum,
+    direction: QuickWorkflowDirection,
+    index: number,
+    getBlockByNodeType: (nodeType: NodeTypeEnum) => BlockDefinition | undefined,
+) => {
+    const mainBlock = slot.mainBloc ? getBlockByNodeType(slot.mainBloc) : undefined;
+    return {
+        id: `workflow-${category}-${direction}-${index}`,
+        label: `${slot.name} · ${category} ${direction}`,
+        icon: mainBlock?.icon ?? 'MaterialSymbolsAccountTreeOutlineRounded',
+        accentColor: mainBlock?.color,
+    };
+};
+
 export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions) => {
-    const { blockDefinitions } = useBlocks();
+    const { blockDefinitions, getBlockByNodeType } = useBlocks();
     const { placeBlock, copyNode, pasteNodes, duplicateNode, createCommentGroup } =
         useGraphActions();
     const { setExecutionPlan } = useExecutionPlan();
@@ -224,9 +241,13 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
                     };
                     if (!canCreateQuickWorkflow(payload)) return;
                     result.push({
-                        id: `workflow-${category}-${direction}-${index}`,
-                        label: `${slot.name} · ${category} ${direction}`,
-                        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+                        ...createQuickWorkflowActionMetadata(
+                            slot,
+                            category,
+                            direction,
+                            index,
+                            getBlockByNodeType,
+                        ),
                         run: () => createQuickWorkflow(payload),
                     });
                 });
@@ -266,6 +287,7 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
                 id: 'quick-workflows',
                 label: 'Quick workflows',
                 icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+                childrenDisplay: 'external-fan',
                 children: workflows,
             });
         }

@@ -52,9 +52,9 @@ onMounted(async () => {
     <main
         data-testid="node-presets-fixture-page"
         :data-fixture-ready="fixtureReady"
-        class="bg-obsidian text-soft-silk min-h-screen p-4"
+        class="bg-obsidian text-soft-silk h-screen min-h-0 w-full overflow-y-auto p-4 lg:flex lg:flex-col lg:overflow-hidden"
     >
-        <div class="mb-3 flex flex-wrap items-center gap-2">
+        <div class="mb-3 flex flex-wrap items-center gap-2 lg:shrink-0">
             <button data-testid="save-node-presets" :disabled="settingsStore.nodePresetSaveBlocked" @click="save">
                 Save Changes
             </button>
@@ -62,6 +62,8 @@ onMounted(async () => {
             <button data-testid="set-premium-plan" @click="setPlan('premium')">Premium plan</button>
         </div>
         <pre data-testid="node-presets-fixture-state" class="sr-only">{{ JSON.stringify(state) }}</pre>
-        <UiSettingsSectionNodePresets />
+        <div class="lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+            <UiSettingsSectionNodePresets />
+        </div>
     </main>
 </template>

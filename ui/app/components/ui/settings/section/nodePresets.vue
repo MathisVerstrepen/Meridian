@@ -80,7 +80,7 @@ const movePreset = (from: number, to: number) => {
 </script>
 
 <template>
-    <div class="flex min-h-full min-w-0 flex-col gap-3 py-4">
+    <div class="flex min-h-full min-w-0 flex-col gap-3 py-4 lg:h-full lg:min-h-0 lg:overflow-hidden">
         <div>
             <h2 class="text-soft-silk font-semibold">Node Presets</h2>
             <p class="text-stone-gray/70 mt-1 max-w-3xl text-sm">
@@ -98,7 +98,7 @@ const movePreset = (from: number, to: number) => {
             </p>
         </div>
 
-        <div class="grid min-w-0 flex-1 grid-cols-1 gap-3 lg:min-h-[560px] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div class="grid min-w-0 flex-1 grid-cols-1 gap-3 lg:h-full lg:min-h-0 lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden">
             <UiSettingsNodePresetsPresetList
                 :presets="nodePresetSettings.presets"
                 :selected-id="selectedId"
@@ -120,7 +120,7 @@ const movePreset = (from: number, to: number) => {
             />
             <div
                 v-else
-                class="border-stone-gray/15 bg-obsidian/35 text-stone-gray/60 flex min-h-[420px] flex-col items-center justify-center rounded-xl border px-6 text-center text-sm lg:min-h-[520px]"
+                class="border-stone-gray/15 bg-obsidian/35 text-stone-gray/60 flex min-h-[420px] flex-col items-center justify-center rounded-xl border px-6 text-center text-sm lg:h-full lg:min-h-0"
             >
                 <UiIcon name="MaterialSymbolsDashboardCustomizeOutlineRounded" class="text-stone-gray/35 mb-3 h-9 w-9" />
                 <span class="text-soft-silk/80 font-semibold">Canvas waiting for a preset</span>

@@ -5,8 +5,13 @@ import {
     isQuickActionEditable,
     resolveQuickActionGestureTarget,
 } from '@/composables/useGraphQuickActions';
-import { createAddQuickActionMetadata } from '@/composables/useGraphQuickActionMenu';
+import {
+    createAddQuickActionMetadata,
+    createQuickWorkflowActionMetadata,
+} from '@/composables/useGraphQuickActionMenu';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
+import type { WheelSlot } from '@/types/settings';
 
 describe('graph quick-action target classification', () => {
     it('propagates block colors into Add node action metadata', () => {
@@ -28,6 +33,33 @@ describe('graph quick-action target classification', () => {
             label: 'Prompt Text (Premium)',
             accentColor: undefined,
             locked: true,
+        });
+    });
+
+    it('uses the configured workflow main block icon and color in informative metadata', () => {
+        const slot: WheelSlot = {
+            name: 'Summarize first',
+            mainBloc: NodeTypeEnum.ROUTING,
+            options: [NodeTypeEnum.PROMPT],
+        };
+        const routingBlock = {
+            icon: 'routing-icon',
+            color: 'var(--color-slate-blue)',
+        } as BlockDefinition;
+
+        expect(
+            createQuickWorkflowActionMetadata(
+                slot,
+                NodeCategoryEnum.CONTEXT,
+                'source',
+                2,
+                (nodeType) => (nodeType === NodeTypeEnum.ROUTING ? routingBlock : undefined),
+            ),
+        ).toEqual({
+            id: 'workflow-context-source-2',
+            label: 'Summarize first · context source',
+            icon: 'routing-icon',
+            accentColor: 'var(--color-slate-blue)',
         });
     });
 

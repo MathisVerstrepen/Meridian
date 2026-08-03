@@ -93,7 +93,7 @@ const onCardKeydown = (event: KeyboardEvent, index: number) => {
 </script>
 
 <template>
-    <aside aria-label="Preset rail" class="border-stone-gray/15 bg-obsidian/40 flex min-h-0 flex-col overflow-hidden rounded-xl border">
+    <aside aria-label="Preset rail" class="border-stone-gray/15 bg-obsidian/40 flex min-h-0 flex-col overflow-hidden rounded-xl border lg:h-full">
         <div class="border-stone-gray/10 border-b p-3.5">
             <div class="flex items-center gap-2.5">
                 <span class="bg-ember-glow/15 text-ember-glow flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">

@@ -29,7 +29,7 @@ defineExpose({ flush: editor.flush, addBlock: editor.addBlock });
 </script>
 
 <template>
-    <section class="border-stone-gray/15 bg-obsidian/35 flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-xl border lg:min-h-[520px]">
+    <section class="border-stone-gray/15 bg-obsidian/35 flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-xl border lg:h-full lg:min-h-0">
         <div class="border-stone-gray/15 flex flex-wrap items-center gap-2 border-b px-3 py-2">
             <button type="button" class="bg-stone-gray/10 text-soft-silk rounded-lg px-2.5 py-1.5 text-xs font-semibold" @click="editor.createGroup()">
                 Group selection
@@ -40,7 +40,7 @@ defineExpose({ flush: editor.flush, addBlock: editor.addBlock });
             <span class="text-stone-gray/55 ml-auto text-xs">Drag, resize, connect, select, or delete blocks</span>
         </div>
 
-        <div class="relative min-h-[360px] flex-1 lg:min-h-[440px]" tabindex="0" aria-label="Node preset canvas" @keydown="onKeydown">
+        <div class="relative min-h-[360px] flex-1 lg:min-h-0" tabindex="0" aria-label="Node preset canvas" @keydown="onKeydown">
             <VueFlow
                 :id="flowId"
                 :connection-mode="ConnectionMode.Strict"

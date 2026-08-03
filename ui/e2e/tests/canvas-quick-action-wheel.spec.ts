@@ -101,6 +101,23 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     });
     await expect(page.locator('[data-action-id="duplicate-node"]')).toBeVisible();
     expect((await readCanvasQuickActionState(page)).selectedIds).toEqual(['unselected']);
+
+    const quickWorkflows = page.locator('[data-action-id="quick-workflows"]');
+    await expect(quickWorkflows).toBeVisible();
+    await quickWorkflows.locator('[data-root-action-label]').hover();
+    await expect(page.locator('[data-external-quick-action]')).toHaveCount(9);
+    const workflow = page.locator('[data-action-id="workflow-context-target-0"]');
+    await expect(workflow).toHaveAttribute('aria-label', 'Slot 1 · context target');
+    expect(
+        await workflow.evaluate((element) =>
+            (element as HTMLElement).style.getPropertyValue('--quick-action-accent'),
+        ),
+    ).toBe('var(--color-olive-grove)');
+    await workflow.locator('[data-external-action-label]').click();
+    await expect.poll(async () => (await readCanvasQuickActionState(page)).nodeIds.length).toBe(6);
+    expect((await readCanvasQuickActionState(page)).actions).toContain(
+        'workflow-context-target-0',
+    );
 });
 
 test('keeps right-drag marquee separate and supports keyboard dismissal', async ({ page }) => {

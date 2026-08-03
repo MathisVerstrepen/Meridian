@@ -45,6 +45,21 @@ const addNodeActions: GraphQuickAction[] = [
 const multipleFanActions: GraphQuickAction[] = [
     addNodeActions[0]!,
     {
+        id: 'quick-workflows',
+        label: 'Quick workflows',
+        icon: 'workflows',
+        childrenDisplay: 'external-fan',
+        children: [
+            {
+                id: 'workflow-context-target-0',
+                label: 'Summarize · context target',
+                icon: 'routing-icon',
+                accentColor: '#735f9c',
+                run: () => undefined,
+            },
+        ],
+    },
+    {
         id: 'presets',
         label: 'Presets',
         icon: 'presets',
@@ -247,15 +262,30 @@ describe('quickActionWheel', () => {
         });
         const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
         const addNode = document.querySelector<HTMLButtonElement>('[data-action-id="add-node"]')!;
+        const quickWorkflows = document.querySelector<HTMLButtonElement>(
+            '[data-action-id="quick-workflows"]',
+        )!;
         const presets = document.querySelector<HTMLButtonElement>('[data-action-id="presets"]')!;
 
         addNode.dispatchEvent(new PointerEvent('pointerenter'));
         await nextTick();
         expect(document.querySelector('[data-action-id="add-prompt"]')).not.toBeNull();
 
-        presets.dispatchEvent(new PointerEvent('pointerenter'));
+        quickWorkflows.dispatchEvent(new PointerEvent('pointerenter'));
         await nextTick();
         expect(document.querySelector('[data-action-id="add-prompt"]')).toBeNull();
+        const workflowAction = document.querySelector<HTMLButtonElement>(
+            '[data-action-id="workflow-context-target-0"]',
+        )!;
+        expect(workflowAction.getAttribute('aria-label')).toBe('Summarize · context target');
+        expect(workflowAction.style.getPropertyValue('--quick-action-accent')).toBe('#735f9c');
+        expect(workflowAction.querySelector('ui-icon-stub')?.getAttribute('name')).toBe('routing-icon');
+        expect(quickWorkflows.getAttribute('aria-expanded')).toBe('true');
+        expect(addNode.getAttribute('aria-expanded')).toBe('false');
+
+        presets.dispatchEvent(new PointerEvent('pointerenter'));
+        await nextTick();
+        expect(document.querySelector('[data-action-id="workflow-context-target-0"]')).toBeNull();
         const presetAction = document.querySelector<HTMLButtonElement>('[data-action-id="preset-one"]')!;
         expect(presetAction).not.toBeNull();
         expect(presetAction.getAttribute('aria-label')).toBe('Long accessible preset name');
