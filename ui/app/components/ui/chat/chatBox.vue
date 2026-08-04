@@ -166,6 +166,11 @@ const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
 
+const handleGenerateNew = (message: string, files: FileSystemObject[]) => {
+    graphEvents.emit('open-upcoming-node-data', {});
+    generateNew(null, message, files);
+};
+
 const chatPanelStyle = computed(() => {
     if (!openChatId.value || !isCompactCanvasWidth.value) return undefined;
 
@@ -490,11 +495,7 @@ onUnmounted(() => {
                 from="chat"
                 class="max-h-[600px]!"
                 @trigger-scroll="triggerScroll"
-                @generate="
-                    (message: string, files: FileSystemObject[]) => {
-                        generateNew(null, message, files);
-                    }
-                "
+                @generate="handleGenerateNew"
                 @go-back-to-bottom="goBackToBottom"
                 @cancel-stream="handleCancelStream"
                 @select-node-type="
