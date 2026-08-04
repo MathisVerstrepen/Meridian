@@ -42,6 +42,8 @@ type BusEvents = {
         direction: string;
         plan: ExecutionPlanResponse;
     };
+    'execution-status': { graphId: string; active: boolean };
+    'stop-execution': { graphId: string };
 
     'highlight-node': { nodeId: string | null };
 

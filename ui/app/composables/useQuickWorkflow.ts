@@ -87,15 +87,9 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
     };
 
     const createQuickWorkflow = (payload: QuickWorkflowCreatePayload): string | undefined => {
-        if (!graphId.value) return;
+        if (!canCreateQuickWorkflow(payload)) return;
         const anchor = getNodes.value.find((node) => node.id === payload.fromNodeId);
-        if (
-            !anchor ||
-            !nodeHasQuickWorkflowHandle(anchor.type, payload.category, payload.direction) ||
-            !targetIsAvailable(payload, anchor)
-        ) {
-            return;
-        }
+        if (!anchor) return;
         const definitions = resolveDefinitions(payload);
         if (!definitions) return;
 
@@ -154,5 +148,16 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
         return mainNode.id;
     };
 
-    return { createQuickWorkflow };
+    function canCreateQuickWorkflow(payload: QuickWorkflowCreatePayload): boolean {
+        if (!graphId.value) return false;
+        const anchor = getNodes.value.find((node) => node.id === payload.fromNodeId);
+        return !!(
+            anchor &&
+            nodeHasQuickWorkflowHandle(anchor.type, payload.category, payload.direction) &&
+            targetIsAvailable(payload, anchor) &&
+            resolveDefinitions(payload)
+        );
+    }
+
+    return { createQuickWorkflow, canCreateQuickWorkflow };
 };

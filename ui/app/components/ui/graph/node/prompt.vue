@@ -24,7 +24,9 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataPrompt>>();
+const props = withDefaults(defineProps<NodeProps<DataPrompt> & { presetEditor?: boolean }>(), {
+    presetEditor: false,
+});
 
 // --- Local State ---
 const minHeight = ref(blockDefinition?.minSize?.height);
@@ -126,6 +128,11 @@ const assemblePromptFromTemplate = () => {
 
 const doneAction = async (generateNext: boolean) => {
     props.data.prompt = assemblePromptFromTemplate();
+
+    if (props.presetEditor) {
+        emit('updateNodeInternals');
+        return;
+    }
 
     await saveGraph();
     if (!generateNext) {
@@ -245,6 +252,7 @@ onUnmounted(() => {
     />
 
     <UiGraphNodeUtilsRunToolbar
+        v-if="!props.presetEditor"
         :graph-id="graphId"
         :node-id="props.id"
         :selected="props.selected"
@@ -280,6 +288,7 @@ onUnmounted(() => {
             <div v-if="isVisible" class="flex items-center">
                 <!-- Edit Button (New) -->
                 <button
+                    v-if="!props.presetEditor"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex
                         h-7 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-bold
                         transition-colors"
@@ -290,7 +299,7 @@ onUnmounted(() => {
                 </button>
 
                 <button
-                    v-if="isTemplateMode"
+                    v-if="isTemplateMode && !props.presetEditor"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
                         cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-bold
                         transition-colors"
@@ -422,11 +431,13 @@ onUnmounted(() => {
         type="target"
         :is-dragging="props.dragging"
         is-visible
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
     <UiGraphNodeUtilsHandlePrompt
         :id="props.id"
         type="source"
         :is-dragging="props.dragging"
         is-visible
+        :show-quick-workflow-wheel="!props.presetEditor"
     />
 </template>

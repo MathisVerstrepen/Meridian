@@ -13,9 +13,11 @@ const props = withDefaults(
         isDragging: boolean;
         multipleInput?: boolean;
         isVisible?: boolean;
+        showQuickWorkflowWheel?: boolean;
     }>(),
     {
         style: () => ({}),
+        showQuickWorkflowWheel: true,
     },
 );
 
@@ -115,6 +117,7 @@ const wheelOptions = computed(() =>
 
         <!-- Radial Menu -->
         <UiGraphNodeUtilsWheel
+            v-if="props.showQuickWorkflowWheel"
             :node-id="props.id"
             :options="wheelOptions"
             :is-hovering="isHovering"

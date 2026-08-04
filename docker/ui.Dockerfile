@@ -7,8 +7,8 @@ ENV NUXT_PUBLIC_VERSION=$NUXT_PUBLIC_VERSION
 
 WORKDIR /ui
 
-# Install pnpm globally
-RUN npm install -g pnpm --no-cache
+# Activate project-pinned pnpm through Corepack
+RUN corepack enable pnpm
 
 # Copy dependency manifests first to leverage Docker's build cache.
 COPY ./ui/package.json ./ui/pnpm-lock.yaml ./
@@ -35,8 +35,8 @@ COPY --from=builder /ui/.output ./.output
 # Copy dependency manifests to install only production dependencies
 COPY --from=builder /ui/package.json /ui/pnpm-lock.yaml ./
 
-# Install pnpm to manage production dependencies
-RUN npm install -g pnpm --no-cache
+# Activate project-pinned pnpm through Corepack
+RUN corepack enable pnpm
 
 # Install ONLY production dependencies
 RUN pnpm install --prod --frozen-lockfile

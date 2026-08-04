@@ -9,6 +9,7 @@ import {
 
 interface PlaceBlockOptions {
     graphId: string;
+    flowId?: string;
     blocId: string;
     fromNodeId?: string | null;
     positionFrom: { x: number; y: number };
@@ -24,7 +25,7 @@ export const useGraphActions = () => {
     const { error, info, warning } = useToast();
 
     const placeBlock = (options: PlaceBlockOptions) => {
-        const { addNodes, getNodes } = useVueFlow('main-graph-' + options.graphId);
+        const { addNodes, getNodes } = useVueFlow(options.flowId ?? 'main-graph-' + options.graphId);
 
         const blockData = getBlockById(options.blocId);
         if (!blockData) {
@@ -72,8 +73,9 @@ export const useGraphActions = () => {
         targetId: string | undefined,
         sourceHandleId: string | null = null,
         targetHandleId: string | null = null,
+        flowId?: string,
     ) => {
-        const { addEdges } = useVueFlow('main-graph-' + graphId);
+        const { addEdges } = useVueFlow(flowId ?? 'main-graph-' + graphId);
 
         if (!sourceId || !targetId) {
             console.error('Source or target ID is missing for edge placement.');
@@ -384,8 +386,9 @@ export const useGraphActions = () => {
         graphId: string,
         nodesForMenu: GraphNode[],
         closeMenu: () => void = () => {},
+        flowId?: string,
     ) => {
-        const { addNodes, setNodes, getNodes } = useVueFlow('main-graph-' + graphId);
+        const { addNodes, setNodes, getNodes } = useVueFlow(flowId ?? 'main-graph-' + graphId);
 
         if (nodesForMenu.length === 0) {
             console.warn('No nodes selected for grouping.');
@@ -468,8 +471,8 @@ export const useGraphActions = () => {
         ]);
     };
 
-    const deleteCommentGroup = (graphId: string, groupId: string) => {
-        const { getNodes, setNodes } = useVueFlow('main-graph-' + graphId);
+    const deleteCommentGroup = (graphId: string, groupId: string, flowId?: string) => {
+        const { getNodes, setNodes } = useVueFlow(flowId ?? 'main-graph-' + graphId);
         const nodes = getNodes.value;
         const groupNode = nodes.find((n) => n.id === groupId);
 
@@ -553,8 +556,11 @@ export const useGraphActions = () => {
         connection: Connection,
         graphId: string,
         newEdgeId: string,
+        flowId?: string,
     ) => {
-        const { getNodes, getEdges, removeEdges, addEdges } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, getEdges, removeEdges, addEdges } = useVueFlow(
+            flowId ?? 'main-graph-' + graphId,
+        );
 
         const targetNode = getNodes.value.find((n) => n.id === connection.target);
         if (!targetNode) {
@@ -586,6 +592,7 @@ export const useGraphActions = () => {
                         existingSourceNode.id,
                         connection.sourceHandle,
                         `context_${existingSourceNode.id}`,
+                        flowId,
                     );
                     nextTick(() => {
                         removeEdges([newEdgeId]);
@@ -616,6 +623,7 @@ export const useGraphActions = () => {
                         blocId: 'primary-context-merger',
                         positionFrom: position,
                         center: false,
+                        flowId,
                     });
 
                     if (!newMergerNode) return;
@@ -630,6 +638,7 @@ export const useGraphActions = () => {
                         newMergerNode.id,
                         existingEdge.sourceHandle,
                         `context_${newMergerNode.id}`,
+                        flowId,
                     );
 
                     // Connect new source to the new merger
@@ -639,6 +648,7 @@ export const useGraphActions = () => {
                         newMergerNode.id,
                         connection.sourceHandle,
                         `context_${newMergerNode.id}`,
+                        flowId,
                     );
 
                     // Connect the new merger to the original target
@@ -648,6 +658,7 @@ export const useGraphActions = () => {
                         targetNode.id,
                         `context_${newMergerNode.id}`,
                         connection.targetHandle,
+                        flowId,
                     );
 
                     nextTick(() => {

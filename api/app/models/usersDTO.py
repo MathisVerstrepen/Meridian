@@ -6,6 +6,7 @@ from typing import List, Optional
 from models.chatDTO import EffortEnum
 from models.context_merger import ContextMergerMode
 from models.message import NodeTypeEnum
+from models.node_preset_dto import NodePresetSettingsDTO, default_node_preset_settings
 from pydantic import BaseModel, Field
 from pydantic.alias_generators import to_camel
 
@@ -289,6 +290,7 @@ class SettingsDTO(BaseModel):
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
     toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
     toolsVisualise: ToolsVisualiseSettings = ToolsVisualiseSettings()
+    nodePresets: NodePresetSettingsDTO = Field(default_factory=default_node_preset_settings)
 
 
 class PromptTemplateBase(BaseModel):

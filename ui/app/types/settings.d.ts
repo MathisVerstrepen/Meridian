@@ -5,6 +5,7 @@ import type {
     PDFEngine,
     ContextMergerModeEnum,
 } from '@/types/enums';
+import type { NodePresetSettings } from '@/types/nodePresets';
 
 export type FileManagerSort =
     | 'name_asc'
@@ -220,4 +221,5 @@ export interface Settings {
     toolsLinkExtraction: ToolsLinkExtractionSettings;
     toolsImageGeneration: ToolsImageGenerationSettings;
     toolsVisualise: ToolsVisualiseSettings;
+    nodePresets: NodePresetSettings;
 }

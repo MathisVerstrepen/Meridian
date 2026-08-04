@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
-import type { Repo } from '@/types/github';
+import type { RepositoryInfo } from '@/types/github';
 
 interface Folder {
     id: string;
@@ -236,7 +236,7 @@ export interface DataRouting {
 }
 
 export interface DataGithub {
-    repo: Repo | undefined;
+    repo: RepositoryInfo | undefined;
     files: FileTreeNode[];
     selectedIssues: GithubIssue[] | undefined;
     branch: string | undefined;

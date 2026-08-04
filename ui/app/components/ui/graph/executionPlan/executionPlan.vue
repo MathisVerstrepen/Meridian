@@ -179,6 +179,7 @@ const cancelPlanClosure = () => {
 // When the execution end, we close the plan after a delay of 5 seconds
 // if the plan is not open anymore, if it is open, we wait for it to be close
 watch(isExecuting, (executing) => {
+    graphEvents.emit('execution-status', { graphId: props.graphId, active: executing });
     // When execution finishes, schedule the plan to close if the panel is not open.
     if (!executing && plan.value && !isOpen.value) {
         schedulePlanClosure();
@@ -201,7 +202,8 @@ watch(isOpen, (open) => {
 
 // --- Lifecycle ---
 onMounted(() => {
-    const unsubscribe = graphEvents.on('execution-plan', async (data) => {
+    const unsubscribePlan = graphEvents.on('execution-plan', async (data) => {
+        if (data.graphId !== props.graphId) return;
         plan.value = data.plan || null;
         if (plan.value) {
             // Cancel any pending closure from a previous run. This prevents
@@ -213,8 +215,19 @@ onMounted(() => {
             executer();
         }
     });
+    const unsubscribeStop = graphEvents.on('stop-execution', ({ graphId }) => {
+        if (graphId === props.graphId && isExecuting.value) {
+            void stopExecution();
+        }
+    });
 
-    onUnmounted(unsubscribe);
+    graphEvents.emit('execution-status', { graphId: props.graphId, active: false });
+    onUnmounted(() => {
+        unsubscribePlan();
+        unsubscribeStop();
+        if (closeTimerId.value) clearTimeout(closeTimerId.value);
+        graphEvents.emit('execution-status', { graphId: props.graphId, active: false });
+    });
 });
 </script>
 

@@ -226,6 +226,24 @@ const unlinkNodeFromGroup = (nodeId: string) => {
     }
 };
 
+const {
+    isOpen: isQuickActionWheelOpen,
+    actions: quickActions,
+    position: quickActionPosition,
+    onPointerDown: onQuickActionPointerDown,
+    onContextMenu: onQuickActionContextMenu,
+    onKeyboardContextMenu,
+    activate: activateQuickAction,
+    close: closeQuickActionWheel,
+} = useGraphQuickActions({
+    graphId,
+    onSelectionStart,
+    deleteNode,
+    unlinkNode: unlinkNodeFromGroup,
+    deleteGroup: deleteCommentGroup,
+    fitGraph: () => fitView({ maxZoom: 1, minZoom: 0.4, padding: 0.2 }),
+});
+
 const fetchGraph = async (id: string) => {
     isGraphLoading.value = true;
     graphReady.value = false;
@@ -326,6 +344,9 @@ const createReplacementGraph = async () => {
 const handleKeyDown = (event: KeyboardEvent) => {
     // Prevent node paste if chat is open
     if (openChatId.value) return;
+
+    const graphContainer = document.getElementById('graph-container');
+    if (graphContainer && onKeyboardContextMenu(event, graphContainer)) return;
 
     // Check if the currently focused element is a textarea, input, or has nodrag class
     const activeElement = document.activeElement;
@@ -621,11 +642,13 @@ onUnmounted(() => {
 <template>
     <div
         id="graph-container"
+        tabindex="0"
+        aria-label="Graph canvas. Press Context Menu or Shift+F10 for quick actions."
         class="relative h-full w-full"
         @dragover="onDragOver"
         @drop="onDrop"
-        @mousedown.right="onSelectionStart"
-        @contextmenu.prevent
+        @mousedown="onQuickActionPointerDown"
+        @contextmenu="onQuickActionContextMenu"
     >
         <ClientOnly>
             <UiGraphLoadErrorState
@@ -828,6 +851,15 @@ onUnmounted(() => {
                 width: `${selectionRect.width}px`,
                 height: `${selectionRect.height}px`,
             }"
+        />
+
+        <UiGraphQuickActionWheel
+            v-if="isQuickActionWheelOpen"
+            :actions="quickActions"
+            :x="quickActionPosition.x"
+            :y="quickActionPosition.y"
+            @activate="activateQuickAction"
+            @close="closeQuickActionWheel"
         />
 
     </template>

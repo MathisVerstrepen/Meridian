@@ -160,7 +160,7 @@ export function useGraphSelection(
         selectionRect.value = { x: 0, y: 0, width: 0, height: 0 };
     };
 
-    const onSelectionStart = (event: MouseEvent) => {
+    const onSelectionStart = (event: MouseEvent, currentMoveEvent?: MouseEvent) => {
         getNodes.value.forEach((node) => (node.selected = false));
         isSelecting.value = true;
         selectionStartPos.value = { x: event.clientX, y: event.clientY };
@@ -172,6 +172,10 @@ export function useGraphSelection(
 
         window.addEventListener('mousemove', onSelectionMove);
         window.addEventListener('mouseup', onSelectionEnd as EventListener);
+
+        if (currentMoveEvent) {
+            onSelectionMove(currentMoveEvent);
+        }
     };
 
     onUnmounted(() => {

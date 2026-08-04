@@ -100,6 +100,7 @@ const handleDrop = (event: DragEvent) => {
         ]"
         :draggable="canDrag"
         :data-file-draggable="canDrag ? 'true' : undefined"
+        data-graph-quick-actions-ignore
         tabindex="0"
         @click="handleClick"
         @keydown.enter.prevent="handleClick"
