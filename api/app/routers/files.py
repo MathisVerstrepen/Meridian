@@ -43,10 +43,10 @@ from services.files import (
     copy_file_system_item,
     create_user_root_folder,
     delete_file_from_disk,
-    ensure_resized_image,
     get_user_storage_path,
     save_upload_file_to_disk,
 )
+from services.image_previews import ImagePreviewSize, ensure_image_preview
 from services.settings import get_user_settings
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -55,7 +55,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 ConflictPolicy = Literal["fail", "replace", "keep_both", "skip"]
 
 EMBEDDABLE_HTML_CONTENT_TYPE = "text/html"
-FILE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000"}
+FILE_CACHE_HEADERS = {"Cache-Control": "private, max-age=31536000"}
 HTML_EMBED_CACHE_HEADERS = {"Cache-Control": "private, no-store"}
 DOWNLOAD_EXTENSION_BY_CONTENT_TYPE = {
     "image/jpeg": "jpg",
@@ -998,14 +998,13 @@ async def copy_file_or_folder(
 async def view_file(
     request: Request,
     file_id: uuid.UUID,
-    size: Optional[str] = Query(None, pattern=r"^\d+x\d+$"),
+    size: Optional[ImagePreviewSize] = Query(None),
     download: bool = False,
     user_id_str: str = Depends(get_current_user_id),
 ):
     """
     Serves a file to the user after checking for ownership.
-    If 'size' is provided (e.g., '160x160') and the file is an image,
-    it returns a resized version, caching it if necessary.
+    If an allowed 'size' is provided for an image, returns a cached WebP preview.
     """
     user_id = uuid.UUID(user_id_str)
     file_record = await _get_owned_file_or_404(request, file_id, user_id)
@@ -1023,14 +1022,24 @@ async def view_file(
     )
     response_filename = _build_id_download_filename(file_record) if download else file_record.name
 
-    # Check if resize is requested for an image
-    if size and file_record.content_type and file_record.content_type.startswith("image/"):
-        resized_path = await ensure_resized_image(user_id, file_path, size)
-        if resized_path:
+    if (
+        not download
+        and size
+        and file_record.content_type
+        and file_record.content_type.startswith("image/")
+    ):
+        preview = await ensure_image_preview(
+            user_id,
+            file_path,
+            size,
+            file_record.content_hash,
+        )
+        if preview:
             return _build_file_response(
-                path=resized_path,
-                media_type=file_record.content_type,
+                path=preview.path,
+                media_type=preview.media_type,
                 filename=response_filename,
+                headers=FILE_CACHE_HEADERS,
                 content_disposition_type=content_disposition_type,
             )
 

@@ -21,6 +21,11 @@ export const IMAGE_PLAYGROUND_RESOLUTIONS: Array<{ id: string; pixels: string }>
 export const IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE =
     'application/x-meridian-image-playground-generated-image';
 
+export type ImagePreviewSize = '48x48' | '160x160' | '512x512';
+
+export const IMAGE_PLAYGROUND_GALLERY_SIZES =
+    '(min-width: 1536px) 20vw, (min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw';
+
 const ASPECT_RATIO_TOLERANCE = 0.02;
 
 type StyleVisual = {
@@ -61,10 +66,13 @@ export const IMAGE_PLAYGROUND_STYLE_VISUALS: Record<string, StyleVisual> = {
     },
 };
 
-export const imagePlaygroundImageUrl = (id: string, thumbnail = false) =>
-    thumbnail
-        ? `/api/auth/refresh/files/view/${id}?size=512x512`
+export const imagePlaygroundImageUrl = (id: string, previewSize?: ImagePreviewSize) =>
+    previewSize
+        ? `/api/auth/refresh/files/view/${id}?size=${previewSize}`
         : `/api/auth/refresh/files/view/${id}`;
+
+export const imagePlaygroundGallerySrcset = (id: string) =>
+    `${imagePlaygroundImageUrl(id, '160x160')} 160w, ${imagePlaygroundImageUrl(id, '512x512')} 512w`;
 
 export const imagePlaygroundDownloadUrl = (id: string) =>
     `/api/auth/refresh/files/view/${id}?download=1`;

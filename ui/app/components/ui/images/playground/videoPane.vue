@@ -896,7 +896,7 @@ defineExpose({
                             @dragend.stop="onReferenceDragEnd"
                         >
                             <img
-                                :src="imagePlaygroundImageUrl(image.id, true)"
+                                :src="imagePlaygroundImageUrl(image.id, '160x160')"
                                 :alt="image.name"
                                 class="h-full w-full object-cover"
                             />

@@ -432,7 +432,7 @@ const tooltip =
                                 @click.prevent="openReferenceInNewTab(referenceId)"
                             >
                                 <img
-                                    :src="imagePlaygroundImageUrl(referenceId, true)"
+                                    :src="imagePlaygroundImageUrl(referenceId, '160x160')"
                                     alt="Reference image used for this generation"
                                     loading="lazy"
                                     class="h-full w-full object-cover transition duration-300
