@@ -126,11 +126,14 @@ const handlePaste = (event: ClipboardEvent) => {
     }
 
     if (imageFiles.length) {
-        void addFiles(imageFiles);
+        void addFiles(imageFiles, 'keep_both');
     }
 };
 
-const addFiles = async (newFiles: globalThis.FileList | File[]) => {
+const addFiles = async (
+    newFiles: globalThis.FileList | File[],
+    conflictPolicy?: FileConflictPolicy,
+) => {
     if (!newFiles) return;
 
     const currentUploads: Record<string, { status: UploadStatus }> = {};
@@ -166,7 +169,9 @@ const addFiles = async (newFiles: globalThis.FileList | File[]) => {
     const uploadPromises = fileList.map(async (file, index) => {
         const tempId = Object.keys(currentUploads)[index];
         try {
-            const newFile = await uploadFile(file, targetId);
+            const newFile = conflictPolicy
+                ? await uploadFile(file, targetId, conflictPolicy)
+                : await uploadFile(file, targetId);
             files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {

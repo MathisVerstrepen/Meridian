@@ -83,6 +83,14 @@ const dispatchPaste = (element: Element, text: string, files: File[]) => {
     element.dispatchEvent(event);
 };
 
+const dispatchDrop = (element: Element, files: File[]) => {
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', {
+        value: { files },
+    });
+    element.dispatchEvent(event);
+};
+
 const selectCloudAttachments = (files: FileSystemObject[]) => {
     const registration = stubs.graphOn.mock.calls.find(
         (call) => call[0] === 'close-attachment-select',
@@ -138,8 +146,74 @@ describe('chat text input clipboard paste', () => {
                 'Pasted caption',
             );
             expect(stubs.uploadFile).toHaveBeenCalledOnce();
-            expect(stubs.uploadFile).toHaveBeenCalledWith(image, 'root');
+            expect(stubs.uploadFile).toHaveBeenCalledWith(image, 'root', 'keep_both');
             expect(stubs.fetchUsage).toHaveBeenCalledOnce();
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('attaches distinct server results from sequential same-name clipboard images', async () => {
+        stubs.uploadFile
+            .mockResolvedValueOnce({
+                id: 'first-image',
+                name: 'image.png',
+                type: 'file',
+                content_type: 'image/png',
+                created_at: '',
+                updated_at: '',
+                cached: false,
+            })
+            .mockResolvedValueOnce({
+                id: 'second-image',
+                name: 'image (1).png',
+                type: 'file',
+                content_type: 'image/png',
+                created_at: '',
+                updated_at: '',
+                cached: false,
+            });
+        const wrapper = await mountInput('chat', false);
+        const firstImage = new File(['first'], 'image.png', { type: 'image/png' });
+        const secondImage = new File(['second'], 'image.png', { type: 'image/png' });
+
+        try {
+            dispatchPaste(wrapper.get('[contenteditable]').element, '', [firstImage]);
+            await flushPromises();
+            dispatchPaste(wrapper.get('[contenteditable]').element, '', [secondImage]);
+            await flushPromises();
+
+            expect(stubs.uploadFile).toHaveBeenNthCalledWith(
+                1,
+                firstImage,
+                'root',
+                'keep_both',
+            );
+            expect(stubs.uploadFile).toHaveBeenNthCalledWith(
+                2,
+                secondImage,
+                'root',
+                'keep_both',
+            );
+            expect(wrapper.findAll('img').map((preview) => preview.attributes('src'))).toEqual([
+                '/api/auth/refresh/files/view/first-image?size=160x160',
+                '/api/auth/refresh/files/view/second-image?size=160x160',
+            ]);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('keeps drag-and-drop uploads policy-free', async () => {
+        const wrapper = await mountInput();
+        const image = new File(['image'], 'dropped.png', { type: 'image/png' });
+
+        try {
+            dispatchDrop(wrapper.get('[contenteditable]').element, [image]);
+            await flushPromises();
+
+            expect(stubs.uploadFile).toHaveBeenCalledOnce();
+            expect(stubs.uploadFile).toHaveBeenCalledWith(image, 'root');
         } finally {
             wrapper.unmount();
         }
