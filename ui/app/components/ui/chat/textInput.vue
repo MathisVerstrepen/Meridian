@@ -84,24 +84,36 @@ const handleDrop = async (event: DragEvent) => {
 const handlePaste = (event: ClipboardEvent) => {
     event.preventDefault();
 
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+
+    const imageFiles = Array.from(clipboardData.items)
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+
     // Remove formatting from pasted text
-    const text = event.clipboardData?.getData('text/plain');
-    if (!text) return;
+    const text = clipboardData.getData('text/plain');
+    if (text) {
+        document.execCommand('insertText', false, text);
 
-    document.execCommand('insertText', false, text);
+        onInput();
 
-    onInput();
+        // After the DOM updates from the paste, scroll the input field to the bottom
+        const el = textareaRef.value;
+        if (el) {
+            nextTick(() => {
+                el.scrollTop = el.scrollHeight;
+            });
+        }
+    }
 
-    // After the DOM updates from the paste, scroll the input field to the bottom
-    const el = textareaRef.value;
-    if (el) {
-        nextTick(() => {
-            el.scrollTop = el.scrollHeight;
-        });
+    if (imageFiles.length) {
+        void addFiles(imageFiles);
     }
 };
 
-const addFiles = async (newFiles: globalThis.FileList) => {
+const addFiles = async (newFiles: globalThis.FileList | File[]) => {
     if (!newFiles) return;
 
     const currentUploads: Record<string, { status: UploadStatus }> = {};
