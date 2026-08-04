@@ -36,6 +36,18 @@ type UploadStatus = 'uploading' | 'complete' | 'error';
 const uploads = ref<Record<string, { status: UploadStatus }>>({});
 const isUploading = computed(() => Object.keys(uploads.value).length > 0);
 
+const isImageAttachment = (file: FileSystemObject) => {
+    if (file.type !== 'file') return false;
+
+    const contentType = file.content_type?.toLowerCase().split(';')[0]?.trim();
+    if (contentType?.startsWith('image/')) return true;
+
+    return /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name);
+};
+
+const imageAttachments = computed(() => files.value.filter(isImageAttachment));
+const nonImageAttachments = computed(() => files.value.filter((file) => !isImageAttachment(file)));
+
 // --- Core Logic Functions ---
 const handleInputWheel = (event: WheelEvent) => {
     const el = textareaRef.value;
@@ -70,6 +82,11 @@ const sendMessage = async () => {
     const el = textareaRef.value;
     if (!el) return;
     el.innerText = '';
+};
+
+const removeFile = (file: FileSystemObject) => {
+    const index = files.value.indexOf(file);
+    if (index >= 0) files.value.splice(index, 1);
 };
 
 const handleDrop = async (event: DragEvent) => {
@@ -224,20 +241,40 @@ onMounted(() => {
         </button>
 
         <!-- File attachments -->
-        <ul
+        <div
             v-if="files.length > 0"
-            class="decoration-none bg-obsidian shadow-soft-silk/5 mx-10 flex h-fit
-                w-[calc(80%-3rem)] max-w-268 flex-wrap items-center justify-start gap-2
-                rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
+            data-attachment-grid
+            class="bg-obsidian shadow-soft-silk/5 mx-10 grid h-fit w-[calc(80%-3rem)] max-w-268
+                grid-cols-1 gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
-            <UiChatAttachmentChipListItem
-                v-for="(file, index) in files"
-                :key="file.id"
-                :file="file"
-                :remove-files="true"
-                @remove-file="files.splice(index, 1)"
-            />
-        </ul>
+            <ul
+                v-if="imageAttachments.length > 0"
+                data-attachment-row="images"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatAttachmentChipListItem
+                    v-for="file in imageAttachments"
+                    :key="file.id"
+                    :file="file"
+                    :remove-files="true"
+                    :show-image-preview="true"
+                    @remove-file="removeFile(file)"
+                />
+            </ul>
+            <ul
+                v-if="nonImageAttachments.length > 0"
+                data-attachment-row="files"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatAttachmentChipListItem
+                    v-for="file in nonImageAttachments"
+                    :key="file.id"
+                    :file="file"
+                    :remove-files="true"
+                    @remove-file="removeFile(file)"
+                />
+            </ul>
+        </div>
 
         <!-- Main input text bar -->
         <div
