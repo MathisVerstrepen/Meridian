@@ -181,6 +181,17 @@ def latest_version(tags: list[Any], excluded: str | None = None) -> Version:
     return max(versions)
 
 
+def verify_promotion(client: GitHubClient, version: str) -> str:
+    candidate = Version.parse(version)
+    tags = client.paginate("/tags?per_page=100")
+    newest = latest_version(tags)
+    if candidate != newest:
+        raise ReleaseError(
+            f"promotion candidate {candidate} is stale; newest strict beta tag is {newest}"
+        )
+    return str(candidate)
+
+
 def release_title(version: str) -> str:
     Version.parse(version)
     return f"Release Meridian {version}"
@@ -330,6 +341,8 @@ def _ensure_release(client: GitHubClient, version: str, changelog: str) -> None:
         raise ReleaseError("GitHub release response is invalid")
     comparable = {key: release.get(key) for key in canonical if key != "generate_release_notes"}
     desired = {key: value for key, value in canonical.items() if key != "generate_release_notes"}
+    if release.get("prerelease") is False:
+        desired["prerelease"] = False
     if comparable != desired:
         client.request("PATCH", f"/releases/{release['id']}", desired)
 
@@ -375,13 +388,18 @@ def main(argv: list[str] | None = None) -> int:
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--repository", required=True)
     publish_parser.add_argument("--pull-request-number", required=True, type=int)
+    verify_parser = subparsers.add_parser("verify-promotion")
+    verify_parser.add_argument("--repository", required=True)
+    verify_parser.add_argument("--version", required=True)
     args = parser.parse_args(argv)
     try:
         client = GitHubClient(args.repository, os.environ.get("RELEASE_TOKEN", ""))
         if args.command == "prepare":
             version = prepare(client, args.bump, args.base, args.head)
-        else:
+        elif args.command == "publish":
             version = publish(client, args.pull_request_number)
+        else:
+            version = verify_promotion(client, args.version)
         print(version)
         return 0
     except ReleaseError as exc:

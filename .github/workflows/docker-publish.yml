@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: docker-publish-${{ github.ref }}
+  group: ${{ startsWith(github.ref, 'refs/tags/') && format('meridian-release-{0}', github.repository) || format('docker-publish-{0}', github.ref) }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
@@ -33,6 +33,16 @@ jobs:
             echo "Tag must be a strict non-v X.Y.Z-beta version." >&2
             exit 1
           fi
+
+      - name: Verify release is newest
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: >-
+          python scripts/release_automation.py verify-promotion
+          --repository "$GITHUB_REPOSITORY"
+          --version "$RELEASE_VERSION"
 
       - name: Run release automation tests
         run: python -m unittest discover -s scripts/tests -p 'test_release_automation.py'
@@ -178,3 +188,118 @@ jobs:
           build-args: ${{ matrix.frontend && format('NUXT_PUBLIC_VERSION={0}', steps.meta.outputs.version) || '' }}
           cache-from: type=gha,scope=${{ matrix.cache-scope }}
           cache-to: type=gha,scope=${{ matrix.cache-scope }},mode=max
+
+  promote-images:
+    name: Promote Docker images to latest
+    needs: build-and-push
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Validate release tag
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta$ ]]; then
+            echo "Tag must be a strict non-v X.Y.Z-beta version." >&2
+            exit 1
+          fi
+
+      - name: Checkout trusted release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prevalidate and promote image manifests
+        env:
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          images=(frontend backend browser-service sandbox-manager sandbox-python)
+          repository="${GITHUB_REPOSITORY,,}"
+          sources=()
+          digests=()
+
+          for image in "${images[@]}"; do
+            source="$REGISTRY/$repository/$image:$RELEASE_VERSION"
+            digest="$(docker buildx imagetools inspect "$source" --format '{{json .Manifest}}' | jq -er '.digest')"
+            sources+=("$source")
+            digests+=("$digest")
+          done
+
+          python scripts/release_automation.py verify-promotion \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$RELEASE_VERSION"
+          unset RELEASE_TOKEN
+
+          for index in "${!sources[@]}"; do
+            target="${sources[$index]%:$RELEASE_VERSION}:latest"
+            source="${sources[$index]%:$RELEASE_VERSION}@${digests[$index]}"
+            docker buildx imagetools create --prefer-index=false --tag "$target" "$source"
+          done
+
+  promote-release:
+    name: Promote GitHub Release
+    needs: promote-images
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta$ ]]; then
+            echo "Tag must be a strict non-v X.Y.Z-beta version." >&2
+            exit 1
+          fi
+
+      - name: Checkout trusted release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Wait for and promote GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          python scripts/release_automation.py verify-promotion \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$RELEASE_VERSION"
+
+          release_found=false
+          for attempt in {1..12}; do
+            if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              release_found=true
+              break
+            fi
+            if (( attempt < 12 )); then
+              sleep 10
+            fi
+          done
+          if [[ "$release_found" != true ]]; then
+            echo "GitHub Release $RELEASE_VERSION was not found after 12 attempts." >&2
+            exit 1
+          fi
+
+          python scripts/release_automation.py verify-promotion \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$RELEASE_VERSION"
+          gh release edit "$RELEASE_VERSION" --prerelease=false --latest --repo "$GITHUB_REPOSITORY"
