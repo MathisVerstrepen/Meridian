@@ -206,6 +206,7 @@ async def lifespan(app: FastAPI):
         )
 
         app.state.connection_manager = connection_manager
+        await app.state.connection_manager.start(app.state.redis_manager)
 
         try:
             await refresh_models_dev_catalog(app)
@@ -234,6 +235,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await shutdown_background_tasks(app.state.background_tasks)
+        await connection_manager.close()
         await browser_fetch_manager.close()
 
         if app.state.http_client is not None:
