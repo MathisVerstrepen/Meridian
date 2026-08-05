@@ -5,7 +5,6 @@ import type { GithubSelectorTab, GithubSelectorTarget } from '@/composables/useG
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
-const repositoryStore = useRepositoryStore();
 
 // --- State from Stores ---
 const { blockGithubSettings } = storeToRefs(settingsStore);
@@ -14,7 +13,6 @@ const { blockGithubSettings } = storeToRefs(settingsStore);
 const { getGenericRepoTree, getGenericRepoBranches, cloneRepository, pullGenericRepo } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
-const { fetchRepositories } = repositoryStore;
 
 // --- Local State ---
 const isOpen = ref(false);
@@ -178,14 +176,7 @@ onMounted(() => {
         selectedIssues.value = repoContent.value?.selectedIssues ?? [];
         errorState.value = null;
 
-        if (!repoContent.value) {
-            try {
-                await fetchRepositories();
-            } catch {
-                error('Failed to fetch repositories');
-            }
-            return;
-        }
+        if (!repoContent.value) return;
 
         // Gitlab migration support
         if (!repoContent.value.repo.provider) {
@@ -238,6 +229,8 @@ onUnmounted(() => {
             <div class="flex h-full w-full">
                 <!-- Tab Navigation (Left Side) -->
                 <div
+                    v-if="repoContent"
+                    data-github-tab-navigation
                     class="bg-obsidian/50 border-stone-gray/10 flex w-16 flex-col items-center gap-4
                         border-r py-8"
                 >
@@ -276,9 +269,10 @@ onUnmounted(() => {
 
                 <!-- Main Content -->
                 <div class="flex grow overflow-hidden p-8">
-                    <div v-if="!repoContent" class="m-auto w-full max-w-xl">
-                        <UiGraphNodeUtilsGithubRepoSelect v-model:current-repo="selectedRepo" />
-                    </div>
+                    <UiGraphNodeUtilsGithubRepositoryPicker
+                        v-if="isOpen && !repoContent"
+                        @select="selectedRepo = $event"
+                    />
 
                     <template v-if="repoContent && fileTree && activeTab === 'files'">
                         <UiGraphNodeUtilsGithubFileTreeSelector

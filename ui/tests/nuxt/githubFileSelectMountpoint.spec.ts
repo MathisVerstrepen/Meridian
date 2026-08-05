@@ -8,7 +8,6 @@ import type { RepoContent, RepositoryInfo } from '@/types/github';
 const stubs = vi.hoisted(() => ({
     graphOn: vi.fn(),
     graphEmit: vi.fn(),
-    fetchRepositories: vi.fn().mockResolvedValue([]),
     getGenericRepoTree: vi.fn(),
     getGenericRepoBranches: vi.fn(),
     cloneRepository: vi.fn(),
@@ -17,9 +16,6 @@ const stubs = vi.hoisted(() => ({
 }));
 
 mockNuxtImport('useSettingsStore', () => () => ({ storeKind: 'settings' }));
-mockNuxtImport('useRepositoryStore', () => () => ({
-    fetchRepositories: stubs.fetchRepositories,
-}));
 mockNuxtImport('storeToRefs', () => () => ({
     blockGithubSettings: { value: { autoPull: false } },
 }));
@@ -32,11 +28,10 @@ mockNuxtImport('useAPI', () => () => ({
 mockNuxtImport('useGraphEvents', () => () => ({ on: stubs.graphOn, emit: stubs.graphEmit }));
 mockNuxtImport('useToast', () => () => ({ error: stubs.error }));
 
-const RepoSelectStub = defineComponent({
-    name: 'UiGraphNodeUtilsGithubRepoSelect',
-    props: ['currentRepo'],
-    emits: ['update:currentRepo'],
-    setup: () => () => h('div', { 'data-repo-select': '' }),
+const RepositoryPickerStub = defineComponent({
+    name: 'UiGraphNodeUtilsGithubRepositoryPicker',
+    emits: ['select'],
+    setup: () => () => h('div', { 'data-repository-picker': '' }),
 });
 
 const IssueSelectorStub = defineComponent({
@@ -76,7 +71,7 @@ const mountSelector = () =>
             stubs: {
                 AnimatePresence: SlotStub,
                 UiIcon: true,
-                UiGraphNodeUtilsGithubRepoSelect: RepoSelectStub,
+                UiGraphNodeUtilsGithubRepositoryPicker: RepositoryPickerStub,
                 UiGraphNodeUtilsGithubIssuePrSelector: IssueSelectorStub,
                 UiGraphNodeUtilsGithubFileTreeSelector: true,
             },
@@ -87,7 +82,6 @@ describe('Git file selector mountpoint', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         stubs.graphOn.mockReturnValue(() => undefined);
-        stubs.fetchRepositories.mockResolvedValue([]);
         stubs.getGenericRepoTree.mockResolvedValue({
             name: '.',
             type: 'directory',
@@ -106,11 +100,15 @@ describe('Git file selector mountpoint', () => {
         });
         await flushPromises();
 
-        expect(stubs.fetchRepositories).toHaveBeenCalledOnce();
-        const repoSelector = wrapper.getComponent(RepoSelectStub);
-        repoSelector.vm.$emit('update:currentRepo', repo);
+        expect(wrapper.find('[data-repository-picker]').exists()).toBe(true);
+        expect(wrapper.find('[data-github-tab-navigation]').exists()).toBe(false);
+        expect(wrapper.findComponent({ name: 'UiGraphNodeUtilsGithubRepoSelect' }).exists()).toBe(
+            false,
+        );
+        wrapper.getComponent(RepositoryPickerStub).vm.$emit('select', repo);
         await flushPromises();
 
+        expect(wrapper.find('[data-github-tab-navigation]').exists()).toBe(true);
         expect(wrapper.find('[data-issue-selector]').exists()).toBe(true);
         expect(stubs.getGenericRepoTree).toHaveBeenCalledWith('github', 'meridian/test', 'develop');
 
