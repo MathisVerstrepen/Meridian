@@ -32,8 +32,7 @@ default_mermaid_helper = {
 
 
 def upgrade() -> None:
-    op.execute(
-        """
+    op.execute("""
         WITH mermaid_prompt_ids AS (
             SELECT
                 s.user_id,
@@ -67,11 +66,9 @@ def upgrade() -> None:
         )::jsonb
         FROM mermaid_prompt_ids
         WHERE g.user_id = mermaid_prompt_ids.user_id
-        """
-    )
+        """)
 
-    op.execute(
-        f"""
+    op.execute(f"""
         UPDATE settings
         SET settings_data = jsonb_set(
             jsonb_set(
@@ -102,13 +99,11 @@ def upgrade() -> None:
             true
         )::jsonb
         WHERE jsonb_typeof((settings_data)::jsonb) = 'object'
-        """
-    )
+        """)
 
 
 def downgrade() -> None:
-    op.execute(
-        f"""
+    op.execute(f"""
         UPDATE settings
         SET settings_data = jsonb_set(
             (settings_data)::jsonb - 'toolsMermaidGeneration',
@@ -136,5 +131,4 @@ def downgrade() -> None:
               WHERE COALESCE(prompt->>'reference', '') = 'MERMAID_DIAGRAM_PROMPT'
                  OR COALESCE(prompt->>'name', '') = 'Mermaid Helper'
           )
-        """
-    )
+        """)

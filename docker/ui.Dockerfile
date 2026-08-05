@@ -11,7 +11,7 @@ WORKDIR /ui
 RUN corepack enable pnpm
 
 # Copy dependency manifests first to leverage Docker's build cache.
-COPY ./ui/package.json ./ui/pnpm-lock.yaml ./
+COPY ./ui/package.json ./ui/pnpm-lock.yaml ./ui/pnpm-workspace.yaml ./
 
 # Install all dependencies (including devDependencies) required for the build
 RUN pnpm install --frozen-lockfile
@@ -33,7 +33,7 @@ WORKDIR /ui
 # Copy only the compiled output from the 'builder' stage
 COPY --from=builder /ui/.output ./.output
 # Copy dependency manifests to install only production dependencies
-COPY --from=builder /ui/package.json /ui/pnpm-lock.yaml ./
+COPY --from=builder /ui/package.json /ui/pnpm-lock.yaml /ui/pnpm-workspace.yaml ./
 
 # Activate project-pinned pnpm through Corepack
 RUN corepack enable pnpm
