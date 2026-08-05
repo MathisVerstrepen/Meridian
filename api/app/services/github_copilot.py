@@ -17,6 +17,7 @@ from database.redis.redis_ops import RedisManager
 from models.inference import ModelInfo
 from models.message import ToolEnum
 from models.tool_question import AskUserPendingResult
+from services.github_copilot_lifecycle import build_scoped_copilot_env, shutdown_copilot_runtime
 from services.provider_runtime import (
     build_runtime_directory_layout,
     cleanup_runtime_dir,
@@ -90,14 +91,13 @@ class GitHubCopilotToolExecutionState:
 
 
 try:
-    from copilot import CopilotClient, SubprocessConfig
+    from copilot import CopilotClient
     from copilot.session import PermissionHandler
     from copilot.tools import Tool, ToolInvocation, ToolResult
 
     GITHUB_COPILOT_SDK_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised when SDK missing
     CopilotClient = None  # type: ignore[misc,assignment]
-    SubprocessConfig = None  # type: ignore[misc,assignment]
     PermissionHandler = None  # type: ignore[misc,assignment]
     Tool = None  # type: ignore[misc,assignment]
     ToolInvocation = None  # type: ignore[misc,assignment]
@@ -106,7 +106,7 @@ except ImportError:  # pragma: no cover - exercised when SDK missing
 
 
 def _require_github_copilot_sdk() -> None:
-    if not GITHUB_COPILOT_SDK_AVAILABLE or CopilotClient is None or SubprocessConfig is None:
+    if not GITHUB_COPILOT_SDK_AVAILABLE or CopilotClient is None:
         raise ValueError(
             "GitHub Copilot support is not available because the github-copilot-sdk package "
             "is not installed."
@@ -358,44 +358,22 @@ def _public_github_copilot_stream_error_message(error: BaseException, model: str
     return GENERIC_STREAM_ERROR_MESSAGE
 
 
-def _is_sdk_model_billing_parse_error(error: Exception) -> bool:
-    return "Missing required field 'multiplier' in ModelBilling" in str(error)
-
-
-async def _list_raw_sdk_models(client: Any) -> list[Any]:
-    rpc_client = getattr(client, "_client", None)
-    if rpc_client is None:
-        raise RuntimeError("Client not connected")
-
-    response = await rpc_client.request("models.list", {})
-    raw_models = response.get("models", []) if isinstance(response, dict) else []
-    return raw_models if isinstance(raw_models, list) else []
-
-
 async def _list_sdk_models(github_token: str) -> list[Any]:
     _require_github_copilot_sdk()
 
     runtime_context = _build_runtime_context()
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
-    client = CopilotClient(
-        SubprocessConfig(
-            cwd=str(runtime_context.cwd),
-            env=runtime_context.env,
+    scope_id = str(runtime_context.root_dir)
+    client = None
+    try:
+        client = CopilotClient(
+            working_directory=str(runtime_context.cwd),
+            env=build_scoped_copilot_env(runtime_context.env, scope_id),
             github_token=github_token,
             use_logged_in_user=False,
         )
-    )
-    try:
         await client.start()
-        try:
-            return await client.list_models()
-        except ValueError as exc:
-            if not _is_sdk_model_billing_parse_error(exc):
-                raise
-            logger.info(
-                "GitHub Copilot SDK could not parse model billing metadata; using raw model list."
-            )
-            return await _list_raw_sdk_models(client)
+        return await client.list_models()
     except FileNotFoundError as exc:
         raise ValueError(
             "GitHub Copilot CLI runtime is unavailable. Install the SDK bundled binary or set a "
@@ -404,10 +382,11 @@ async def _list_sdk_models(github_token: str) -> list[Any]:
     except Exception as exc:
         raise ValueError(f"GitHub Copilot model listing failed: {exc}") from exc
     finally:
+        await shutdown_copilot_runtime(client, None, scope_id)
         with contextlib.suppress(Exception):
-            await client.force_stop()
-        await stop_runtime_heartbeat(heartbeat_task)
-        _cleanup_runtime_context(runtime_context)
+            await stop_runtime_heartbeat(heartbeat_task)
+        with contextlib.suppress(Exception):
+            _cleanup_runtime_context(runtime_context)
 
 
 async def list_github_copilot_models(
@@ -701,24 +680,24 @@ async def _run_copilot_session(
     prompt = build_prompt(prompt_messages) or "Please respond to the available context."
     runtime_context = _build_runtime_context()
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
-    client = CopilotClient(
-        SubprocessConfig(
-            cwd=str(runtime_context.cwd),
-            env=runtime_context.env,
+    scope_id = str(runtime_context.root_dir)
+    client = None
+    session = None
+    try:
+        client = CopilotClient(
+            working_directory=str(runtime_context.cwd),
+            env=build_scoped_copilot_env(runtime_context.env, scope_id),
             github_token=req.github_token,
             use_logged_in_user=False,
         )
-    )
-    session = None
-    abort_tasks: list[asyncio.Task[None]] = []
-    execution_state = execution_state or GitHubCopilotToolExecutionState()
+        abort_tasks: list[asyncio.Task[None]] = []
+        execution_state = execution_state or GitHubCopilotToolExecutionState()
 
-    def _abort_current_turn() -> None:
-        if session is None:
-            return
-        abort_tasks.append(asyncio.create_task(session.abort()))
+        def _abort_current_turn() -> None:
+            if session is None:
+                return
+            abort_tasks.append(asyncio.create_task(session.abort()))
 
-    try:
         await client.start()
         tools = _build_tools(
             req,
@@ -745,7 +724,7 @@ async def _run_copilot_session(
                 available_tools=available_tool_names,
                 streaming=streaming,
                 working_directory=str(runtime_context.cwd),
-                config_dir=str(runtime_context.config_dir),
+                config_directory=str(runtime_context.config_dir),
                 enable_config_discovery=False,
                 infinite_sessions={"enabled": False},
                 client_name="Meridian",
@@ -767,16 +746,14 @@ async def _run_copilot_session(
             raise ValueError(_format_model_unavailable_error(req.model)) from exc
         raise
     finally:
-        for abort_task in abort_tasks:
-            with contextlib.suppress(Exception):
+        for abort_task in locals().get("abort_tasks", []):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await abort_task
-        if session is not None:
-            with contextlib.suppress(Exception):
-                await session.destroy()
+        await shutdown_copilot_runtime(client, session, scope_id)
         with contextlib.suppress(Exception):
-            await client.force_stop()
-        await stop_runtime_heartbeat(heartbeat_task)
-        _cleanup_runtime_context(runtime_context)
+            await stop_runtime_heartbeat(heartbeat_task)
+        with contextlib.suppress(Exception):
+            _cleanup_runtime_context(runtime_context)
 
 
 async def make_github_copilot_request_non_streaming(
