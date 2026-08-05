@@ -17,7 +17,7 @@ At least one existing non-`v` tag matching strict `X.Y.Z-beta` syntax must exist
 
 1. Open **Actions → Prepare Release → Run workflow** from `main`.
 2. Select `patch`, `minor`, or `major`. Automation reads all strict beta tags, computes numeric successor, validates `dev` is ahead of `main`, and reads matching changelog from `dev`.
-3. Inspect created or updated `dev` to `main` PR. Title must be exactly `Release Meridian <version>` and body must exactly match changelog, including trailing newline.
+3. Inspect created or updated `dev` to `main` PR. Title must be exactly `Release Meridian <version>` and body must match changelog. CRLF and LF line endings are equivalent; all other whitespace, including trailing newline, must match.
 4. Wait for required CI to pass. Release PR image workflow runs shared lint and five parallel image builds without pushing packages. User remains responsible for CI review and manual merge.
 5. Merge PR manually. Publish workflow refetches merged PR and changelog from merge commit, validates title, body, branches, repository, successor version, and tag target before writing release artifacts.
 
