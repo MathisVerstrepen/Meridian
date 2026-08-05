@@ -14,6 +14,7 @@ Usage: ./scripts/run-tests.sh [--e2e]
 
 Runs the repository test protocol:
   - Layered deployment configuration tests
+  - Release automation unit tests
   - Backend pytest suite
   - Backend lint/type checks
   - Frontend lint
@@ -60,6 +61,7 @@ else
 fi
 
 run_step "Layered deployment configuration tests" "$ROOT_DIR/docker/tests/test_config.sh"
+run_step "Release automation unit tests" "$API_PYTHON" -m unittest discover -s "$ROOT_DIR/scripts/tests" -p 'test_release_automation.py'
 run_step "Backend tests" bash -c "cd '$API_DIR' && '$API_PYTHON' -m pytest tests"
 run_step "Backend lint/type checks" bash -c "cd '$API_DIR' && ./run-linter.sh"
 run_step "Browser service tests and checks" "$BROWSER_SERVICE_DIR/run-checks.sh"
