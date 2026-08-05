@@ -23,7 +23,6 @@ const stubs = vi.hoisted(() => ({
     retrieveCurrentSession: vi.fn(),
     isNodeStreaming: vi.fn(() => false),
     createNodeFromVariant: vi.fn(),
-    addFilesPromptInputNodes: vi.fn(),
     waitForRender: vi.fn().mockResolvedValue(undefined),
     teleportViewportToNode: vi.fn(),
     execute: vi.fn().mockResolvedValue(undefined),
@@ -65,7 +64,6 @@ mockNuxtImport('storeToRefs', () => (store: { storeKind: string }) =>
         : { isNodeStreaming: { value: stubs.isNodeStreaming } },
 );
 mockNuxtImport('useGraphChat', () => () => ({
-    addFilesPromptInputNodes: stubs.addFilesPromptInputNodes,
     createNodeFromVariant: stubs.createNodeFromVariant,
     waitForRender: stubs.waitForRender,
 }));
@@ -126,7 +124,11 @@ describe('useChatGenerator prompt identity', () => {
         const { session, generator } = setupGenerator([]);
         generator.selectedNodeType.value = { nodeType: NodeTypeEnum.TEXT_TO_TEXT } as never;
 
-        await generator.generateNew(null, 'Fresh prompt');
+        await generator.generateNew(null, {
+            message: 'Fresh prompt',
+            files: [],
+            githubContext: null,
+        });
 
         const createdUserMessage = session.value.messages.find(
             (message) => message.role === MessageRoleEnum.user,
@@ -161,9 +163,14 @@ describe('useChatGenerator prompt identity', () => {
         expect(stubs.createNodeFromVariant).toHaveBeenCalledWith(
             NodeTypeEnum.TEXT_TO_TEXT,
             'existing-chat-id',
-            [NodeTypeEnum.PROMPT],
-            'Initial prompt',
-            'generator-node-id',
+            {
+                submission: {
+                    message: 'Initial prompt',
+                    files: [],
+                    githubContext: null,
+                },
+                forcedNodeId: 'generator-node-id',
+            },
         );
         expect(stubs.execute).toHaveBeenCalledWith('generator-node-id');
     });

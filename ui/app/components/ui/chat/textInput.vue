@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import type { NodeTypeEnum } from '@/types/enums';
+import type { ChatInputSubmission } from '@/types/chat';
+import type { BlockDefinition } from '@/types/graph';
 
-const emit = defineEmits([
-    'triggerScroll',
-    'generate',
-    'goBackToBottom',
-    'cancelStream',
-    'selectNodeType',
-]);
+const emit = defineEmits<{
+    (e: 'triggerScroll'): void;
+    (e: 'generate', submission: ChatInputSubmission): void;
+    (e: 'goBackToBottom'): void;
+    (e: 'cancelStream'): void;
+    (e: 'selectNodeType', nodeType: BlockDefinition): void;
+}>();
 
 defineProps<{
     isLockedToBottom: boolean;
@@ -24,6 +26,7 @@ const usageStore = useUsageStore();
 const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
 const { error } = useToast();
 const graphEvents = useGraphEvents();
+const { githubContext, openGithubContext, removeGithubContext } = useChatGithubContext();
 
 // --- Local State ---
 const textareaRef = ref<HTMLDivElement | null>(null);
@@ -35,6 +38,18 @@ const isDraggingOver = ref(false);
 type UploadStatus = 'uploading' | 'complete' | 'error';
 const uploads = ref<Record<string, { status: UploadStatus }>>({});
 const isUploading = computed(() => Object.keys(uploads.value).length > 0);
+
+const isImageAttachment = (file: FileSystemObject) => {
+    if (file.type !== 'file') return false;
+
+    const contentType = file.content_type?.toLowerCase().split(';')[0]?.trim();
+    if (contentType?.startsWith('image/')) return true;
+
+    return /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name);
+};
+
+const imageAttachments = computed(() => files.value.filter(isImageAttachment));
+const nonImageAttachments = computed(() => files.value.filter((file) => !isImageAttachment(file)));
 
 // --- Core Logic Functions ---
 const handleInputWheel = (event: WheelEvent) => {
@@ -62,14 +77,24 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    emit('generate', message.value, files.value);
+    emit('generate', {
+        message: message.value,
+        files: files.value,
+        githubContext: githubContext.value,
+    });
 
     message.value = '';
     files.value = [];
+    githubContext.value = null;
     isEmpty.value = true;
     const el = textareaRef.value;
     if (!el) return;
     el.innerText = '';
+};
+
+const removeFile = (file: FileSystemObject) => {
+    const index = files.value.indexOf(file);
+    if (index >= 0) files.value.splice(index, 1);
 };
 
 const handleDrop = async (event: DragEvent) => {
@@ -84,24 +109,39 @@ const handleDrop = async (event: DragEvent) => {
 const handlePaste = (event: ClipboardEvent) => {
     event.preventDefault();
 
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+
+    const imageFiles = Array.from(clipboardData.items)
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+
     // Remove formatting from pasted text
-    const text = event.clipboardData?.getData('text/plain');
-    if (!text) return;
+    const text = clipboardData.getData('text/plain');
+    if (text) {
+        document.execCommand('insertText', false, text);
 
-    document.execCommand('insertText', false, text);
+        onInput();
 
-    onInput();
+        // After the DOM updates from the paste, scroll the input field to the bottom
+        const el = textareaRef.value;
+        if (el) {
+            nextTick(() => {
+                el.scrollTop = el.scrollHeight;
+            });
+        }
+    }
 
-    // After the DOM updates from the paste, scroll the input field to the bottom
-    const el = textareaRef.value;
-    if (el) {
-        nextTick(() => {
-            el.scrollTop = el.scrollHeight;
-        });
+    if (imageFiles.length) {
+        void addFiles(imageFiles, 'keep_both');
     }
 };
 
-const addFiles = async (newFiles: globalThis.FileList) => {
+const addFiles = async (
+    newFiles: globalThis.FileList | File[],
+    conflictPolicy?: FileConflictPolicy,
+) => {
     if (!newFiles) return;
 
     const currentUploads: Record<string, { status: UploadStatus }> = {};
@@ -137,7 +177,9 @@ const addFiles = async (newFiles: globalThis.FileList) => {
     const uploadPromises = fileList.map(async (file, index) => {
         const tempId = Object.keys(currentUploads)[index];
         try {
-            const newFile = await uploadFile(file, targetId);
+            const newFile = conflictPolicy
+                ? await uploadFile(file, targetId, conflictPolicy)
+                : await uploadFile(file, targetId);
             files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {
@@ -212,27 +254,57 @@ onMounted(() => {
         </button>
 
         <!-- File attachments -->
-        <ul
-            v-if="files.length > 0"
-            class="decoration-none bg-obsidian shadow-soft-silk/5 mx-10 flex h-fit
-                w-[calc(80%-3rem)] max-w-268 flex-wrap items-center justify-start gap-2
-                rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
+        <div
+            v-if="files.length > 0 || githubContext"
+            data-attachment-grid
+            class="bg-obsidian shadow-soft-silk/5 mx-10 grid h-fit w-[calc(80%-3rem)] max-w-268
+                grid-cols-1 gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
-            <UiChatAttachmentChipListItem
-                v-for="(file, index) in files"
-                :key="file.id"
-                :file="file"
-                :remove-files="true"
-                @remove-file="files.splice(index, 1)"
-            />
-        </ul>
+            <ul
+                v-if="githubContext"
+                data-attachment-row="github"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatGithubContextChip
+                    :context="githubContext"
+                    @remove="removeGithubContext"
+                />
+            </ul>
+            <ul
+                v-if="imageAttachments.length > 0"
+                data-attachment-row="images"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatAttachmentChipListItem
+                    v-for="file in imageAttachments"
+                    :key="file.id"
+                    :file="file"
+                    :remove-files="true"
+                    :show-image-preview="true"
+                    @remove-file="removeFile(file)"
+                />
+            </ul>
+            <ul
+                v-if="nonImageAttachments.length > 0"
+                data-attachment-row="files"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatAttachmentChipListItem
+                    v-for="file in nonImageAttachments"
+                    :key="file.id"
+                    :file="file"
+                    :remove-files="true"
+                    @remove-file="removeFile(file)"
+                />
+            </ul>
+        </div>
 
         <!-- Main input text bar -->
         <div
             class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-280 items-end
                 justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
-                'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0,
+                'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0 && !githubContext,
                 'bg-anthracite/25': from === 'home',
                 'bg-obsidian/75': from === 'chat',
             }"
@@ -241,6 +313,7 @@ onMounted(() => {
                 :disabled="isUploading"
                 @add-files="addFiles"
                 @open-cloud-select="openCloudSelect"
+                @add-git-context="openGithubContext"
             >
                 <template #icon>
                     <UiChatUtilsUploadProgressCircle
@@ -248,7 +321,7 @@ onMounted(() => {
                         :uploads="uploads"
                         class="animate-pulse"
                     />
-                    <UiIcon v-else name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                    <UiIcon v-else name="Fa6SolidPlus" class="text-stone-gray h-5 w-5" />
                 </template>
             </UiChatAttachmentUploadButton>
 

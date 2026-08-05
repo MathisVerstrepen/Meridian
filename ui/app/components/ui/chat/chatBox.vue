@@ -3,6 +3,7 @@ import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
 import { useMessageEditing } from '@/composables/useMessageEditing';
+import type { ChatInputSubmission } from '@/types/chat';
 
 const props = defineProps<{
     isTemporary?: boolean;
@@ -164,6 +165,11 @@ const updateScrollState = () => {
 
 const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
+};
+
+const handleGenerateNew = (submission: ChatInputSubmission) => {
+    graphEvents.emit('open-upcoming-node-data', {});
+    generateNew(null, submission);
 };
 
 const chatPanelStyle = computed(() => {
@@ -490,11 +496,7 @@ onUnmounted(() => {
                 from="chat"
                 class="max-h-[600px]!"
                 @trigger-scroll="triggerScroll"
-                @generate="
-                    (message: string, files: FileSystemObject[]) => {
-                        generateNew(null, message, files);
-                    }
-                "
+                @generate="handleGenerateNew"
                 @go-back-to-bottom="goBackToBottom"
                 @cancel-stream="handleCancelStream"
                 @select-node-type="

@@ -277,8 +277,8 @@ describe('Alibaba Token Plan Image Playground behavior', () => {
         }
     });
 
-    it('labels persisted Alibaba video audio as provider-managed rather than silent', async () => {
-        settingsRefs.toolsImageGenerationSettings.value.defaultVideoModel = fixtures.t2v.id;
+    it('displays and reuses persisted Alibaba video metadata', async () => {
+        settingsRefs.toolsImageGenerationSettings.value.defaultVideoModel = fixtures.openRouterVideo.id;
         generatedVideos.value = [{
             id: 'generated-video-1',
             name: 'Generated video',
@@ -286,16 +286,50 @@ describe('Alibaba Token Plan Image Playground behavior', () => {
             content_type: 'video/mp4',
             created_at: '2026-07-23T00:00:00Z',
             updated_at: '2026-07-23T00:00:00Z',
-            model: fixtures.t2v.id,
+            prompt: 'Persisted motion directive',
+            model: fixtures.r2v.id,
+            aspect_ratio: '9:16',
+            resolution: '1080p',
+            duration: 10,
             generate_audio: false,
-            source_image_ids: [],
+            source_image_ids: ['reference-1', 'reference-2'],
         }];
         const wrapper = await mountSuspended(VideoPane, mountOptions);
         await nextTick();
 
         try {
-            expect(wrapper.text()).toContain('provider-managed audio');
-            expect(wrapper.text()).not.toContain('· silent ·');
+            const persistedVideo = wrapper.get('article');
+            expect(persistedVideo.text()).toContain('Persisted motion directive');
+            expect(persistedVideo.text()).toContain(fixtures.r2v.id);
+            expect(persistedVideo.text()).toContain('9:16');
+            expect(persistedVideo.text()).toContain('1080p');
+            expect(persistedVideo.text()).toContain('provider-managed audio');
+            expect(persistedVideo.text()).not.toContain('· silent ·');
+
+            await wrapper.get('button[title="Reuse settings"]').trigger('click');
+            await nextTick();
+
+            expect(wrapper.get('textarea').element.value).toBe('Persisted motion directive');
+            expect(playgroundRefs.sourceImages.value.map((reference) => reference.id)).toEqual([
+                'reference-1',
+                'reference-2',
+            ]);
+
+            const buttons = wrapper.findAll('button');
+            const selectedModel = buttons.find((button) => button.text().includes('HappyHorse R2V'));
+            const selectedAspectRatio = buttons.find((button) => button.text().trim() === '9:16');
+            const selectedResolution = buttons.find((button) => button.text().includes('1080p'));
+            const selectedDuration = buttons.find((button) => button.text().trim() === '10s');
+            const audioButton = buttons.find((button) =>
+                button.text().includes('Audio managed by HappyHorse'),
+            );
+
+            expect(selectedModel?.classes()).toContain('border-ember-glow');
+            expect(selectedAspectRatio?.classes()).toContain('border-ember-glow');
+            expect(selectedResolution?.classes()).toContain('border-ember-glow');
+            expect(selectedDuration?.classes()).toContain('border-ember-glow');
+            expect(audioButton?.attributes('disabled')).toBeDefined();
+            expect(audioButton?.classes()).not.toContain('bg-ember-glow/8');
         } finally {
             wrapper.unmount();
         }

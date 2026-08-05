@@ -2,20 +2,19 @@ name: Lint, Build and Push Docker Images
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    tags: ["*.*.*-beta"]
   pull_request:
     branches: [main]
-  create:
-    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE_NAME: ${{ github.repository }}/frontend
-  BACKEND_IMAGE_NAME: ${{ github.repository }}/backend
-  BROWSER_SERVICE_IMAGE_NAME: ${{ github.repository }}/browser-service
-  SANDBOX_MANAGER_IMAGE_NAME: ${{ github.repository }}/sandbox-manager
-  SANDBOX_PYTHON_IMAGE_NAME: ${{ github.repository }}/sandbox-python
 
 jobs:
   lint:
@@ -24,6 +23,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-beta$ ]]; then
+            echo "Tag must be a strict non-v X.Y.Z-beta version." >&2
+            exit 1
+          fi
+
+      - name: Run release automation tests
+        run: python -m unittest discover -s scripts/tests -p 'test_release_automation.py'
+
+      - name: Validate GitHub Actions workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,12 +61,10 @@ jobs:
           pip install -r sandbox_manager/requirements.txt -r sandbox_manager/requirements-dev.txt
 
       - name: Run backend linters
-        run: |
-          ./api/run-linter.sh
+        run: ./api/run-linter.sh
 
       - name: Run sandbox manager checks
-        run: |
-          ./sandbox_manager/run-checks.sh
+        run: ./sandbox_manager/run-checks.sh
 
       - name: Run browser service checks
         run: |
@@ -75,8 +88,7 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm dependencies
         uses: actions/cache@v4
@@ -93,13 +105,41 @@ jobs:
         run: cd ui && pnpm lint
 
   build-and-push:
-    name: Build and Push Docker Images
+    name: Build ${{ matrix.name }} image
     needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            image: frontend
+            dockerfile: ./docker/ui.Dockerfile
+            cache-scope: frontend
+            frontend: true
+          - name: backend
+            image: backend
+            dockerfile: ./docker/api.Dockerfile
+            cache-scope: backend
+            frontend: false
+          - name: browser-service
+            image: browser-service
+            dockerfile: ./docker/browser-service.Dockerfile
+            cache-scope: browser-service
+            frontend: false
+          - name: sandbox-manager
+            image: sandbox-manager
+            dockerfile: ./docker/sandbox-manager.Dockerfile
+            cache-scope: sandbox-manager
+            frontend: false
+          - name: sandbox-python
+            image: sandbox-python
+            dockerfile: ./docker/sandbox-python.Dockerfile
+            cache-scope: sandbox-python
+            frontend: false
 
     steps:
       - name: Checkout repository
@@ -109,120 +149,32 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/')
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for frontend
-        id: meta-frontend
+      - name: Extract image metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Extract metadata for backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract metadata for browser service
-        id: meta-browser-service
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BROWSER_SERVICE_IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract metadata for sandbox manager
-        id: meta-sandbox-manager
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.SANDBOX_MANAGER_IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract metadata for sandbox python
-        id: meta-sandbox-python
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.SANDBOX_PYTHON_IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push frontend image
+      - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/ui.Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          build-args: |
-            NUXT_PUBLIC_VERSION=${{ steps.meta-frontend.outputs.version }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,scope=frontend,mode=max
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/api.Dockerfile
-          push: ${{ startsWith(github.ref, 'refs/tags/') }}
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
-
-      - name: Build and push browser service image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/browser-service.Dockerfile
-          push: ${{ startsWith(github.ref, 'refs/tags/') }}
-          tags: ${{ steps.meta-browser-service.outputs.tags }}
-          labels: ${{ steps.meta-browser-service.outputs.labels }}
-          cache-from: type=gha,scope=browser-service
-          cache-to: type=gha,scope=browser-service,mode=max
-
-      - name: Build and push sandbox manager image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/sandbox-manager.Dockerfile
-          push: ${{ startsWith(github.ref, 'refs/tags/') }}
-          tags: ${{ steps.meta-sandbox-manager.outputs.tags }}
-          labels: ${{ steps.meta-sandbox-manager.outputs.labels }}
-          cache-from: type=gha,scope=sandbox-manager
-          cache-to: type=gha,scope=sandbox-manager,mode=max
-
-      - name: Build and push sandbox python image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/sandbox-python.Dockerfile
-          push: ${{ startsWith(github.ref, 'refs/tags/') }}
-          tags: ${{ steps.meta-sandbox-python.outputs.tags }}
-          labels: ${{ steps.meta-sandbox-python.outputs.labels }}
-          cache-from: type=gha,scope=sandbox-python
-          cache-to: type=gha,scope=sandbox-python,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.frontend && format('NUXT_PUBLIC_VERSION={0}', steps.meta.outputs.version) || '' }}
+          cache-from: type=gha,scope=${{ matrix.cache-scope }}
+          cache-to: type=gha,scope=${{ matrix.cache-scope }},mode=max

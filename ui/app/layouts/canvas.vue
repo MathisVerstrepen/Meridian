@@ -21,8 +21,6 @@ onMounted(() => {
 
         <UiUtilsFullscreenMountpoint />
 
-        <UiGraphNodeUtilsGithubFileSelectMountpoint />
-
         <UiGraphNodeUtilsFilePromptMountpoint />
     </div>
 </template>

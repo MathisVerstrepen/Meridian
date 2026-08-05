@@ -4,10 +4,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
-from services.image_playground.gallery import gallery_item
+from services.image_playground.gallery import gallery_item, video_gallery_item
 
 
 def _file_record(**overrides):
@@ -34,6 +33,8 @@ def _job_record(**overrides):
         "model": "google/gemini-image",
         "aspect_ratio": "1:1",
         "resolution": "1K",
+        "duration": None,
+        "generate_audio": False,
         "actual_width": 1024,
         "actual_height": 1024,
         "actual_aspect_ratio": "1:1",
@@ -70,3 +71,43 @@ def test_gallery_item_uses_safe_defaults_without_job_metadata():
     assert item.prompt is None
     assert item.model is None
     assert item.source_image_ids == []
+
+
+def test_video_gallery_item_maps_persisted_generation_metadata():
+    file_created_at = datetime(2026, 8, 5, 10, 0, tzinfo=timezone.utc)
+    generation_started_at = datetime(2026, 8, 5, 9, 58, tzinfo=timezone.utc)
+    generation_completed_at = datetime(2026, 8, 5, 9, 59, tzinfo=timezone.utc)
+    source_image_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+    file_record = _file_record(
+        name="generated-video.mp4",
+        content_type="video/mp4",
+        created_at=file_created_at,
+        updated_at=file_created_at,
+    )
+    job_record = _job_record(
+        created_at=generation_started_at,
+        completed_at=generation_completed_at,
+        prompt="A cinematic valley",
+        effective_prompt="A cinematic valley",
+        model="provider/resolved-video-model",
+        aspect_ratio="16:9",
+        resolution="1080p",
+        duration=6,
+        generate_audio=True,
+        source_image_ids=source_image_ids,
+    )
+
+    item = video_gallery_item(file_record, job_record)
+
+    assert item.id == file_record.id
+    assert item.path == "/Generated Videos/generated-video.mp4"
+    assert item.generation_started_at == generation_started_at
+    assert item.generation_completed_at == generation_completed_at
+    assert item.prompt == "A cinematic valley"
+    assert item.effective_prompt == "A cinematic valley"
+    assert item.model == "provider/resolved-video-model"
+    assert item.aspect_ratio == "16:9"
+    assert item.resolution == "1080p"
+    assert item.duration == 6
+    assert item.generate_audio is True
+    assert item.source_image_ids == source_image_ids

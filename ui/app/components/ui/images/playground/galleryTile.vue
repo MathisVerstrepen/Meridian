@@ -1,12 +1,14 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
+    IMAGE_PLAYGROUND_GALLERY_SIZES,
     IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE,
     imagePlaygroundAspectClass,
     imagePlaygroundAspectStyle,
     imagePlaygroundDownloadName,
     imagePlaygroundDownloadUrl,
     imagePlaygroundDisplayAspectRatio,
+    imagePlaygroundGallerySrcset,
     imagePlaygroundImageUrl,
 } from '@/utils/imagePlayground';
 
@@ -45,7 +47,9 @@ const onDragStart = (event: DragEvent) => {
         @dragstart.stop="onDragStart"
     >
         <img
-            :src="imagePlaygroundImageUrl(image.id, true)"
+            :src="imagePlaygroundImageUrl(image.id, '160x160')"
+            :srcset="imagePlaygroundGallerySrcset(image.id)"
+            :sizes="IMAGE_PLAYGROUND_GALLERY_SIZES"
             alt=""
             aria-hidden="true"
             loading="lazy"
@@ -61,7 +65,9 @@ const onDragStart = (event: DragEvent) => {
                 :style="imagePlaygroundAspectStyle(image)"
             >
                 <img
-                    :src="imagePlaygroundImageUrl(image.id, true)"
+                    :src="imagePlaygroundImageUrl(image.id, '160x160')"
+                    :srcset="imagePlaygroundGallerySrcset(image.id)"
+                    :sizes="IMAGE_PLAYGROUND_GALLERY_SIZES"
                     :alt="image.name"
                     loading="lazy"
                     class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"

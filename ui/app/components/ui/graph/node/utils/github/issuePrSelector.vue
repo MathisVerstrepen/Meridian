@@ -12,7 +12,7 @@ const props = defineProps<{
 // --- Emits ---
 const emit = defineEmits<{
     (e: 'update:selectedIssues', issues: GithubIssue[]): void;
-    (e: 'close'): void;
+    (e: 'close', issues?: GithubIssue[]): void;
 }>();
 
 // --- Composables ---
@@ -107,7 +107,7 @@ const toggleIssue = (issue: GithubIssue) => {
 };
 
 const confirmSelection = () => {
-    emit('close');
+    emit('close', selectedIssuesList.value);
 };
 
 // --- Watchers ---

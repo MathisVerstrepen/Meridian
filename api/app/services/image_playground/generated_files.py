@@ -1,16 +1,18 @@
 import hashlib
 import uuid
+from datetime import datetime, timezone
 from io import BytesIO
 from math import gcd
 from pathlib import Path
 
 from database.pg.file_ops.file_crud import create_db_file, get_root_folder_for_user
-from database.pg.models import Files
+from database.pg.models import Files, ImageGenerationJob
 from database.pg.user_ops.storage_crud import check_and_reserve_storage, release_storage
 from fastapi import HTTPException
 from PIL import Image
 from services.files import delete_file_from_disk, save_file_to_disk
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 VIDEO_CONTENT_TYPES_BY_EXTENSION = {
     "mov": "video/quicktime",
@@ -30,6 +32,63 @@ def generated_video_content_type(extension: str) -> str:
     return VIDEO_CONTENT_TYPES_BY_EXTENSION.get(
         normalized_extension, f"video/{normalized_extension}"
     )
+
+
+async def create_completed_generation_job(
+    *,
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    file_id: uuid.UUID,
+    prompt: str,
+    model: str,
+    media_type: str,
+    aspect_ratio: str,
+    resolution: str,
+    source_image_ids: list[str],
+    generation_started_at: datetime,
+    duration: int | None = None,
+    generate_audio: bool = False,
+    actual_width: int | None = None,
+    actual_height: int | None = None,
+    actual_aspect_ratio: str | None = None,
+) -> ImageGenerationJob:
+    completed_at = datetime.now(timezone.utc)
+    job = ImageGenerationJob(
+        batch_id=uuid.uuid4(),
+        user_id=user_id,
+        file_id=file_id,
+        status="completed",
+        prompt=prompt.strip(),
+        effective_prompt=prompt.strip(),
+        model=model.strip(),
+        media_type=media_type,
+        aspect_ratio=aspect_ratio,
+        resolution=resolution,
+        duration=duration,
+        generate_audio=generate_audio,
+        actual_width=actual_width,
+        actual_height=actual_height,
+        actual_aspect_ratio=actual_aspect_ratio,
+        style_preset=None,
+        source_image_ids=[str(image_id) for image_id in source_image_ids],
+        error=None,
+        attempts=1,
+        max_attempts=1,
+        is_preview=False,
+        created_at=generation_started_at,
+        updated_at=completed_at,
+        completed_at=completed_at,
+    )
+    async with AsyncSession(pg_engine) as session:
+        try:
+            session.add(job)
+            await session.commit()
+            await session.refresh(job)
+        except Exception:
+            await session.rollback()
+            raise
+
+    return job
 
 
 async def create_generated_image_file(

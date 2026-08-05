@@ -40,7 +40,9 @@ esac
 
 cd "${APP_DIR}"
 
-exec "${SCRIPT_DIR}/venv/bin/uvicorn" main:app \
+exec "${SCRIPT_DIR}/venv/bin/uvicorn" \
+    --env-file "${SCRIPT_DIR}/../docker/env/.env.local" \
+    main:app \
     --host 0.0.0.0 \
     --port "${API_PORT:-8000}" \
     --reload \

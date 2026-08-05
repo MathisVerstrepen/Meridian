@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from limits.storage import MemoryStorage
+from limits.strategies import FixedWindowRateLimiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
@@ -94,6 +96,13 @@ def test_repository_route_limit_threshold_plus_one(
         return service_response
 
     monkeypatch.setattr(repository, service_name, response)
+    memory_storage = MemoryStorage()
+    monkeypatch.setattr(repository.limiter, "_storage", memory_storage)
+    monkeypatch.setattr(
+        repository.limiter,
+        "_limiter",
+        FixedWindowRateLimiter(memory_storage),
+    )
     repository.limiter.reset()
     app = FastAPI()
     app.state.limiter = repository.limiter

@@ -1,7 +1,6 @@
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 import type { MessageContent, BlockDefinition } from '@/types/graph';
-import type { ChatSession } from '@/types/chat';
-import { DEFAULT_NODE_ID } from '@/constants';
+import type { ChatInputSubmission, ChatSession } from '@/types/chat';
 import type { ShallowRef } from 'vue';
 import { useVueFlow } from '@vue-flow/core';
 
@@ -39,7 +38,7 @@ export const useChatGenerator = (
     } = streamStore;
 
     // --- Composables ---
-    const { addFilesPromptInputNodes, createNodeFromVariant, waitForRender } = useGraphChat();
+    const { createNodeFromVariant, waitForRender } = useGraphChat();
     const { teleportViewportToNode } = useGraphActions();
     const { getBlockByNodeType } = useBlocks();
     const { getNodes } = useVueFlow('main-graph-' + graphId.value);
@@ -188,8 +187,7 @@ export const useChatGenerator = (
 
     const generateNew = async (
         forcedNodeId: string | null = null,
-        message: string | null = null,
-        files: FileSystemObject[] | null = null,
+        submission: ChatInputSubmission | null = null,
     ) => {
         let generatorNodeId: string | undefined;
         syncUpcomingModelDefaults();
@@ -201,37 +199,30 @@ export const useChatGenerator = (
                 return;
             }
 
-            const createdNodes = createNodeFromVariant(
-                lastestMessage.type,
-                openChatId.value as string,
-                [NodeTypeEnum.PROMPT],
-                getTextFromMessage(lastestMessage),
+            const storedSubmission: ChatInputSubmission = {
+                message: getTextFromMessage(lastestMessage),
+                files: lastestMessage.data?.files ?? [],
+                githubContext: lastestMessage.data?.githubContext ?? null,
+            };
+            const createdNodes = createNodeFromVariant(lastestMessage.type, openChatId.value as string, {
+                submission: storedSubmission,
                 forcedNodeId,
-            );
+            });
             generatorNodeId = createdNodes.generatorNodeId;
             if (createdNodes.promptNodeId) {
                 lastestMessage.prompt_node_id = createdNodes.promptNodeId;
             }
-
-            if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
-                addFilesPromptInputNodes(
-                    lastestMessage.data.files || [],
-                    forcedNodeId || DEFAULT_NODE_ID,
-                );
-            }
-        } else if (message && selectedNodeType.value) {
+        } else if (submission && selectedNodeType.value) {
             const createdNodes = createNodeFromVariant(
                 selectedNodeType.value.nodeType,
                 openChatId.value as string,
-                [NodeTypeEnum.PROMPT],
-                message,
+                { submission },
             );
             generatorNodeId = createdNodes.generatorNodeId;
 
             let filesContent: MessageContent[] = [];
-            if (files && files.length > 0) {
-                addFilesPromptInputNodes(files, generatorNodeId || DEFAULT_NODE_ID);
-                filesContent = files.map((file) => fileToMessageContent(file));
+            if (submission.files.length > 0) {
+                filesContent = submission.files.map((file) => fileToMessageContent(file));
             }
 
             addMessage({
@@ -239,7 +230,7 @@ export const useChatGenerator = (
                 content: [
                     {
                         type: MessageContentTypeEnum.TEXT,
-                        text: message,
+                        text: submission.message,
                     },
                     ...filesContent,
                 ],
@@ -304,7 +295,11 @@ export const useChatGenerator = (
             return;
         }
 
-        await generateNew(null, normalizedMessage, files);
+        await generateNew(null, {
+            message: normalizedMessage,
+            files: files ?? [],
+            githubContext: null,
+        });
     };
 
     const regenerate = async (index: number) => {

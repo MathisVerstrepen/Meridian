@@ -11,12 +11,12 @@ from fastapi import FastAPI
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 import services.inference as inference
+import services.inference_cache as inference_cache
 import services.providers.alibaba_token_plan_official_catalog as official_catalog
 from models.inference import Architecture, ModelInfo, Pricing, ResponseModel
 from services.inference import get_alibaba_token_plan_models_safe
 from services.model_catalog import encode_model_catalog
 from services.providers.alibaba_token_plan_catalog import (
-    ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
     build_alibaba_token_plan_models_from_models_dev,
 )
 from services.providers.alibaba_token_plan_official_catalog import (
@@ -25,6 +25,37 @@ from services.providers.alibaba_token_plan_official_catalog import (
     fetch_alibaba_token_plan_official_video_model_ids,
     parse_alibaba_token_plan_official_video_model_ids,
 )
+
+
+class _ExpiringFakeRedis:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.values: dict[str, str] = {}
+        self.expires_at: dict[str, float] = {}
+        self.set_calls: list[tuple[str, int | None]] = []
+        self.delete_calls: list[str] = []
+
+    async def get(self, key: str) -> str | None:
+        expires_at = self.expires_at.get(key)
+        if expires_at is not None and self.now >= expires_at:
+            self.values.pop(key, None)
+            self.expires_at.pop(key, None)
+        return self.values.get(key)
+
+    async def set(self, key: str, value: str, *, ex: int | None = None) -> None:
+        self.values[key] = value
+        if ex is not None:
+            self.expires_at[key] = self.now + ex
+        self.set_calls.append((key, ex))
+
+    async def delete(self, key: str) -> None:
+        self.values.pop(key, None)
+        self.expires_at.pop(key, None)
+        self.delete_calls.append(key)
+
+
+def _redis_manager(redis: _ExpiringFakeRedis) -> SimpleNamespace:
+    return SimpleNamespace(client=redis)
 
 
 def _official_html(*rows: str) -> bytes:
@@ -259,39 +290,48 @@ def test_alibaba_token_plan_live_failure_preserves_official_video(caplog: pytest
 
 
 def test_alibaba_token_plan_official_cache_ttls_and_failed_refresh_drop_stale(
-    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ):
-    app = SimpleNamespace(state=SimpleNamespace(http_client=object()))
-    clock = [100.0]
-    fetch = AsyncMock(return_value=["happyhorse-first-t2v"])
-    monkeypatch.setattr(inference.time, "monotonic", lambda: clock[0])
+    async def run() -> tuple[object, object, object, object, object, AsyncMock, _ExpiringFakeRedis]:
+        redis = _ExpiringFakeRedis()
+        first_app = SimpleNamespace(
+            state=SimpleNamespace(http_client=object(), redis_manager=_redis_manager(redis))
+        )
+        second_app = SimpleNamespace(
+            state=SimpleNamespace(http_client=object(), redis_manager=_redis_manager(redis))
+        )
+        fetch = AsyncMock(return_value=["happyhorse-first-t2v"])
 
-    with patch(
-        "services.inference.fetch_alibaba_token_plan_official_video_model_ids",
-        new=fetch,
-    ):
-        first = asyncio.run(inference._get_alibaba_official_video_catalog_snapshot(app))
-        clock[0] += 599
-        reused = asyncio.run(inference._get_alibaba_official_video_catalog_snapshot(app))
-        fetch.side_effect = RuntimeError("sentinel-body")
-        clock[0] += 2
-        unavailable = asyncio.run(inference._get_alibaba_official_video_catalog_snapshot(app))
-        clock[0] += 59
-        reused_failure = asyncio.run(inference._get_alibaba_official_video_catalog_snapshot(app))
-        fetch.side_effect = None
-        fetch.return_value = ["happyhorse-recovered-i2v"]
-        clock[0] += 2
-        recovered = asyncio.run(inference._get_alibaba_official_video_catalog_snapshot(app))
+        with patch(
+            "services.inference.fetch_alibaba_token_plan_official_video_model_ids",
+            new=fetch,
+        ):
+            first = await inference._get_alibaba_official_video_catalog_snapshot(first_app)
+            redis.now += 599
+            reused = await inference._get_alibaba_official_video_catalog_snapshot(second_app)
+            fetch.side_effect = RuntimeError("sentinel-body")
+            redis.now += 2
+            unavailable = await inference._get_alibaba_official_video_catalog_snapshot(second_app)
+            redis.now += 59
+            reused_failure = await inference._get_alibaba_official_video_catalog_snapshot(first_app)
+            fetch.side_effect = None
+            fetch.return_value = ["happyhorse-recovered-i2v"]
+            redis.now += 2
+            recovered = await inference._get_alibaba_official_video_catalog_snapshot(first_app)
+        return first, reused, unavailable, reused_failure, recovered, fetch, redis
 
-    assert first is reused
+    first, reused, unavailable, reused_failure, recovered, fetch, redis = asyncio.run(run())
+
+    assert first == reused
     assert first.available is True
-    assert unavailable is reused_failure
+    assert unavailable == reused_failure
     assert unavailable.available is False
     assert unavailable.model_ids == ()
     assert first.fingerprint != unavailable.fingerprint != recovered.fingerprint
     assert recovered.model_ids == ("happyhorse-recovered-i2v",)
     assert fetch.await_count == 3
+    snapshot_key = "inference:model-catalog:v1:alibaba-official:official-video-v1"
+    assert redis.set_calls == [(snapshot_key, 600), (snapshot_key, 60), (snapshot_key, 600)]
     assert "sentinel-body" not in caplog.text
 
 
@@ -333,64 +373,60 @@ def test_alibaba_token_plan_official_cache_shields_shared_inflight_and_cancellat
     assert asyncio.run(run()) == (1, ("happyhorse-shared-t2v",))
 
 
-def test_alibaba_token_plan_snapshot_fingerprint_versions_and_prunes_provider_cache():
-    app = FastAPI()
-    app.state.http_client = object()
-    app.state.models_dev_catalog = None
-    legacy_key = inference._build_subscription_model_cache_key(
-        ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
-        "credential-a",
-    )
-    app.state.subscription_provider_model_cache = {
-        legacy_key: (0.0, [_model("alibaba-token-plan/stale-image")]),
-        "unrelated:key": (0.0, [_model("unrelated/model")]),
-    }
-    loader = AsyncMock(return_value=[_model("alibaba-token-plan/happyhorse-current-t2v")])
-    official_fetch = AsyncMock(return_value=["happyhorse-current-t2v"])
-
-    with (
-        patch(
-            "services.inference.fetch_alibaba_token_plan_official_video_model_ids",
-            new=official_fetch,
-        ),
-        patch("services.inference.get_alibaba_token_plan_models_safe", new=loader),
+def test_alibaba_token_plan_snapshot_fingerprint_versions_provider_cache_without_scans():
+    async def run() -> (
+        tuple[list[ModelInfo], list[ModelInfo], AsyncMock, AsyncMock, _ExpiringFakeRedis]
     ):
-        models = asyncio.run(
-            inference._get_cached_alibaba_token_plan_models(
+        redis = _ExpiringFakeRedis()
+        app = FastAPI()
+        app.state.http_client = object()
+        app.state.models_dev_catalog = None
+        app.state.redis_manager = _redis_manager(redis)
+        loader = AsyncMock(return_value=[_model("alibaba-token-plan/happyhorse-current-t2v")])
+        official_fetch = AsyncMock(return_value=["happyhorse-current-t2v"])
+
+        with (
+            patch(
+                "services.inference.fetch_alibaba_token_plan_official_video_model_ids",
+                new=official_fetch,
+            ),
+            patch("services.inference.get_alibaba_token_plan_models_safe", new=loader),
+        ):
+            models = await inference._get_cached_alibaba_token_plan_models(
                 app,
                 api_key="credential-a",
             )
-        )
-        asyncio.run(
-            inference._get_cached_alibaba_token_plan_models(
+            await inference._get_cached_alibaba_token_plan_models(
                 app,
                 api_key="credential-b",
             )
-        )
-        app.state.alibaba_token_plan_official_video_catalog_cache = (
-            inference._build_alibaba_official_snapshot(
+            changed_snapshot = inference._build_alibaba_official_snapshot(
                 ["happyhorse-changed-i2v"],
                 available=True,
             )
-        )
-        loader.return_value = [_model("alibaba-token-plan/happyhorse-changed-i2v")]
-        changed_models = asyncio.run(
-            inference._get_cached_alibaba_token_plan_models(
+            await inference_cache.write_alibaba_official_snapshot(
+                app.state.redis_manager,
+                changed_snapshot,
+            )
+            loader.return_value = [_model("alibaba-token-plan/happyhorse-changed-i2v")]
+            changed_models = await inference._get_cached_alibaba_token_plan_models(
                 app,
                 api_key="credential-a",
             )
-        )
+        return models, changed_models, loader, official_fetch, redis
+
+    models, changed_models, loader, official_fetch, redis = asyncio.run(run())
 
     assert [model.id for model in models] == ["alibaba-token-plan/happyhorse-current-t2v"]
-    assert legacy_key not in app.state.subscription_provider_model_cache
-    assert "unrelated:key" in app.state.subscription_provider_model_cache
     alibaba_keys = [
         key
-        for key in app.state.subscription_provider_model_cache
-        if key.startswith(f"{ALIBABA_TOKEN_PLAN_PROVIDER_KEY}:")
+        for key in redis.values
+        if key.startswith(
+            "inference:model-catalog:v1:provider:alibaba-token-plan:official-video-v1:"
+        )
     ]
-    assert len(alibaba_keys) == 1
-    assert all("official-video-v1" in key for key in alibaba_keys)
+    assert len(alibaba_keys) == 3
+    assert not redis.delete_calls
     assert [model.id for model in changed_models] == ["alibaba-token-plan/happyhorse-changed-i2v"]
     assert official_fetch.await_count == 1
     assert loader.await_count == 3

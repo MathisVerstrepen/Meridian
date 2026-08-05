@@ -1,0 +1,42 @@
+name: Publish Release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meridian-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish merged release
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Create tag and prerelease
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ -z "$RELEASE_TOKEN" ]]; then
+            echo "RELEASE_TOKEN is required." >&2
+            exit 1
+          fi
+          python scripts/release_automation.py publish \
+            --repository "$REPOSITORY" \
+            --pull-request-number "$PULL_REQUEST_NUMBER"

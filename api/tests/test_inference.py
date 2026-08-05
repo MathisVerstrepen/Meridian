@@ -1,11 +1,13 @@
 import asyncio
 import base64
 import json
+import os
+import signal
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 import httpx
 import pytest
@@ -30,9 +32,18 @@ from services.github_copilot import (
     _is_model_unavailable_error,
     _list_sdk_models,
     _public_github_copilot_stream_error_message,
+    _run_copilot_session,
     list_github_copilot_models,
     make_github_copilot_request_non_streaming,
     stream_github_copilot_response,
+)
+from services.github_copilot_lifecycle import (
+    GITHUB_COPILOT_SCOPE_ENV,
+    CopilotProcessIdentity,
+    _find_scoped_processes,
+    _reap_process,
+    _signal_process,
+    _terminate_scoped_processes,
 )
 from services.inference import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
@@ -1967,68 +1978,247 @@ def test_github_copilot_model_listing_returns_only_sdk_models():
     assert listed_models == []
 
 
-def test_github_copilot_sdk_model_listing_falls_back_to_raw_models_on_billing_parse_error():
-    class FakeRpcClient:
-        async def request(self, method, payload):
-            assert method == "models.list"
-            assert payload == {}
-            return {
-                "models": [
-                    {
-                        "id": "gpt-5",
-                        "name": "GPT-5",
-                        "capabilities": {
-                            "supports": {"vision": True},
-                            "limits": {"max_context_window_tokens": 200000},
-                        },
-                        "billing": {},
-                    }
-                ]
-            }
+def test_github_copilot_failed_sdk_model_listing_preserves_error_and_cleans_up():
+    events = []
+    constructor_kwargs = {}
 
     class FakeCopilotClient:
-        def __init__(self, _config):
-            self._client = FakeRpcClient()
+        def __init__(self, **kwargs):
+            constructor_kwargs.update(kwargs)
+            events.append("client-created")
 
         async def start(self):
-            return None
+            events.append("client-started")
 
         async def list_models(self):
-            raise ValueError("Missing required field 'multiplier' in ModelBilling")
+            events.append("models-listed")
+            raise RuntimeError("Not authenticated")
+
+        async def stop(self):
+            events.append("client-stopped")
+            raise RuntimeError("runtime did not stop")
 
         async def force_stop(self):
-            return None
+            events.append("client-force-stopped")
 
     async def _stop_runtime_heartbeat(_heartbeat_task):
-        return None
+        events.append("heartbeat-stopped")
 
+    def _terminate_processes(_scope_id, _initial_identities):
+        events.append("processes-terminated")
+        return set()
+
+    runtime_root = Path("/tmp/meridian-copilot-test")
     with (
         patch("services.github_copilot.CopilotClient", FakeCopilotClient),
         patch(
-            "services.github_copilot.SubprocessConfig",
-            lambda **kwargs: SimpleNamespace(**kwargs),
-        ),
-        patch(
             "services.github_copilot._build_runtime_context",
-            return_value=SimpleNamespace(root_dir=Path("/tmp"), cwd=Path("/tmp"), env={}),
+            return_value=SimpleNamespace(
+                root_dir=runtime_root,
+                cwd=runtime_root / "cwd",
+                env={"HOME": "/tmp/home"},
+            ),
         ),
         patch("services.github_copilot.start_runtime_heartbeat", return_value=None),
         patch("services.github_copilot.stop_runtime_heartbeat", _stop_runtime_heartbeat),
-        patch("services.github_copilot._cleanup_runtime_context"),
+        patch(
+            "services.github_copilot._cleanup_runtime_context",
+            side_effect=lambda _context: events.append("runtime-cleaned"),
+        ),
+        patch("services.github_copilot_lifecycle._find_scoped_processes", return_value=set()),
+        patch(
+            "services.github_copilot_lifecycle._terminate_scoped_processes",
+            side_effect=_terminate_processes,
+        ),
     ):
-        raw_models = asyncio.run(_list_sdk_models("gho_test-token"))
+        with pytest.raises(ValueError, match="GitHub Copilot model listing failed: Not authenticated"):
+            asyncio.run(_list_sdk_models("gho_test-token"))
 
-    assert raw_models == [
-        {
-            "id": "gpt-5",
-            "name": "GPT-5",
-            "capabilities": {
-                "supports": {"vision": True},
-                "limits": {"max_context_window_tokens": 200000},
-            },
-            "billing": {},
-        }
+    assert constructor_kwargs == {
+        "working_directory": str(runtime_root / "cwd"),
+        "env": {
+            "HOME": "/tmp/home",
+            GITHUB_COPILOT_SCOPE_ENV: str(runtime_root),
+        },
+        "github_token": "gho_test-token",
+        "use_logged_in_user": False,
+    }
+    assert events == [
+        "client-created",
+        "client-started",
+        "models-listed",
+        "client-stopped",
+        "client-force-stopped",
+        "processes-terminated",
+        "heartbeat-stopped",
+        "runtime-cleaned",
     ]
+
+
+def test_github_copilot_failed_and_cancelled_chat_preserve_outcome_and_cleanup():
+    for send_error in (RuntimeError("chat failed"), asyncio.CancelledError()):
+        events = []
+        create_session_kwargs = {}
+
+        class FakeSession:
+            async def send_and_wait(self, _prompt, timeout):
+                assert timeout == 300.0
+                events.append("message-sent")
+                raise send_error
+
+            async def disconnect(self):
+                events.append("session-disconnected")
+
+        class FakeCopilotClient:
+            def __init__(self, **_kwargs):
+                events.append("client-created")
+
+            async def start(self):
+                events.append("client-started")
+
+            async def create_session(self, **kwargs):
+                create_session_kwargs.update(kwargs)
+                events.append("session-created")
+                return FakeSession()
+
+            async def stop(self):
+                events.append("client-stopped")
+
+            async def force_stop(self):  # pragma: no cover - graceful stop must win
+                raise AssertionError("force_stop should not run after successful stop")
+
+        def _terminate_processes(_scope_id, _initial_identities):
+            events.append("processes-terminated")
+            return set()
+
+        runtime_root = Path("/tmp/meridian-copilot-chat-test")
+        req = GitHubCopilotReqChat(
+            github_token="gho_test-token",
+            model="github-copilot/gpt-5",
+            messages=[{"role": "user", "content": "Hello"}],
+            config=SimpleNamespace(exclude_reasoning=False, reasoning_effort="low"),
+            user_id="user-1",
+            pg_engine=None,
+        )
+        with (
+            patch("services.github_copilot.CopilotClient", FakeCopilotClient),
+            patch("services.github_copilot._build_tools", return_value=[]),
+            patch(
+                "services.github_copilot._build_runtime_context",
+                return_value=SimpleNamespace(
+                    root_dir=runtime_root,
+                    cwd=runtime_root / "cwd",
+                    config_dir=runtime_root / "config",
+                    env={},
+                ),
+            ),
+            patch("services.github_copilot.start_runtime_heartbeat", return_value=None),
+            patch("services.github_copilot.stop_runtime_heartbeat", new=AsyncMock()),
+            patch("services.github_copilot._cleanup_runtime_context"),
+            patch(
+                "services.github_copilot_lifecycle._find_scoped_processes", return_value=set()
+            ),
+            patch(
+                "services.github_copilot_lifecycle._terminate_scoped_processes",
+                side_effect=_terminate_processes,
+            ),
+        ):
+            with pytest.raises(type(send_error)) as exc_info:
+                asyncio.run(
+                    _run_copilot_session(
+                        req,
+                        streaming=False,
+                        event_handler=lambda _event: None,
+                        feedback_callback=lambda _feedback: None,
+                    )
+                )
+
+        assert exc_info.value is send_error
+        assert "config_dir" not in create_session_kwargs
+        assert create_session_kwargs["config_directory"] == str(runtime_root / "config")
+        assert events == [
+            "client-created",
+            "client-started",
+            "session-created",
+            "message-sent",
+            "session-disconnected",
+            "client-stopped",
+            "processes-terminated",
+        ]
+
+
+def _write_fake_copilot_process(
+    proc_root: Path,
+    pid: int,
+    start_time: int,
+    environ_entries: list[str],
+) -> None:
+    process_dir = proc_root / str(pid)
+    process_dir.mkdir()
+    stat_fields = ["S", "1"] + ["0"] * 17 + [str(start_time)]
+    (process_dir / "stat").write_text(f"{pid} (copilot ) launcher) {' '.join(stat_fields)}")
+    (process_dir / "environ").write_bytes(
+        b"\0".join(entry.encode() for entry in environ_entries) + b"\0"
+    )
+
+
+def test_github_copilot_process_discovery_uses_exact_scope_and_start_identity(tmp_path):
+    scope_id = "/tmp/copilot-scope"
+    marker = f"{GITHUB_COPILOT_SCOPE_ENV}={scope_id}"
+    _write_fake_copilot_process(tmp_path, 41001, 101, [marker])
+    _write_fake_copilot_process(tmp_path, 41002, 102, [f"{marker}-other"])
+    _write_fake_copilot_process(tmp_path, 41003, 103, ["UNRELATED=value"])
+    _write_fake_copilot_process(tmp_path, os.getpid(), 104, [marker])
+
+    assert _find_scoped_processes(scope_id, tmp_path) == {
+        CopilotProcessIdentity(pid=41001, start_time_ticks=101)
+    }
+
+    reused_identity = CopilotProcessIdentity(pid=41001, start_time_ticks=101)
+    (tmp_path / "41001" / "stat").write_text(
+        "41001 (reused) " + " ".join(["S", "1"] + ["0"] * 17 + ["999"])
+    )
+    with (
+        patch("services.github_copilot_lifecycle.os.kill") as kill_process,
+        patch("services.github_copilot_lifecycle.os.waitpid") as wait_for_process,
+    ):
+        _signal_process(reused_identity, signal.SIGTERM, tmp_path)
+        _reap_process(reused_identity, tmp_path)
+
+    kill_process.assert_not_called()
+    wait_for_process.assert_not_called()
+
+
+def test_github_copilot_process_cleanup_escalates_and_reaps_only_tracked_pids():
+    first = CopilotProcessIdentity(pid=42001, start_time_ticks=201)
+    late = CopilotProcessIdentity(pid=42002, start_time_ticks=202)
+    discoveries = [{first}, {first}, {first}, {first, late}, {first, late}]
+
+    with (
+        patch(
+            "services.github_copilot_lifecycle._find_scoped_processes",
+            side_effect=discoveries,
+        ),
+        patch("services.github_copilot_lifecycle._identity_is_current", return_value=True),
+        patch(
+            "services.github_copilot_lifecycle.time.monotonic",
+            side_effect=[0.0, 1.0, 2.0, 2.0, 3.0],
+        ),
+        patch("services.github_copilot_lifecycle.time.sleep"),
+        patch("services.github_copilot_lifecycle.os.kill") as kill_process,
+        patch("services.github_copilot_lifecycle.os.waitpid", return_value=(0, 0)) as waitpid,
+    ):
+        survivors = _terminate_scoped_processes("scope-1")
+
+    assert kill_process.call_args_list == [
+        call(first.pid, signal.SIGTERM),
+        call(first.pid, signal.SIGKILL),
+        call(late.pid, signal.SIGKILL),
+    ]
+    assert survivors == {first, late}
+    assert waitpid.call_count > 0
+    assert all(call.args[0] in {first.pid, late.pid} for call in waitpid.call_args_list)
+    assert all(call.args[1] == os.WNOHANG for call in waitpid.call_args_list)
 
 
 def test_get_github_copilot_models_safe_returns_empty_on_failure():

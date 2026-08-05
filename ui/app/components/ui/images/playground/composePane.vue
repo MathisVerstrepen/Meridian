@@ -940,7 +940,7 @@ defineExpose({
                                     v-if="preset.imageId || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
                                     :src="
                                         preset.imageId
-                                            ? imagePlaygroundImageUrl(preset.imageId, true)
+                                            ? imagePlaygroundImageUrl(preset.imageId, '160x160')
                                             : IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image
                                     "
                                     :alt="`${preset.label} illustration`"
@@ -1150,7 +1150,7 @@ defineExpose({
                         @dragend.stop="onReferenceDragEnd"
                     >
                         <img
-                            :src="imagePlaygroundImageUrl(image.id, true)"
+                            :src="imagePlaygroundImageUrl(image.id, '160x160')"
                             :alt="image.name"
                             class="h-full w-full object-cover"
                         />
@@ -1268,7 +1268,7 @@ defineExpose({
                         >
                             <img
                                 v-if="newTonePreviewImageId"
-                                :src="imagePlaygroundImageUrl(newTonePreviewImageId, true)"
+                                :src="imagePlaygroundImageUrl(newTonePreviewImageId, '160x160')"
                                 alt="Generated tone preview"
                                 class="h-full w-full object-cover"
                             >

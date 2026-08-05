@@ -74,7 +74,7 @@ async def connect_claude_agent(
             CLAUDE_AGENT_PROVIDER_KEY,
             encrypted_token,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -93,7 +93,7 @@ async def disconnect_claude_agent(
     user_id: str = Depends(get_current_user_id),
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, CLAUDE_AGENT_PROVIDER_KEY)
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "Claude Agent disconnected successfully."}
 
 
@@ -119,7 +119,7 @@ async def connect_github_copilot(
             GITHUB_COPILOT_PROVIDER_KEY,
             encrypted_token,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -138,7 +138,7 @@ async def disconnect_github_copilot(
     user_id: str = Depends(get_current_user_id),
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, GITHUB_COPILOT_PROVIDER_KEY)
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "GitHub Copilot disconnected successfully."}
 
 
@@ -170,7 +170,7 @@ async def connect_z_ai_coding_plan(
             Z_AI_CODING_PLAN_PROVIDER_KEY,
             encrypted_api_key,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -193,7 +193,7 @@ async def disconnect_z_ai_coding_plan(
         user_id,
         Z_AI_CODING_PLAN_PROVIDER_KEY,
     )
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "Z.AI Coding Plan disconnected successfully."}
 
 
@@ -222,7 +222,7 @@ async def connect_gemini_cli(
             GEMINI_CLI_PROVIDER_KEY,
             encrypted_oauth_creds,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -241,7 +241,7 @@ async def disconnect_gemini_cli(
     user_id: str = Depends(get_current_user_id),
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, GEMINI_CLI_PROVIDER_KEY)
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "Gemini CLI disconnected successfully."}
 
 
@@ -261,7 +261,7 @@ async def _store_openai_codex_auth_json(
         OPENAI_CODEX_PROVIDER_KEY,
         encrypted_auth_json,
     )
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
 
 
 @router.post(
@@ -327,7 +327,7 @@ async def disconnect_openai_codex(
     user_id: str = Depends(get_current_user_id),
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, OPENAI_CODEX_PROVIDER_KEY)
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "OpenAI Codex disconnected successfully."}
 
 
@@ -359,7 +359,7 @@ async def connect_opencode_go(
             OPENCODE_GO_PROVIDER_KEY,
             encrypted_api_key,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -378,7 +378,7 @@ async def disconnect_opencode_go(
     user_id: str = Depends(get_current_user_id),
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, OPENCODE_GO_PROVIDER_KEY)
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "OpenCode Go disconnected successfully."}
 
 
@@ -410,7 +410,7 @@ async def connect_alibaba_token_plan(
             ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
             encrypted_api_key,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        await invalidate_user_available_models_cache(request.app, user_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
@@ -437,5 +437,5 @@ async def disconnect_alibaba_token_plan(
         user_id,
         ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
     )
-    invalidate_user_available_models_cache(request.app, user_id)
+    await invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "Alibaba Personal Token Plan disconnected successfully."}

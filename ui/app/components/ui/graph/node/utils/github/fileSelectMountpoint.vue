@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
+import type { RepoContent, FileTreeNode, GithubIssue, RepositoryInfo } from '@/types/github';
+import type { GithubSelectorTab, GithubSelectorTarget } from '@/composables/useGraphEvents';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
@@ -16,16 +17,26 @@ const { error } = useToast();
 // --- Local State ---
 const isOpen = ref(false);
 const repoContent = ref<RepoContent | null>(null);
+const initialRepoContent = ref<RepoContent | null>(null);
+const selectedRepo = ref<RepositoryInfo>();
 const selectedFiles = ref<FileTreeNode[]>([]);
-const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const selectedIssues = ref<GithubIssue[]>([]);
-const initialSelectedIssues = ref<GithubIssue[]>([]);
-const activeNodeId = ref<string | null>(null);
+const activeTarget = ref<GithubSelectorTarget | null>(null);
 const fileTree = ref<FileTreeNode>();
 const branches = ref<string[]>([]);
 const loadingState = ref(0); // 0: idle, 1: cloning, 2: fetching tree
 const errorState = ref<string | null>(null);
-const activeTab = ref<'files' | 'issues'>('files');
+const activeTab = ref<GithubSelectorTab>('files');
+
+const cloneRepoContent = (content: RepoContent | null): RepoContent | null => {
+    if (!content) return null;
+    return {
+        repo: { ...content.repo },
+        selectedFiles: content.selectedFiles.map((file) => ({ ...file })),
+        selectedIssues: (content.selectedIssues ?? []).map((issue) => ({ ...issue })),
+        currentBranch: content.currentBranch,
+    };
+};
 
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
@@ -103,22 +114,48 @@ const closeFullscreen = (payload?: {
     branch: string;
     issues: GithubIssue[];
 }) => {
+    if (!activeTarget.value) return;
+    const result = payload && repoContent.value
+        ? {
+              repo: { ...repoContent.value.repo },
+              selectedFiles: payload.files.map((file) => ({ ...file })),
+              selectedIssues: payload.issues.map((issue) => ({ ...issue })),
+              currentBranch: payload.branch,
+          }
+        : cloneRepoContent(initialRepoContent.value);
+
     graphEvents.emit('close-github-file-select', {
-        selectedFilePaths: payload ? payload.files : initialSelectedFiles.value,
-        selectedIssues: payload ? payload.issues : initialSelectedIssues.value,
-        nodeId: activeNodeId.value || '',
-        branch: payload ? payload.branch : repoContent.value?.currentBranch,
+        target: activeTarget.value,
+        repoContent: result,
     });
 
-    repoContent.value = null;
     isOpen.value = false;
+    repoContent.value = null;
+    initialRepoContent.value = null;
+    selectedRepo.value = undefined;
     selectedFiles.value = [];
     selectedIssues.value = [];
-    activeNodeId.value = null;
+    activeTarget.value = null;
     fileTree.value = undefined;
     branches.value = [];
     activeTab.value = 'files';
 };
+
+watch(selectedRepo, async (repo) => {
+    if (!isOpen.value || !repo) return;
+    if (repoContent.value?.repo.full_name === repo.full_name) return;
+
+    repoContent.value = {
+        repo: { ...repo },
+        selectedFiles: [],
+        selectedIssues: [],
+        currentBranch: repo.default_branch || 'main',
+    };
+    selectedFiles.value = [];
+    selectedIssues.value = [];
+    errorState.value = null;
+    await fetchGithubData();
+});
 
 const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && isOpen.value) {
@@ -130,13 +167,16 @@ const handleKeyDown = (event: KeyboardEvent) => {
 onMounted(() => {
     const unsubscribe = graphEvents.on('open-github-file-select', async (payload) => {
         isOpen.value = true;
-        repoContent.value = payload.repoContent;
-        selectedFiles.value = payload.repoContent.selectedFiles || [];
-        selectedIssues.value = payload.repoContent.selectedIssues || [];
-        activeNodeId.value = payload.nodeId;
-        initialSelectedFiles.value = [...selectedFiles.value];
-        initialSelectedIssues.value = [...selectedIssues.value];
+        activeTarget.value = payload.target;
+        activeTab.value = payload.initialTab;
+        initialRepoContent.value = cloneRepoContent(payload.repoContent);
+        repoContent.value = cloneRepoContent(payload.repoContent);
+        selectedRepo.value = repoContent.value?.repo;
+        selectedFiles.value = repoContent.value?.selectedFiles ?? [];
+        selectedIssues.value = repoContent.value?.selectedIssues ?? [];
         errorState.value = null;
+
+        if (!repoContent.value) return;
 
         // Gitlab migration support
         if (!repoContent.value.repo.provider) {
@@ -146,7 +186,7 @@ onMounted(() => {
             repoContent.value.repo.encoded_provider = btoa(unescape(encodeURIComponent('github')));
         }
 
-        fetchGithubData();
+        await fetchGithubData();
     });
 
     document.addEventListener('keydown', handleKeyDown);
@@ -168,7 +208,7 @@ onUnmounted(() => {
             :initial="{ opacity: 0, scale: 0.85 }"
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
-            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex
+            class="bg-obsidian/90 border-stone-gray/10 fixed top-1/2 left-1/2 z-50 mx-auto flex
                 h-[95%] w-[95%] -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col
                 overflow-hidden rounded-2xl border-2 shadow-lg backdrop-blur-md"
         >
@@ -180,17 +220,7 @@ onUnmounted(() => {
                     hover:cursor-pointer"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
-                @click="
-                    closeFullscreen(
-                        repoContent
-                            ? {
-                                  files: selectedFiles,
-                                  branch: repoContent.currentBranch,
-                                  issues: selectedIssues,
-                              }
-                            : undefined,
-                    )
-                "
+                @click="closeFullscreen()"
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
@@ -199,6 +229,8 @@ onUnmounted(() => {
             <div class="flex h-full w-full">
                 <!-- Tab Navigation (Left Side) -->
                 <div
+                    v-if="repoContent"
+                    data-github-tab-navigation
                     class="bg-obsidian/50 border-stone-gray/10 flex w-16 flex-col items-center gap-4
                         border-r py-8"
                 >
@@ -237,6 +269,11 @@ onUnmounted(() => {
 
                 <!-- Main Content -->
                 <div class="flex grow overflow-hidden p-8">
+                    <UiGraphNodeUtilsGithubRepositoryPicker
+                        v-if="isOpen && !repoContent"
+                        @select="selectedRepo = $event"
+                    />
+
                     <template v-if="repoContent && fileTree && activeTab === 'files'">
                         <UiGraphNodeUtilsGithubFileTreeSelector
                             :tree-data="fileTree"
@@ -273,17 +310,20 @@ onUnmounted(() => {
                             :initial-selected-issues="selectedIssues"
                             @update:selected-issues="selectedIssues = $event"
                             @close="
-                                closeFullscreen({
-                                    files: selectedFiles,
-                                    branch: repoContent.currentBranch,
-                                    issues: selectedIssues,
-                                })
+                                (issues) =>
+                                    issues
+                                        ? closeFullscreen({
+                                              files: selectedFiles,
+                                              branch: repoContent.currentBranch,
+                                              issues,
+                                          })
+                                        : closeFullscreen()
                             "
                         />
                     </template>
 
                     <div
-                        v-else-if="!repoContent || !fileTree"
+                        v-else-if="repoContent && !fileTree"
                         class="text-stone-gray/50 m-auto flex flex-col items-center gap-4
                             text-center text-sm"
                     >

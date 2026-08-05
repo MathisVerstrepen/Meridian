@@ -6,7 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 
@@ -24,8 +25,10 @@ from routers.files import (
     bulk_delete_items,
     bulk_move_items,
     upload_file,
+    view_file,
 )
 from services.files import copy_file_system_item
+from services.image_previews import ImagePreviewArtifact
 
 
 def patch_filter_top_level_item_ids(monkeypatch):
@@ -737,3 +740,148 @@ def test_copy_file_system_item_rejects_copy_into_own_subtree(monkeypatch) -> Non
 
     assert exc_info.value.status_code == 400
     assert calls == ["subtree-check"]
+
+
+def _view_file_record(*, content_type: str = "image/png") -> SimpleNamespace:
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        name="source.png",
+        file_path="images/source.png",
+        content_type=content_type,
+        content_hash="source-hash",
+    )
+
+
+def test_view_file_serves_webp_preview_with_private_cache(monkeypatch) -> None:
+    user_id = uuid.uuid4()
+    file_id = uuid.uuid4()
+    file_record = _view_file_record()
+    request = SimpleNamespace()
+    calls: list[tuple[object, ...]] = []
+
+    async def fake_get_owned_file_or_404(*args):
+        return file_record
+
+    async def fake_ensure_image_preview(*args):
+        calls.append(args)
+        return ImagePreviewArtifact(path="/cache/source.webp", media_type="image/webp")
+
+    monkeypatch.setattr("routers.files._get_owned_file_or_404", fake_get_owned_file_or_404)
+    monkeypatch.setattr("routers.files.ensure_image_preview", fake_ensure_image_preview)
+
+    response = asyncio.run(
+        view_file(
+            request,
+            file_id,
+            size="160x160",
+            download=False,
+            user_id_str=str(user_id),
+        )
+    )
+
+    assert calls == [(user_id, "images/source.png", "160x160", "source-hash")]
+    assert response.path == "/cache/source.webp"
+    assert response.media_type == "image/webp"
+    assert response.headers["cache-control"] == "private, max-age=31536000"
+    assert response.headers["content-disposition"].startswith("inline;")
+
+
+@pytest.mark.parametrize(
+    ("size", "download", "content_type"),
+    [
+        (None, False, "image/png"),
+        ("160x160", True, "image/png"),
+        ("160x160", False, "application/pdf"),
+    ],
+)
+def test_view_file_preserves_original_for_no_size_download_and_non_image(
+    monkeypatch,
+    size,
+    download: bool,
+    content_type: str,
+) -> None:
+    user_id = uuid.uuid4()
+    file_id = uuid.uuid4()
+    file_record = _view_file_record(content_type=content_type)
+
+    async def fake_get_owned_file_or_404(*args):
+        return file_record
+
+    async def fail_preview(*args):
+        raise AssertionError("preview generation must be bypassed")
+
+    monkeypatch.setattr("routers.files._get_owned_file_or_404", fake_get_owned_file_or_404)
+    monkeypatch.setattr("routers.files.ensure_image_preview", fail_preview)
+    monkeypatch.setattr(
+        "routers.files._get_full_file_path",
+        lambda current_user_id, path: f"/original/{path}",
+    )
+
+    response = asyncio.run(
+        view_file(
+            SimpleNamespace(),
+            file_id,
+            size=size,
+            download=download,
+            user_id_str=str(user_id),
+        )
+    )
+
+    assert response.path == "/original/images/source.png"
+    assert response.media_type == content_type
+    assert response.headers["cache-control"] == "private, max-age=31536000"
+    expected_disposition = (
+        "attachment" if download or content_type == "application/pdf" else "inline"
+    )
+    assert response.headers["content-disposition"].startswith(f"{expected_disposition};")
+
+
+def test_view_file_falls_back_to_original_when_preview_render_fails(monkeypatch) -> None:
+    file_record = _view_file_record()
+
+    async def fake_get_owned_file_or_404(*args):
+        return file_record
+
+    async def fake_ensure_image_preview(*args):
+        return None
+
+    monkeypatch.setattr("routers.files._get_owned_file_or_404", fake_get_owned_file_or_404)
+    monkeypatch.setattr("routers.files.ensure_image_preview", fake_ensure_image_preview)
+    monkeypatch.setattr(
+        "routers.files._get_full_file_path", lambda user_id, path: f"/original/{path}"
+    )
+
+    response = asyncio.run(
+        view_file(
+            SimpleNamespace(),
+            uuid.uuid4(),
+            size="512x512",
+            download=False,
+            user_id_str=str(uuid.uuid4()),
+        )
+    )
+
+    assert response.path == "/original/images/source.png"
+    assert response.media_type == "image/png"
+    assert response.headers["cache-control"] == "private, max-age=31536000"
+
+
+@pytest.mark.parametrize("invalid_size", ["320x320", "512x256", "invalid"])
+def test_view_file_rejects_invalid_preview_size(monkeypatch, invalid_size: str) -> None:
+    from routers import files as files_router
+
+    async def fake_auth() -> str:
+        return str(uuid.uuid4())
+
+    async def fail_owned_lookup(*args):
+        raise AssertionError("invalid query must fail before ownership lookup")
+
+    monkeypatch.setattr(files_router, "_get_owned_file_or_404", fail_owned_lookup)
+    app = FastAPI()
+    app.include_router(files_router.router)
+    app.dependency_overrides[files_router.get_current_user_id] = fake_auth
+
+    with TestClient(app) as client:
+        response = client.get(f"/files/view/{uuid.uuid4()}?size={invalid_size}")
+
+    assert response.status_code == 422

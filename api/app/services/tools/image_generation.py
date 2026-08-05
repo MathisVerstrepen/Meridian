@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -10,7 +11,11 @@ from fastapi import HTTPException
 from models.inference import InferenceProviderEnum
 from services.file_encoding import encode_file_as_data_uri
 from services.files import get_user_storage_path, save_file_to_disk
-from services.image_playground.generated_files import create_generated_video_file
+from services.image_playground.generated_files import (
+    create_completed_generation_job,
+    create_generated_video_file,
+    measure_image_dimensions,
+)
 from services.inference import get_request_inference_credentials, resolve_model_provider
 from services.provider_image_generation import (
     ImageGenerationProviderError,
@@ -313,6 +318,7 @@ async def generate_image(arguments: dict, req) -> dict:
 
     if not prompt:
         return {"error": "Prompt is required for image generation."}
+    prompt = str(prompt)
 
     message_content = await _build_image_content_payload(
         arguments,
@@ -326,6 +332,7 @@ async def generate_image(arguments: dict, req) -> dict:
 
     try:
         credentials = await get_request_inference_credentials(req)
+        generation_started_at = datetime.now(timezone.utc)
         generated_image = await generate_image_with_provider(
             credentials=credentials,
             model=model,
@@ -362,6 +369,24 @@ async def generate_image(arguments: dict, req) -> dict:
             content_type=f"image/{generated_image.extension}",
             hash=hashlib.sha256(generated_image.image_bytes).hexdigest(),
         )
+        actual_width, actual_height, actual_aspect_ratio = measure_image_dimensions(
+            generated_image.image_bytes
+        )
+        await create_completed_generation_job(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            file_id=new_file.id,
+            prompt=prompt,
+            model=generated_image.model,
+            media_type="image",
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            source_image_ids=source_image_ids,
+            generation_started_at=generation_started_at,
+            actual_width=actual_width,
+            actual_height=actual_height,
+            actual_aspect_ratio=actual_aspect_ratio,
+        )
 
         return {
             "success": True,
@@ -395,6 +420,7 @@ async def generate_video(arguments: dict, req) -> dict:
 
     if not prompt:
         return {"error": "Prompt is required for video generation."}
+    prompt = str(prompt)
     if duration is not None:
         try:
             duration = int(duration)
@@ -415,6 +441,7 @@ async def generate_video(arguments: dict, req) -> dict:
 
     try:
         credentials = await get_request_inference_credentials(req)
+        generation_started_at = datetime.now(timezone.utc)
         generated_video = await generate_video_with_provider(
             credentials=credentials,
             model=model,
@@ -434,6 +461,20 @@ async def generate_video(arguments: dict, req) -> dict:
             source_image_ids=source_image_ids,
             video_bytes=generated_video.video_bytes,
             extension=generated_video.extension,
+        )
+        await create_completed_generation_job(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            file_id=new_file.id,
+            prompt=prompt,
+            model=generated_video.model,
+            media_type="video",
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            source_image_ids=source_image_ids,
+            generation_started_at=generation_started_at,
+            duration=duration,
+            generate_audio=generate_audio,
         )
 
         return {
