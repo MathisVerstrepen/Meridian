@@ -50,7 +50,7 @@ stub_modules["services.github_copilot"].validate_github_copilot_token = AsyncMoc
 stub_modules["services.inference"].get_inference_provider_statuses = AsyncMock(  # type: ignore[attr-defined]
     return_value=[]
 )
-stub_modules["services.inference"].invalidate_user_available_models_cache = MagicMock()  # type: ignore[attr-defined]
+stub_modules["services.inference"].invalidate_user_available_models_cache = AsyncMock()  # type: ignore[attr-defined]
 stub_modules["services.openai_codex"].complete_openai_codex_device_oauth = AsyncMock()  # type: ignore[attr-defined]
 stub_modules["services.openai_codex"].start_openai_codex_device_oauth = AsyncMock()  # type: ignore[attr-defined]
 stub_modules["services.openai_codex"].validate_openai_codex_oauth_auth_json = AsyncMock()  # type: ignore[attr-defined]
@@ -369,7 +369,7 @@ def test_connect_route_validates_encrypts_stores_then_invalidates() -> None:
         assert args[2:] == (ALIBABA_TOKEN_PLAN_PROVIDER_KEY, "encrypted")
         events.append("store")
 
-    def invalidate(*args: object) -> None:
+    async def invalidate(*args: object) -> None:
         events.append("invalidate")
 
     with (
@@ -418,7 +418,7 @@ def test_connect_route_does_not_store_failed_validation() -> None:
 def test_disconnect_route_deletes_token_and_invalidates_cache() -> None:
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pg_engine=MagicMock())))
     delete = AsyncMock()
-    invalidate = MagicMock()
+    invalidate = AsyncMock()
     with (
         patch("routers.inference_providers.delete_provider_token", new=delete),
         patch(
@@ -433,5 +433,5 @@ def test_disconnect_route_deletes_token_and_invalidates_cache() -> None:
         "user-1",
         ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
     )
-    invalidate.assert_called_once_with(request.app, "user-1")
+    invalidate.assert_awaited_once_with(request.app, "user-1")
     assert result == {"message": "Alibaba Personal Token Plan disconnected successfully."}

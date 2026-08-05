@@ -1,9 +1,7 @@
 import asyncio
 import hashlib
 import logging
-import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -19,6 +17,19 @@ from models.inference import (
 )
 from models.message import ToolEnum
 from services.crypto import decrypt_api_key
+from services.inference_cache import (
+    ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION,
+    AlibabaOfficialVideoCatalogSnapshot,
+    build_alibaba_subscription_models_key,
+    build_subscription_models_key,
+    delete_user_available_models,
+    read_alibaba_official_snapshot,
+    read_subscription_models,
+    read_user_available_models,
+    write_alibaba_official_snapshot,
+    write_subscription_models,
+    write_user_available_models,
+)
 from services.providers.alibaba_token_plan_catalog import (
     ALIBABA_TOKEN_PLAN_LABEL,
     ALIBABA_TOKEN_PLAN_MODEL_PREFIX,
@@ -76,19 +87,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 MERIDIAN_TOOL_NAMES = [tool.value for tool in ToolEnum]
-SUBSCRIPTION_MODEL_CACHE_TTL_SECONDS = 60 * 10
-USER_AVAILABLE_MODELS_CACHE_TTL_SECONDS = 60
-ALIBABA_OFFICIAL_CATALOG_SUCCESS_TTL_SECONDS = 60 * 10
-ALIBABA_OFFICIAL_CATALOG_FAILURE_TTL_SECONDS = 60
-ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION = "official-video-v1"
-
-
-@dataclass(frozen=True)
-class _AlibabaOfficialVideoCatalogSnapshot:
-    model_ids: tuple[str, ...]
-    fetched_at: float
-    available: bool
-    fingerprint: str
 
 
 def _copy_models(models: list[ModelInfo]) -> list[ModelInfo]:
@@ -102,16 +100,6 @@ def _copy_response_model(response: ResponseModel) -> ResponseModel:
     )
 
 
-def _get_subscription_model_cache(
-    app: FastAPI,
-) -> dict[str, tuple[float, list[ModelInfo]]]:
-    cache = getattr(app.state, "subscription_provider_model_cache", None)
-    if cache is None:
-        cache = {}
-        app.state.subscription_provider_model_cache = cache
-    return cache
-
-
 def _get_subscription_model_inflight(
     app: FastAPI,
 ) -> dict[str, asyncio.Task[list[ModelInfo]]]:
@@ -120,16 +108,6 @@ def _get_subscription_model_inflight(
         inflight = {}
         app.state.subscription_provider_model_inflight = inflight
     return inflight
-
-
-def _get_user_available_models_cache(
-    app: FastAPI,
-) -> dict[str, tuple[float, ResponseModel]]:
-    cache = getattr(app.state, "user_available_models_cache", None)
-    if cache is None:
-        cache = {}
-        app.state.user_available_models_cache = cache
-    return cache
 
 
 def _get_user_available_models_inflight(
@@ -142,13 +120,9 @@ def _get_user_available_models_inflight(
     return inflight
 
 
-def invalidate_user_available_models_cache(app: FastAPI, user_id: str) -> None:
-    _get_user_available_models_cache(app).pop(user_id, None)
+async def invalidate_user_available_models_cache(app: FastAPI, user_id: str) -> None:
     _get_user_available_models_inflight(app).pop(user_id, None)
-
-
-def _build_subscription_model_cache_key(provider_key: str, credential: str) -> str:
-    return f"{provider_key}:{hashlib.sha256(credential.encode('utf-8')).hexdigest()}"
+    await delete_user_available_models(getattr(app.state, "redis_manager", None), user_id)
 
 
 async def _get_cached_subscription_models(
@@ -158,13 +132,10 @@ async def _get_cached_subscription_models(
     loader: Callable[[], Awaitable[list[ModelInfo]]],
     cache_empty: bool = True,
 ) -> list[ModelInfo]:
-    cache = _get_subscription_model_cache(app)
-    cached_entry = cache.get(cache_key)
-    if cached_entry is not None:
-        cached_at, cached_models = cached_entry
-        if (time.monotonic() - cached_at) < SUBSCRIPTION_MODEL_CACHE_TTL_SECONDS:
-            return _copy_models(cached_models)
-        cache.pop(cache_key, None)
+    redis_manager = getattr(app.state, "redis_manager", None)
+    cached_models = await read_subscription_models(redis_manager, cache_key)
+    if cached_models is not None:
+        return _copy_models(cached_models)
 
     inflight = _get_subscription_model_inflight(app)
     existing_task = inflight.get(cache_key)
@@ -174,7 +145,7 @@ async def _get_cached_subscription_models(
     async def _load_models() -> list[ModelInfo]:
         models = await loader()
         if models or cache_empty:
-            cache[cache_key] = (time.monotonic(), _copy_models(models))
+            await write_subscription_models(redis_manager, cache_key, models)
         return models
 
     task = asyncio.create_task(_load_models())
@@ -187,7 +158,7 @@ async def _get_cached_subscription_models(
 
 def _build_alibaba_official_snapshot(
     model_ids: list[str], *, available: bool
-) -> _AlibabaOfficialVideoCatalogSnapshot:
+) -> AlibabaOfficialVideoCatalogSnapshot:
     sorted_ids = tuple(sorted(model_ids))
     fingerprint_payload = "\0".join(
         [
@@ -196,9 +167,8 @@ def _build_alibaba_official_snapshot(
             *sorted_ids,
         ]
     )
-    return _AlibabaOfficialVideoCatalogSnapshot(
+    return AlibabaOfficialVideoCatalogSnapshot(
         model_ids=sorted_ids,
-        fetched_at=time.monotonic(),
         available=available,
         fingerprint=hashlib.sha256(fingerprint_payload.encode("utf-8")).hexdigest(),
     )
@@ -206,20 +176,11 @@ def _build_alibaba_official_snapshot(
 
 async def _get_alibaba_official_video_catalog_snapshot(
     app: FastAPI,
-) -> _AlibabaOfficialVideoCatalogSnapshot:
-    cached_snapshot = getattr(
-        app.state,
-        "alibaba_token_plan_official_video_catalog_cache",
-        None,
-    )
-    if isinstance(cached_snapshot, _AlibabaOfficialVideoCatalogSnapshot):
-        ttl = (
-            ALIBABA_OFFICIAL_CATALOG_SUCCESS_TTL_SECONDS
-            if cached_snapshot.available
-            else ALIBABA_OFFICIAL_CATALOG_FAILURE_TTL_SECONDS
-        )
-        if (time.monotonic() - cached_snapshot.fetched_at) < ttl:
-            return cached_snapshot
+) -> AlibabaOfficialVideoCatalogSnapshot:
+    redis_manager = getattr(app.state, "redis_manager", None)
+    cached_snapshot = await read_alibaba_official_snapshot(redis_manager)
+    if cached_snapshot is not None:
+        return cached_snapshot
 
     existing_task = getattr(
         app.state,
@@ -229,7 +190,7 @@ async def _get_alibaba_official_video_catalog_snapshot(
     if isinstance(existing_task, asyncio.Task):
         return await asyncio.shield(existing_task)
 
-    async def _load_snapshot() -> _AlibabaOfficialVideoCatalogSnapshot:
+    async def _load_snapshot() -> AlibabaOfficialVideoCatalogSnapshot:
         try:
             model_ids = await fetch_alibaba_token_plan_official_video_model_ids(
                 app.state.http_client
@@ -241,13 +202,13 @@ async def _get_alibaba_official_video_catalog_snapshot(
                 type(exc).__name__,
             )
             snapshot = _build_alibaba_official_snapshot([], available=False)
-        app.state.alibaba_token_plan_official_video_catalog_cache = snapshot
+        await write_alibaba_official_snapshot(redis_manager, snapshot)
         return snapshot
 
     task = asyncio.create_task(_load_snapshot())
     app.state.alibaba_token_plan_official_video_catalog_inflight = task
 
-    def _clear_inflight(_: asyncio.Task[_AlibabaOfficialVideoCatalogSnapshot]) -> None:
+    def _clear_inflight(_: asyncio.Task[AlibabaOfficialVideoCatalogSnapshot]) -> None:
         if (
             getattr(
                 app.state,
@@ -262,50 +223,15 @@ async def _get_alibaba_official_video_catalog_snapshot(
     return await asyncio.shield(task)
 
 
-def _build_alibaba_subscription_cache_key(
-    credential: str,
-    snapshot_fingerprint: str,
-) -> str:
-    credential_fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()
-    return (
-        f"{ALIBABA_TOKEN_PLAN_PROVIDER_KEY}:{ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION}:"
-        f"{credential_fingerprint}:{snapshot_fingerprint}"
-    )
-
-
-def _prune_obsolete_alibaba_subscription_cache_entries(
-    app: FastAPI,
-    snapshot_fingerprint: str,
-) -> None:
-    provider_prefix = f"{ALIBABA_TOKEN_PLAN_PROVIDER_KEY}:"
-    current_prefix = f"{provider_prefix}{ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION}:"
-    current_suffix = f":{snapshot_fingerprint}"
-
-    def _is_obsolete(key: str) -> bool:
-        return key.startswith(provider_prefix) and not (
-            key.startswith(current_prefix) and key.endswith(current_suffix)
-        )
-
-    cache = _get_subscription_model_cache(app)
-    for key in list(cache):
-        if _is_obsolete(key):
-            cache.pop(key, None)
-    inflight = _get_subscription_model_inflight(app)
-    for key in list(inflight):
-        if _is_obsolete(key):
-            inflight.pop(key, None)
-
-
 async def _get_cached_alibaba_token_plan_models(
     app: FastAPI,
     *,
     api_key: str,
 ) -> list[ModelInfo]:
     snapshot = await _get_alibaba_official_video_catalog_snapshot(app)
-    _prune_obsolete_alibaba_subscription_cache_entries(app, snapshot.fingerprint)
     return await _get_cached_subscription_models(
         app,
-        cache_key=_build_alibaba_subscription_cache_key(api_key, snapshot.fingerprint),
+        cache_key=build_alibaba_subscription_models_key(api_key, snapshot.fingerprint),
         loader=lambda: get_alibaba_token_plan_models_safe(
             models_dev_catalog=getattr(app.state, "models_dev_catalog", None),
             api_key=api_key,
@@ -542,13 +468,10 @@ def normalize_openrouter_model(model: ModelInfo) -> ModelInfo:
 
 
 async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseModel:
-    user_cache = _get_user_available_models_cache(app)
-    cached_response = user_cache.get(user_id)
+    redis_manager = getattr(app.state, "redis_manager", None)
+    cached_response = await read_user_available_models(redis_manager, user_id)
     if cached_response is not None:
-        cached_at, response = cached_response
-        if (time.monotonic() - cached_at) < USER_AVAILABLE_MODELS_CACHE_TTL_SECONDS:
-            return _copy_response_model(response)
-        user_cache.pop(user_id, None)
+        return _copy_response_model(cached_response)
 
     user_inflight = _get_user_available_models_inflight(app)
     existing_task = user_inflight.get(user_id)
@@ -556,7 +479,9 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         return _copy_response_model(await asyncio.shield(existing_task))
 
     async def _load_available_models() -> ResponseModel:
-        return await _build_available_models_for_user(app, user_id)
+        response = await _build_available_models_for_user(app, user_id)
+        await write_user_available_models(redis_manager, user_id, response)
+        return response
 
     task = asyncio.create_task(_load_available_models())
     user_inflight[user_id] = task
@@ -564,7 +489,6 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         lambda _: user_inflight.pop(user_id, None) if user_inflight.get(user_id) is task else None
     )
     response = await asyncio.shield(task)
-    user_cache[user_id] = (time.monotonic(), _copy_response_model(response))
     return _copy_response_model(response)
 
 
@@ -586,7 +510,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     CLAUDE_AGENT_PROVIDER_KEY,
                     claude_oauth_token,
                 ),
@@ -598,7 +522,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     GITHUB_COPILOT_PROVIDER_KEY,
                     github_copilot_token,
                 ),
@@ -609,7 +533,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     Z_AI_CODING_PLAN_PROVIDER_KEY,
                     credentials.z_ai_coding_plan_api_key,
                 ),
@@ -622,7 +546,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     GEMINI_CLI_PROVIDER_KEY,
                     credentials.gemini_cli_oauth_creds_json,
                 ),
@@ -634,7 +558,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     OPENAI_CODEX_PROVIDER_KEY,
                     openai_codex_auth_json,
                 ),
@@ -652,7 +576,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         provider_model_tasks.append(
             _get_cached_subscription_models(
                 app,
-                cache_key=_build_subscription_model_cache_key(
+                cache_key=build_subscription_models_key(
                     OPENCODE_GO_PROVIDER_KEY,
                     credentials.opencode_go_api_key,
                 ),
