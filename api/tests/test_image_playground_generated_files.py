@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import sys
 import uuid
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,11 +11,11 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
-
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 from services.image_playground import generated_files
 from services.image_playground.generated_files import (
+    create_completed_generation_job,
     create_generated_image_file,
     create_generated_video_file,
     generated_video_content_type,
@@ -37,6 +38,135 @@ def test_generated_video_content_type_maps_mov_to_quicktime():
     assert generated_video_content_type("mov") == "video/quicktime"
     assert generated_video_content_type(".MOV") == "video/quicktime"
     assert generated_video_content_type("mp4") == "video/mp4"
+
+
+def test_create_completed_generation_job_persists_completed_metadata(monkeypatch):
+    calls: dict[str, object] = {}
+    user_id = uuid.uuid4()
+    file_id = uuid.uuid4()
+    generation_started_at = datetime(2020, 8, 5, 10, 30, tzinfo=timezone.utc)
+    source_image_ids = [str(uuid.uuid4())]
+
+    class FakeSession:
+        def __init__(self, pg_engine):
+            calls["engine"] = pg_engine
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        def add(self, job):
+            calls["job"] = job
+
+        async def commit(self):
+            calls["committed"] = True
+
+        async def refresh(self, job):
+            calls["refreshed"] = job
+
+        async def rollback(self):
+            calls["rolled_back"] = True
+
+    monkeypatch.setattr(generated_files, "AsyncSession", FakeSession)
+
+    job = asyncio.run(
+        create_completed_generation_job(
+            pg_engine="engine",
+            user_id=user_id,
+            file_id=file_id,
+            prompt="  Generated prompt  ",
+            model="  provider/resolved-model  ",
+            media_type="image",
+            aspect_ratio="4:3",
+            resolution="2K",
+            source_image_ids=source_image_ids,
+            generation_started_at=generation_started_at,
+            actual_width=1200,
+            actual_height=900,
+            actual_aspect_ratio="4:3",
+        )
+    )
+
+    assert calls["engine"] == "engine"
+    assert calls["job"] is job
+    assert calls["committed"] is True
+    assert calls["refreshed"] is job
+    assert "rolled_back" not in calls
+    assert job.user_id == user_id
+    assert job.file_id == file_id
+    assert job.status == "completed"
+    assert job.prompt == "Generated prompt"
+    assert job.effective_prompt == "Generated prompt"
+    assert job.model == "provider/resolved-model"
+    assert job.media_type == "image"
+    assert job.aspect_ratio == "4:3"
+    assert job.resolution == "2K"
+    assert job.duration is None
+    assert job.generate_audio is False
+    assert job.actual_width == 1200
+    assert job.actual_height == 900
+    assert job.actual_aspect_ratio == "4:3"
+    assert job.style_preset is None
+    assert job.source_image_ids == source_image_ids
+    assert job.error is None
+    assert job.attempts == 1
+    assert job.max_attempts == 1
+    assert job.is_preview is False
+    assert job.created_at == generation_started_at
+    assert job.updated_at == job.completed_at
+    assert job.completed_at >= generation_started_at
+
+
+def test_create_completed_generation_job_rolls_back_and_reraises(monkeypatch):
+    calls: dict[str, object] = {}
+
+    class FakeSession:
+        def __init__(self, pg_engine):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        def add(self, job):
+            calls["added"] = job
+
+        async def commit(self):
+            raise RuntimeError("database unavailable")
+
+        async def refresh(self, job):
+            calls["refreshed"] = True
+
+        async def rollback(self):
+            calls["rolled_back"] = True
+
+    monkeypatch.setattr(generated_files, "AsyncSession", FakeSession)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        asyncio.run(
+            create_completed_generation_job(
+                pg_engine="engine",
+                user_id=uuid.uuid4(),
+                file_id=uuid.uuid4(),
+                prompt="prompt",
+                model="provider/model",
+                media_type="video",
+                aspect_ratio="16:9",
+                resolution="720p",
+                source_image_ids=[],
+                generation_started_at=datetime.now(timezone.utc),
+                duration=6,
+                generate_audio=True,
+            )
+        )
+
+    assert "added" in calls
+    assert calls["rolled_back"] is True
+    assert "refreshed" not in calls
 
 
 def test_create_generated_image_file_saves_under_generated_images(monkeypatch):

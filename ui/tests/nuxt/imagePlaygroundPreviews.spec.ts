@@ -13,6 +13,8 @@ const image: GeneratedImageGalleryItem = {
     updated_at: '2026-08-04T00:00:00Z',
     prompt: 'Gallery fixture',
     model: 'fixture-model',
+    aspect_ratio: '4:3',
+    resolution: '1K',
     source_image_ids: [],
 };
 
@@ -45,6 +47,11 @@ describe('Image Playground gallery previews', () => {
                 );
                 expect(renderedImage.attributes('sizes')).toBe(IMAGE_PLAYGROUND_GALLERY_SIZES);
             }
+
+            expect(wrapper.text()).toContain('Gallery fixture');
+            expect(wrapper.text()).toContain('fixture-model');
+            expect(wrapper.text()).toContain('4:3');
+            expect(wrapper.text()).toContain('1K');
         } finally {
             wrapper.unmount();
         }
