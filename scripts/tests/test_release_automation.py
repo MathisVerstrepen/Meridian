@@ -259,6 +259,23 @@ class PublishTests(unittest.TestCase):
             },
         )
 
+    def test_crlf_pr_body_publishes_canonical_changelog(self):
+        self.queue_publish_validation(pr=pull(body=CHANGELOG.replace("\n", "\r\n")))
+        self.transport.add("GET", "/git/ref/tags/1.7.5-beta", {"message": "missing"}, status=404)
+        self.transport.add("POST", "/git/refs", {"ref": "refs/tags/1.7.5-beta"}, status=201)
+        self.transport.add(
+            "GET", "/git/ref/tags/1.7.5-beta", {"object": {"type": "commit", "sha": SHA}}
+        )
+        self.transport.add("GET", "/releases/tags/1.7.5-beta", {"message": "missing"}, status=404)
+        self.transport.add("POST", "/releases", {"id": 8}, status=201)
+
+        self.assertEqual(release.publish(self.client, 12), "1.7.5-beta")
+
+        release_write = self.transport.calls[-1]
+        self.assertEqual(release_write["method"], "POST")
+        self.assertEqual(release_write["path"], "/releases")
+        self.assertEqual(release_write["payload"]["body"], CHANGELOG)
+
     def test_existing_annotated_tag_and_release_are_reconciled(self):
         self.queue_publish_validation(tags=[{"name": "1.7.4-beta"}, {"name": "1.7.5-beta"}])
         tag_sha = "b" * 40
@@ -329,19 +346,30 @@ class PublishTests(unittest.TestCase):
             release.publish(self.client, 12)
         self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
 
-    def test_invalid_pr_title_or_body_refuses_before_mutation(self):
+    def test_invalid_pr_title_refuses_before_mutation(self):
         invalid_title = pull()
         invalid_title["title"] = "Release 1.7.5-beta"
         self.transport.add("GET", "/pulls/12", invalid_title)
         with self.assertRaises(release.ReleaseError):
             release.publish(self.client, 12)
-        invalid_body = pull(body="edited")
-        self.transport.add("GET", "/pulls/12", invalid_body)
-        self.transport.add(
-            "GET", f"/contents/docs/changelogs/Update-1.7.5-beta.md?ref={SHA}", encoded_changelog()
-        )
-        with self.assertRaisesRegex(release.ReleaseError, "body"):
-            release.publish(self.client, 12)
+
+    def test_changelog_mismatches_refuse_before_mutation(self):
+        mismatches = {
+            "substantive": CHANGELOG.replace("Exact notes.", "Edited notes."),
+            "trailing newline": CHANGELOG.removesuffix("\n"),
+        }
+        for name, body in mismatches.items():
+            with self.subTest(name=name):
+                self.transport.add("GET", "/pulls/12", pull(body=body))
+                self.transport.add(
+                    "GET",
+                    f"/contents/docs/changelogs/Update-1.7.5-beta.md?ref={SHA}",
+                    encoded_changelog(),
+                )
+                with self.assertRaisesRegex(release.ReleaseError, "body"):
+                    release.publish(self.client, 12)
+                self.transport.assert_done()
+        self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
 
     def test_release_create_race_is_updated(self):
         self.queue_publish_validation()

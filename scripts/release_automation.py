@@ -349,7 +349,10 @@ def publish(
     changelog = decode_changelog(
         client.request("GET", _contents_path(version, merge_sha))[0], version
     )
-    if pull.get("body") != changelog:
+    pull_body = pull.get("body")
+    if not isinstance(pull_body, str) or pull_body.replace("\r\n", "\n") != changelog.replace(
+        "\r\n", "\n"
+    ):
         raise ReleaseError("release PR body does not equal merged changelog")
     tags = client.paginate("/tags?per_page=100")
     prior = latest_version(tags, excluded=version)
