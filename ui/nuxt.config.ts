@@ -1,5 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
+import { loadReleaseChangelogs } from './build/releaseChangelogs';
+
+const releaseChangelogs = await loadReleaseChangelogs(
+    fileURLToPath(new URL('../docs/changelogs/', import.meta.url)),
+);
 
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
@@ -87,6 +93,10 @@ export default defineNuxtConfig({
                 { name: 'theme-color', content: '#ccc5b9' },
             ],
         },
+    },
+
+    appConfig: {
+        releaseChangelogs,
     },
 
     vite: {

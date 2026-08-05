@@ -18,6 +18,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application source code
 COPY ./ui .
+COPY ./docs/changelogs /docs/changelogs
 
 # Build the Nuxt application
 RUN pnpm run build
