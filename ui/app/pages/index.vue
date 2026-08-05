@@ -3,6 +3,7 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 import type { MessageContent, BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
+import type { ChatInputSubmission } from '@/types/chat';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
 
@@ -130,7 +131,7 @@ const loadMoreGraphs = async () => {
     }
 };
 
-const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
+const openNewFromInput = async (submission: ChatInputSubmission) => {
     if ((user.value as User)?.plan_type === 'free') {
         const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
         if (nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS) {
@@ -164,8 +165,8 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     openChatId.value = textToTextNodeId;
 
     let filesContent: MessageContent[] = [];
-    if (files && files.length > 0) {
-        filesContent = files.map((file) => fileToMessageContent(file));
+    if (submission.files.length > 0) {
+        filesContent = submission.files.map((file) => fileToMessageContent(file));
     }
 
     addMessage(
@@ -174,7 +175,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
             content: [
                 {
                     type: MessageContentTypeEnum.TEXT,
-                    text: message,
+                    text: submission.message,
                 },
                 ...filesContent,
             ],
@@ -184,7 +185,8 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
             data: {
                 reply: '',
                 model: upcomingModelData.value.data.model as string,
-                files: files,
+                files: submission.files,
+                githubContext: submission.githubContext,
             },
             usageData: null,
         },

@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import type { NodeTypeEnum } from '@/types/enums';
+import type { ChatInputSubmission } from '@/types/chat';
+import type { BlockDefinition } from '@/types/graph';
 
-const emit = defineEmits([
-    'triggerScroll',
-    'generate',
-    'goBackToBottom',
-    'cancelStream',
-    'selectNodeType',
-]);
+const emit = defineEmits<{
+    (e: 'triggerScroll'): void;
+    (e: 'generate', submission: ChatInputSubmission): void;
+    (e: 'goBackToBottom'): void;
+    (e: 'cancelStream'): void;
+    (e: 'selectNodeType', nodeType: BlockDefinition): void;
+}>();
 
 defineProps<{
     isLockedToBottom: boolean;
@@ -24,6 +26,7 @@ const usageStore = useUsageStore();
 const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
 const { error } = useToast();
 const graphEvents = useGraphEvents();
+const { githubContext, openGithubContext, removeGithubContext } = useChatGithubContext();
 
 // --- Local State ---
 const textareaRef = ref<HTMLDivElement | null>(null);
@@ -74,10 +77,15 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    emit('generate', message.value, files.value);
+    emit('generate', {
+        message: message.value,
+        files: files.value,
+        githubContext: githubContext.value,
+    });
 
     message.value = '';
     files.value = [];
+    githubContext.value = null;
     isEmpty.value = true;
     const el = textareaRef.value;
     if (!el) return;
@@ -247,11 +255,21 @@ onMounted(() => {
 
         <!-- File attachments -->
         <div
-            v-if="files.length > 0"
+            v-if="files.length > 0 || githubContext"
             data-attachment-grid
             class="bg-obsidian shadow-soft-silk/5 mx-10 grid h-fit w-[calc(80%-3rem)] max-w-268
                 grid-cols-1 gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
+            <ul
+                v-if="githubContext"
+                data-attachment-row="github"
+                class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
+            >
+                <UiChatGithubContextChip
+                    :context="githubContext"
+                    @remove="removeGithubContext"
+                />
+            </ul>
             <ul
                 v-if="imageAttachments.length > 0"
                 data-attachment-row="images"
@@ -286,7 +304,7 @@ onMounted(() => {
             class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-280 items-end
                 justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
-                'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0,
+                'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0 && !githubContext,
                 'bg-anthracite/25': from === 'home',
                 'bg-obsidian/75': from === 'chat',
             }"
@@ -295,6 +313,7 @@ onMounted(() => {
                 :disabled="isUploading"
                 @add-files="addFiles"
                 @open-cloud-select="openCloudSelect"
+                @add-git-context="openGithubContext"
             >
                 <template #icon>
                     <UiChatUtilsUploadProgressCircle
@@ -302,7 +321,7 @@ onMounted(() => {
                         :uploads="uploads"
                         class="animate-pulse"
                     />
-                    <UiIcon v-else name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                    <UiIcon v-else name="Fa6SolidPlus" class="text-stone-gray h-5 w-5" />
                 </template>
             </UiChatAttachmentUploadButton>
 

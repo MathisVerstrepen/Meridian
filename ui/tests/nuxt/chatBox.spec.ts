@@ -3,6 +3,7 @@ import { defineComponent, h, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ChatBox from '@/components/ui/chat/chatBox.vue';
 import { NodeTypeEnum } from '@/types/enums';
+import type { ChatInputSubmission } from '@/types/chat';
 
 const stubs = vi.hoisted(() => ({
     callOrder: [] as string[],
@@ -109,7 +110,7 @@ describe('chatBox manual message generation', () => {
         });
     });
 
-    it('opens upcoming node data before generating with unchanged arguments', async () => {
+    it('opens upcoming node data before forwarding the typed submission', async () => {
         const wrapper = await mountSuspended(ChatBox, {
             shallow: true,
             global: {
@@ -118,25 +119,26 @@ describe('chatBox manual message generation', () => {
                 },
             },
         });
-        const message = 'Generate this';
-        const files: FileSystemObject[] = [
-            {
+        const submission: ChatInputSubmission = {
+            message: 'Generate this',
+            files: [{
                 id: 'file-id',
                 name: 'reference.png',
                 type: 'file',
                 created_at: '2026-08-04T00:00:00Z',
                 updated_at: '2026-08-04T00:00:00Z',
                 cached: true,
-            },
-        ];
+            }],
+            githubContext: null,
+        };
 
         try {
-            wrapper.findComponent(TextInputStub).vm.$emit('generate', message, files);
+            wrapper.findComponent(TextInputStub).vm.$emit('generate', submission);
 
             expect(stubs.graphEmit).toHaveBeenCalledOnce();
             expect(stubs.graphEmit).toHaveBeenCalledWith('open-upcoming-node-data', {});
             expect(stubs.generateNew).toHaveBeenCalledOnce();
-            expect(stubs.generateNew).toHaveBeenCalledWith(null, message, files);
+            expect(stubs.generateNew).toHaveBeenCalledWith(null, submission);
             expect(stubs.callOrder).toEqual(['open-upcoming-node-data', 'generate-new']);
         } finally {
             wrapper.unmount();

@@ -3,6 +3,7 @@ import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
 import { useMessageEditing } from '@/composables/useMessageEditing';
+import type { ChatInputSubmission } from '@/types/chat';
 
 const props = defineProps<{
     isTemporary?: boolean;
@@ -166,9 +167,9 @@ const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
 
-const handleGenerateNew = (message: string, files: FileSystemObject[]) => {
+const handleGenerateNew = (submission: ChatInputSubmission) => {
     graphEvents.emit('open-upcoming-node-data', {});
-    generateNew(null, message, files);
+    generateNew(null, submission);
 };
 
 const chatPanelStyle = computed(() => {

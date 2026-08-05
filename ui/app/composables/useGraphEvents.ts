@@ -1,7 +1,7 @@
 import type { NodeCategoryEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { DragZoneHoverEvent } from '@/types/graph';
-import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
+import type { RepoContent } from '@/types/github';
 import type { PromptImproverReviewChangeInput } from '@/types/promptImprover';
 import type { PromptTemplate, WheelSlot } from '@/types/settings';
 import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
@@ -21,12 +21,14 @@ type BusEvents = {
     'open-fullscreen': { open: boolean; rawElement?: string };
     'drag-zone-hover': DragZoneHoverEvent | null;
 
-    'open-github-file-select': { repoContent: RepoContent; nodeId: string };
+    'open-github-file-select': {
+        target: GithubSelectorTarget;
+        repoContent: RepoContent | null;
+        initialTab: GithubSelectorTab;
+    };
     'close-github-file-select': {
-        selectedFilePaths: FileTreeNode[];
-        selectedIssues?: GithubIssue[];
-        nodeId: string;
-        branch?: string;
+        target: GithubSelectorTarget;
+        repoContent: RepoContent | null;
     };
 
     'open-attachment-select': { nodeId: string | null; selectedFiles: FileSystemObject[] };
@@ -64,6 +66,11 @@ type BusEvents = {
         error?: string;
     };
 };
+
+export type GithubSelectorTab = 'files' | 'issues';
+export type GithubSelectorTarget =
+    | { kind: 'node'; nodeId: string }
+    | { kind: 'chat-input' };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};
 

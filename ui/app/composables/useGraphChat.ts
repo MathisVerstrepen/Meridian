@@ -3,6 +3,8 @@ import { useVueFlow } from '@vue-flow/core';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeTypeEnum } from '@/types/enums';
+import type { ChatInputSubmission } from '@/types/chat';
+import type { RepoContent } from '@/types/github';
 
 type CreatedChatNodes = {
     generatorNodeId: string | undefined;
@@ -134,7 +136,7 @@ export const useGraphChat = () => {
         return newPromptNode?.id;
     };
 
-    const addGithubInputNodes = (fromNodeId: string) => {
+    const addGithubInputNodes = (context: RepoContent, fromNodeId: string) => {
         const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(fromNodeId);
 
         const newGithubNode = placeBlock({
@@ -143,6 +145,12 @@ export const useGraphChat = () => {
             fromNodeId: fromNodeId,
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
             positionOffset: { x: -600, y: 0 },
+            data: {
+                repo: context.repo,
+                files: context.selectedFiles,
+                selectedIssues: context.selectedIssues ?? [],
+                branch: context.currentBranch,
+            },
         });
 
         placeEdge(graphId.value, newGithubNode?.id, fromNodeId, null, 'attachment_' + fromNodeId);
@@ -305,42 +313,45 @@ export const useGraphChat = () => {
     const createNodeFromVariant = (
         generatorNode: NodeTypeEnum,
         fromNodeId: string,
-        options: NodeTypeEnum[] | undefined = undefined,
-        inputText: string = '',
-        forcedNodeId: string | null = null,
+        options: { submission: ChatInputSubmission; forcedNodeId?: string | null },
     ): CreatedChatNodes => {
         let newNodeId: string | undefined;
         let promptNodeId: string | undefined;
         const optionIds: string[] = [];
+        const { submission, forcedNodeId = null } = options;
 
         switch (generatorNode) {
             case NodeTypeEnum.TEXT_TO_TEXT:
-                newNodeId = addTextToTextInputNodes(inputText, fromNodeId, forcedNodeId);
+                newNodeId = addTextToTextInputNodes(submission.message, fromNodeId, forcedNodeId);
                 break;
             case NodeTypeEnum.PARALLELIZATION:
-                newNodeId = addParallelizationInputNode(inputText, fromNodeId, forcedNodeId);
+                newNodeId = addParallelizationInputNode(submission.message, fromNodeId, forcedNodeId);
                 break;
             case NodeTypeEnum.ROUTING:
-                newNodeId = addRoutingInputNode(inputText, fromNodeId, forcedNodeId);
+                newNodeId = addRoutingInputNode(submission.message, fromNodeId, forcedNodeId);
                 break;
             default:
                 console.warn(`Unknown node variant: ${generatorNode}`);
                 break;
         }
 
-        for (const option of options ?? []) {
-            if (option === NodeTypeEnum.FILE_PROMPT && newNodeId) {
-                const optionId = addFilesPromptInputNodes([], newNodeId);
-                if (optionId) optionIds.push(optionId);
-            } else if (option === NodeTypeEnum.PROMPT && newNodeId) {
-                const optionId = addPromptFromNodeId(inputText, newNodeId);
-                if (optionId) {
-                    optionIds.push(optionId);
-                    promptNodeId = optionId;
-                }
-            } else if (option === NodeTypeEnum.GITHUB && newNodeId) {
-                const optionId = addGithubInputNodes(newNodeId);
-                if (optionId) optionIds.push(optionId);
+        if (newNodeId) {
+            promptNodeId = addPromptFromNodeId(submission.message, newNodeId);
+            if (promptNodeId) optionIds.push(promptNodeId);
+
+            if (submission.files.length > 0) {
+                const fileNodeId = addFilesPromptInputNodes(submission.files, newNodeId);
+                if (fileNodeId) optionIds.push(fileNodeId);
+            }
+
+            const githubContext = submission.githubContext;
+            if (
+                githubContext &&
+                (githubContext.selectedFiles.length > 0 ||
+                    (githubContext.selectedIssues?.length ?? 0) > 0)
+            ) {
+                const githubNodeId = addGithubInputNodes(githubContext, newNodeId);
+                if (githubNodeId) optionIds.push(githubNodeId);
             }
         }
 
@@ -374,6 +385,7 @@ export const useGraphChat = () => {
     return {
         addTextToTextInputNodes,
         addFilesPromptInputNodes,
+        addGithubInputNodes,
         addParallelizationInputNode,
         updatePromptNodeText,
         isCanvasEmpty,

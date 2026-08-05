@@ -2,20 +2,15 @@
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
 import { RecycleScroller } from 'vue-virtual-scroller';
 
-import { SavingStatus } from '@/types/enums';
 import type { RepositoryInfo, SourceProvider } from '@/types/github';
 
 const currentRepo = defineModel<RepositoryInfo>('currentRepo');
 
 // --- Stores ---
 const repositoryStore = useRepositoryStore();
-const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores ---
 const { repositories, isLoading } = storeToRefs(repositoryStore);
-
-// --- Actions/Methods from Stores ---
-const { setNeedSave } = canvasSaveStore;
 
 // --- Local State ---
 const comboboxInput = ref<HTMLInputElement>();
@@ -51,8 +46,6 @@ const clearSelection = async (event: MouseEvent) => {
 
 watch(selected, (newSelected) => {
     currentRepo.value = newSelected ?? undefined;
-
-    setNeedSave(SavingStatus.NOT_SAVED);
 });
 
 // Sync model with local selected & set source tab

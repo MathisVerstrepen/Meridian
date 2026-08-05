@@ -44,13 +44,14 @@ const fetchRepoTree = async () => {
     const initialBranch = props.branch || props.repo.default_branch || 'main';
 
     graphEvents.emit('open-github-file-select', {
+        target: { kind: 'node', nodeId: props.nodeId },
         repoContent: {
             repo: props.repo,
             selectedFiles: selectedFiles.value,
             selectedIssues: selectedIssues.value,
             currentBranch: initialBranch,
         },
-        nodeId: props.nodeId,
+        initialTab: 'files',
     });
 };
 
@@ -74,14 +75,14 @@ watch(
 onMounted(() => {
     const unsubscribe = graphEvents.on(
         'close-github-file-select',
-        ({ selectedFilePaths, selectedIssues: newSelectedIssues, nodeId, branch }) => {
-            if (nodeId === props.nodeId) {
-                selectedFiles.value = selectedFilePaths;
-                if (newSelectedIssues) {
-                    selectedIssues.value = newSelectedIssues;
+        ({ target, repoContent }) => {
+            if (target.kind === 'node' && target.nodeId === props.nodeId && repoContent) {
+                selectedFiles.value = repoContent.selectedFiles;
+                if (repoContent.selectedIssues) {
+                    selectedIssues.value = repoContent.selectedIssues;
                 }
-                if (branch) {
-                    props.setBranch(branch);
+                if (repoContent.currentBranch) {
+                    props.setBranch(repoContent.currentBranch);
                 }
             }
         },

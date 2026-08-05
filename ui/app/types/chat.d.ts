@@ -1,5 +1,12 @@
 import type { NodeTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
+import type { RepoContent } from '@/types/github';
+
+export interface ChatInputSubmission {
+    message: string;
+    files: FileSystemObject[];
+    githubContext: RepoContent | null;
+}
 
 export interface GenerateRequest {
     graph_id: string;

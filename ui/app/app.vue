@@ -144,6 +144,7 @@ watch(route, fetchEssentials);
         <ClientOnly>
             <UiLibraryPromptEditor />
             <UiLibraryPromptImprover />
+            <UiGraphNodeUtilsGithubFileSelectMountpoint />
         </ClientOnly>
     </div>
 </template>

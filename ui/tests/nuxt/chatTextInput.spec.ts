@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AttachmentChipListItem from '@/components/ui/chat/attachment/chipListItem.vue';
 import TextInput from '@/components/ui/chat/textInput.vue';
 import { NodeTypeEnum } from '@/types/enums';
+import type { RepoContent } from '@/types/github';
 
 const stubs = vi.hoisted(() => ({
     uploadFile: vi.fn(),
@@ -101,6 +102,17 @@ const selectCloudAttachments = (files: FileSystemObject[]) => {
 
     if (!handler) throw new Error('Attachment selection handler was not registered');
     handler({ selectedFiles: files });
+};
+
+const closeGithubSelector = (repoContent: RepoContent | null) => {
+    const registration = stubs.graphOn.mock.calls.find(
+        (call) => call[0] === 'close-github-file-select',
+    );
+    const handler = registration?.[1] as
+        | ((payload: { target: { kind: 'chat-input' }; repoContent: RepoContent | null }) => void)
+        | undefined;
+    if (!handler) throw new Error('Git context selection handler was not registered');
+    handler({ target: { kind: 'chat-input' }, repoContent });
 };
 
 describe('chat text input clipboard paste', () => {
@@ -384,5 +396,91 @@ describe('chat attachment chip image previews', () => {
             defaultImageChip.unmount();
             documentChip.unmount();
         }
+    });
+});
+
+describe('chat Git context', () => {
+    beforeEach(() => {
+        stubs.uploadFile.mockReset();
+        stubs.getRootFolder.mockReset();
+        stubs.getFolderContents.mockReset();
+        stubs.createFolder.mockReset();
+        stubs.fetchUsage.mockReset();
+        stubs.error.mockReset();
+        stubs.graphEmit.mockReset();
+        stubs.graphOn.mockReset().mockReturnValue(() => undefined);
+    });
+
+    it('opens targeted tabs, shows removable context, and submits then clears it', async () => {
+        const wrapper = await mountInput();
+        const context: RepoContent = {
+            repo: {
+                provider: 'github',
+                encoded_provider: 'github',
+                full_name: 'meridian/test',
+                description: null,
+                clone_url_ssh: 'git@example.test:meridian/test.git',
+                clone_url_https: 'https://example.test/meridian/test.git',
+                default_branch: 'main',
+            },
+            selectedFiles: [
+                { name: 'README.md', type: 'file', path: 'README.md', children: [] },
+            ],
+            selectedIssues: [],
+            currentBranch: 'main',
+        };
+
+        const addButton = wrapper.getComponent({ name: 'UiChatAttachmentUploadButton' });
+        addButton.vm.$emit('add-git-context', 'issues');
+        expect(stubs.graphEmit).toHaveBeenCalledWith('open-github-file-select', {
+            target: { kind: 'chat-input' },
+            repoContent: null,
+            initialTab: 'issues',
+        });
+
+        closeGithubSelector(context);
+        await flushPromises();
+        expect(wrapper.text()).toContain('meridian/test');
+        expect(wrapper.text()).toContain('1 file(s), 0 issue(s)');
+
+        await wrapper.get('button[aria-label="Remove Git context for meridian/test"]').trigger('click');
+        expect(wrapper.text()).not.toContain('meridian/test');
+
+        closeGithubSelector(context);
+        await flushPromises();
+
+        const input = wrapper.get('[contenteditable]');
+        input.element.textContent = 'Use this context';
+        await input.trigger('input');
+        wrapper.getComponent({ name: 'UiChatUtilsSendChatButton' }).vm.$emit('send');
+
+        expect(wrapper.emitted('generate')).toEqual([
+            [{ message: 'Use this context', files: [], githubContext: context }],
+        ]);
+        await flushPromises();
+        expect(wrapper.text()).not.toContain('meridian/test');
+
+        wrapper.unmount();
+    });
+
+    it('normalizes an empty confirmed repository to no pending context', async () => {
+        const wrapper = await mountInput();
+        closeGithubSelector({
+            repo: {
+                provider: 'github',
+                encoded_provider: 'github',
+                full_name: 'meridian/empty',
+                description: null,
+                clone_url_ssh: '',
+                clone_url_https: '',
+                default_branch: 'main',
+            },
+            selectedFiles: [],
+            selectedIssues: [],
+            currentBranch: 'main',
+        });
+        await flushPromises();
+        expect(wrapper.text()).not.toContain('meridian/empty');
+        wrapper.unmount();
     });
 });

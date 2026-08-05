@@ -4,6 +4,7 @@ import { motion } from 'motion-v';
 const emit = defineEmits<{
     (e: 'open-cloud-select'): void;
     (e: 'add-files', files: FileList): void;
+    (e: 'add-git-context', tab: 'files' | 'issues'): void;
 }>();
 
 // --- Props ---
@@ -13,16 +14,25 @@ const props = defineProps<{
 
 // --- Local state ---
 const isMenuOpen = ref(false);
-const menuRef = ref(null);
+const menuRef = ref<HTMLElement | { $el?: HTMLElement } | null>(null);
 const buttonRef = ref<HTMLElement | null>(null);
 const menuPosition = ref({ top: 0, left: 0 });
 
 const updateMenuPosition = () => {
-    if (buttonRef.value) {
+    const menuElement =
+        menuRef.value instanceof HTMLElement ? menuRef.value : menuRef.value?.$el;
+    if (buttonRef.value && menuElement) {
         const rect = buttonRef.value.getBoundingClientRect();
+        // Layout dimensions ignore motion's initial scale transform.
+        const menuWidth = menuElement.offsetWidth;
+        const menuHeight = menuElement.offsetHeight;
+        const viewportPadding = 8;
         menuPosition.value = {
-            top: rect.top - 88,
-            left: rect.left,
+            top: Math.max(viewportPadding, rect.top - menuHeight - viewportPadding),
+            left: Math.max(
+                viewportPadding,
+                Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding),
+            ),
         };
     }
 };
@@ -52,6 +62,11 @@ const handleCloudSelect = () => {
     closeMenu();
 };
 
+const handleGitSelect = (tab: 'files' | 'issues') => {
+    emit('add-git-context', tab);
+    closeMenu();
+};
+
 // Update position on window resize
 onMounted(() => {
     window.addEventListener('resize', updateMenuPosition);
@@ -63,7 +78,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div ref="menuRef" class="relative">
+    <div class="relative">
         <!-- Button mode -->
         <button
             ref="buttonRef"
@@ -71,10 +86,12 @@ onUnmounted(() => {
                 rounded-2xl shadow transition duration-200 ease-in-out hover:cursor-pointer
                 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="disabled"
+            type="button"
+            aria-label="Add context"
             @click="toggleMenu"
         >
             <slot name="icon">
-                <UiIcon name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5" />
             </slot>
         </button>
 
@@ -85,7 +102,9 @@ onUnmounted(() => {
             <AnimatePresence>
                 <motion.div
                     v-if="isMenuOpen"
+                    ref="menuRef"
                     key="attachment-menu"
+                    data-add-context-menu
                     :style="{
                         position: 'fixed',
                         top: `${menuPosition.top}px`,
@@ -119,13 +138,37 @@ onUnmounted(() => {
                         backdrop-blur-lg"
                 >
                     <ul class="flex flex-col gap-1">
+                        <li class="text-stone-gray/60 px-2 pt-1 text-xs font-semibold">Git</li>
+                        <li>
+                            <button
+                                type="button"
+                                class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
+                                    font-semibold transition-colors duration-200"
+                                @click="handleGitSelect('files')"
+                            >
+                                <UiIcon name="MdiFileDocumentOutline" class="h-5 w-5" />
+                                <span>Add files</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                type="button"
+                                class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
+                                    font-semibold transition-colors duration-200"
+                                @click="handleGitSelect('issues')"
+                            >
+                                <UiIcon name="MdiSourcePull" class="h-5 w-5" />
+                                <span>Add PR/issue</span>
+                            </button>
+                        </li>
+                        <li class="text-stone-gray/60 px-2 pt-2 text-xs font-semibold">Files</li>
                         <li>
                             <label
                                 class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
                                     font-semibold transition-colors duration-200"
                             >
                                 <UiIcon name="UilUpload" class="h-5 w-5" />
-                                <span>Upload from device</span>
+                                <span>From device</span>
                                 <input
                                     type="file"
                                     multiple
@@ -138,10 +181,11 @@ onUnmounted(() => {
                             <button
                                 class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
                                     font-semibold transition-colors duration-200"
+                                type="button"
                                 @click="handleCloudSelect"
                             >
                                 <UiIcon name="MdiCloudUploadOutline" class="h-5 w-5" />
-                                <span>Upload from cloud</span>
+                                <span>From cloud</span>
                             </button>
                         </li>
                     </ul>

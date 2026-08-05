@@ -4,6 +4,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { DataGithub } from '@/types/graph';
 import type { RepositoryInfo } from '@/types/github';
+import { SavingStatus } from '@/types/enums';
 
 const emit = defineEmits([
     'updateNodeInternals',
@@ -25,6 +26,7 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const githubStore = useGithubStore();
 const gitlabStore = useGitlabStore();
 const repositoryStore = useRepositoryStore();
+const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores ---
 const { isGithubConnected } = storeToRefs(githubStore);
@@ -39,6 +41,7 @@ const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Actions ---
 const { fetchRepositories } = repositoryStore;
+const { setNeedSave } = canvasSaveStore;
 
 // --- Constants ---
 const blockDefinition = getBlockById('primary-github-context');
@@ -46,6 +49,7 @@ const blockDefinition = getBlockById('primary-github-context');
 watch(
     () => props.data.repo,
     (newRepo) => {
+        setNeedSave(SavingStatus.NOT_SAVED);
         if (newRepo) {
             props.data.files = [];
             props.data.branch = undefined;
