@@ -314,8 +314,8 @@ onBeforeUnmount(() => {
     <div ref="pageRef" class="bg-obsidian relative h-full w-full overflow-hidden">
         <UiSettingsUtilsBlobBackground />
 
-        <div class="text-stone-gray/25 absolute top-4 left-4 text-sm">
-            <span>Version {{ appVersion }}</span>
+        <div class="text-stone-gray/25 absolute top-4 left-4 z-30 text-sm">
+            <UiHomeReleaseVersionInfo :current-version="appVersion" />
         </div>
 
         <!-- Background dots -->
