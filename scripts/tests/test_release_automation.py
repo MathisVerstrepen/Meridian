@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import os
 import sys
@@ -163,6 +164,44 @@ class ClientTests(unittest.TestCase):
         self.assertNotIn("secret", str(raised.exception))
 
 
+class PromotionTests(unittest.TestCase):
+    def setUp(self):
+        self.transport = FakeTransport()
+        self.client = release.GitHubClient(REPOSITORY, "secret", self.transport)
+
+    def test_numeric_newest_strict_beta_is_accepted_with_gets_only(self):
+        self.transport.add(
+            "GET",
+            "/tags?per_page=100",
+            [
+                {"name": "1.9.9-beta"},
+                {"name": "1.10.0-beta"},
+                {"name": "v2.0.0-beta"},
+                {"name": "2.0.0"},
+                {"name": "01.11.0-beta"},
+            ],
+        )
+
+        self.assertEqual(release.verify_promotion(self.client, "1.10.0-beta"), "1.10.0-beta")
+        self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
+        self.transport.assert_done()
+
+    def test_stale_candidate_is_rejected_with_gets_only(self):
+        self.transport.add(
+            "GET",
+            "/tags?per_page=100",
+            [{"name": "1.9.9-beta"}, {"name": "1.10.0-beta"}],
+        )
+
+        with self.assertRaisesRegex(
+            release.ReleaseError,
+            r"promotion candidate 1\.9\.9-beta is stale; newest strict beta tag is 1\.10\.0-beta",
+        ):
+            release.verify_promotion(self.client, "1.9.9-beta")
+        self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
+        self.transport.assert_done()
+
+
 class PrepareTests(unittest.TestCase):
     def setUp(self):
         self.transport = FakeTransport()
@@ -289,7 +328,7 @@ class PublishTests(unittest.TestCase):
                 "name": "1.7.5-beta",
                 "body": CHANGELOG,
                 "draft": False,
-                "prerelease": True,
+                "prerelease": False,
             },
         )
 
@@ -301,6 +340,19 @@ class PublishTests(unittest.TestCase):
         existing = {"id": 8, **release._canonical_release("1.7.5-beta", CHANGELOG)}
         self.transport.add("GET", "/releases/tags/1.7.5-beta", existing)
         release.publish(self.client, 12)
+        self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
+
+    def test_exact_existing_promoted_release_is_noop(self):
+        self.queue_publish_validation()
+        self.transport.add(
+            "GET", "/git/ref/tags/1.7.5-beta", {"object": {"type": "commit", "sha": SHA}}
+        )
+        existing = {"id": 8, **release._canonical_release("1.7.5-beta", CHANGELOG)}
+        existing["prerelease"] = False
+        self.transport.add("GET", "/releases/tags/1.7.5-beta", existing)
+
+        release.publish(self.client, 12)
+
         self.assertTrue(all(call["method"] == "GET" for call in self.transport.calls))
 
     def test_tag_create_race_is_reread(self):
@@ -364,6 +416,7 @@ class PublishTests(unittest.TestCase):
         )
         self.transport.add("PATCH", "/releases/8", {"id": 8})
         release.publish(self.client, 12)
+        self.assertIs(self.transport.calls[-1]["payload"]["prerelease"], False)
 
 
 class CliTests(unittest.TestCase):
@@ -374,6 +427,35 @@ class CliTests(unittest.TestCase):
             self.assertEqual(
                 release.main(["prepare", "--repository", REPOSITORY, "--bump", "patch"]), 1
             )
+
+    def test_verify_promotion_stale_candidate_exits_nonzero_without_writes(self):
+        transport = FakeTransport()
+        client = release.GitHubClient(REPOSITORY, "secret", transport)
+        transport.add(
+            "GET",
+            "/tags?per_page=100",
+            [{"name": "1.7.5-beta"}, {"name": "1.8.0-beta"}],
+        )
+        stderr = io.StringIO()
+
+        with mock.patch.object(release, "GitHubClient", return_value=client), mock.patch.dict(
+            os.environ, {"RELEASE_TOKEN": "secret"}, clear=True
+        ), mock.patch("sys.stderr", stderr):
+            result = release.main(
+                [
+                    "verify-promotion",
+                    "--repository",
+                    REPOSITORY,
+                    "--version",
+                    "1.7.5-beta",
+                ]
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn("1.7.5-beta is stale", stderr.getvalue())
+        self.assertIn("1.8.0-beta", stderr.getvalue())
+        self.assertTrue(all(call["method"] == "GET" for call in transport.calls))
+        transport.assert_done()
 
 
 if __name__ == "__main__":
