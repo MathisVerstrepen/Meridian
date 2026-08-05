@@ -75,33 +75,27 @@ def upgrade() -> None:
 
     # 4. Data Migration
     # Create default workspaces for all existing users
-    op.execute(
-        """
+    op.execute("""
         INSERT INTO workspaces (id, user_id, name, created_at, updated_at)
         SELECT uuid_generate_v4(), id, 'Default', now(), now()
         FROM users
-    """
-    )
+    """)
 
     # Link existing folders to the new default workspace of their owner
-    op.execute(
-        """
+    op.execute("""
         UPDATE folders f
         SET workspace_id = w.id
         FROM workspaces w
         WHERE f.user_id = w.user_id
-    """
-    )
+    """)
 
     # Link existing graphs to the new default workspace of their owner
-    op.execute(
-        """
+    op.execute("""
         UPDATE graphs g
         SET workspace_id = w.id
         FROM workspaces w
         WHERE g.user_id = w.user_id
-    """
-    )
+    """)
 
 
 def downgrade() -> None:

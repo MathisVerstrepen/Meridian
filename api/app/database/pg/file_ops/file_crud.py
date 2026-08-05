@@ -16,8 +16,7 @@ async def get_item_path(session: AsyncSession, item_id: uuid.UUID) -> str:
     """
     Calculates the full logical path for a given item using a Recursive CTE.
     """
-    stmt = text(
-        """
+    stmt = text("""
         WITH RECURSIVE path_tree AS (
             SELECT id, name, parent_id, 1 as level
             FROM files
@@ -28,8 +27,7 @@ async def get_item_path(session: AsyncSession, item_id: uuid.UUID) -> str:
             JOIN path_tree pt ON f.id = pt.parent_id
         )
         SELECT name FROM path_tree ORDER BY level DESC;
-    """
-    )
+    """)
     result = await session.execute(stmt, {"item_id": item_id})
     names = [r[0] for r in result.fetchall()]
 
@@ -238,8 +236,7 @@ async def delete_db_item_recursively(
     and the physical storage.
     """
     async with AsyncSession(pg_engine) as session:
-        recursive_query = text(
-            """
+        recursive_query = text("""
             WITH RECURSIVE file_tree AS (
                 SELECT id, file_path, type, user_id
                 FROM files
@@ -250,8 +247,7 @@ async def delete_db_item_recursively(
                 JOIN file_tree ft ON f.parent_id = ft.id
             )
             SELECT id, file_path, type, user_id FROM file_tree
-            """
-        )
+            """)
         result = await session.execute(recursive_query, {"item_id": item_id})
         all_items = result.fetchall()
 
@@ -285,8 +281,7 @@ async def is_item_in_subtree(
 ) -> bool:
     """Returns whether item_id is ancestor_id or one of its descendants."""
     async with AsyncSession(pg_engine) as session:
-        recursive_query = text(
-            """
+        recursive_query = text("""
             WITH RECURSIVE item_tree AS (
                 SELECT id
                 FROM files
@@ -298,8 +293,7 @@ async def is_item_in_subtree(
                 WHERE f.user_id = :user_id
             )
             SELECT id FROM item_tree WHERE id = :item_id
-            """
-        )
+            """)
         result = await session.execute(
             recursive_query,
             {
@@ -322,8 +316,7 @@ async def filter_top_level_item_ids(
         return []
 
     async with AsyncSession(pg_engine) as session:
-        recursive_query = text(
-            """
+        recursive_query = text("""
             WITH RECURSIVE selected_tree AS (
                 SELECT id AS root_id, id
                 FROM files
@@ -337,8 +330,7 @@ async def filter_top_level_item_ids(
             SELECT DISTINCT id
             FROM selected_tree
             WHERE id = ANY(:item_ids) AND id != root_id
-            """
-        )
+            """)
         result = await session.execute(
             recursive_query,
             {
@@ -437,8 +429,7 @@ async def move_item(
             if item.id == destination_folder_id:
                 raise HTTPException(status_code=400, detail="Cannot move a folder into itself")
 
-            recursive_query = text(
-                """
+            recursive_query = text("""
                 WITH RECURSIVE folder_tree AS (
                     SELECT id
                     FROM files
@@ -450,8 +441,7 @@ async def move_item(
                     WHERE f.type = 'folder'
                 )
                 SELECT id FROM folder_tree WHERE id = :destination_folder_id
-                """
-            )
+                """)
             descendant_result = await session.execute(
                 recursive_query,
                 {
