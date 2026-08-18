@@ -6,7 +6,7 @@ const props = defineProps<{
 }>();
 
 const args = computed(() => {
-    const a = props.detail.arguments as Record<string, unknown>;
+    const a = jsonObjectOrEmpty(props.detail.arguments);
     return {
         instructions: String(a?.instructions || ''),
         output_mode: a?.output_mode ? String(a.output_mode) : null,
@@ -16,7 +16,7 @@ const args = computed(() => {
 });
 
 const result = computed(() => {
-    const r = props.detail.result as Record<string, unknown>;
+    const r = jsonObjectOrEmpty(props.detail.result);
     return {
         artifact_id: r?.artifact_id ? String(r.artifact_id) : null,
         title: r?.title ? String(r.title) : null,
@@ -28,13 +28,13 @@ const displayTitle = computed(() => result.value.title || args.value.title || 'V
 
 const extractedArtifacts = computed<ToolCallArtifact[]>(() => {
     const r = props.detail.result;
-    if (!r || Array.isArray(r) || typeof r !== 'object') return [];
-    const rawArtifacts = (r as Record<string, unknown>).artifacts;
+    if (!isJsonObject(r)) return [];
+    const rawArtifacts = r.artifacts;
     if (!Array.isArray(rawArtifacts)) return [];
 
     return rawArtifacts.flatMap((artifact) => {
-        if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) return [];
-        const a = artifact as Record<string, unknown>;
+        if (!isJsonObject(artifact)) return [];
+        const a = artifact;
         const id = String(a.id || '').trim();
         const name = String(a.name || '').trim();
         const relativePath = String(a.relative_path || '').trim();

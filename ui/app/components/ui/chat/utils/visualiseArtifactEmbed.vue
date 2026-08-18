@@ -67,16 +67,16 @@ const handleWindowMessage = (event: MessageEvent) => {
     }
 
     const payload = event.data;
-    if (!payload || typeof payload.type !== 'string') {
+    if (!payload || !isRuntimeString(payload.type)) {
         return;
     }
 
-    if (payload.type === VISUALISE_HEIGHT_TYPE && typeof payload.height === 'number') {
+    if (payload.type === VISUALISE_HEIGHT_TYPE && isRuntimeNumber(payload.height)) {
         iframeHeight.value = Math.max(120, Math.ceil(payload.height));
         return;
     }
 
-    if (payload.type === VISUALISE_PROMPT_TYPE && typeof payload.text === 'string') {
+    if (payload.type === VISUALISE_PROMPT_TYPE && isRuntimeString(payload.text)) {
         const prompt = payload.text.trim().slice(0, 2000);
         if (prompt) {
             emit('sendPrompt', prompt);

@@ -4,8 +4,8 @@ import WebSearchView from '@/components/ui/chat/utils/toolCallFormatted/WebSearc
 import type { ToolCallDetail } from '@/types/toolCall';
 
 const createDetail = (
-    argumentsValue: Record<string, unknown>,
-    result: Record<string, unknown> | unknown[],
+    argumentsValue: Record<string, JsonValue>,
+    result: Record<string, JsonValue> | unknown[],
 ): ToolCallDetail => ({
     id: 'detail-id',
     node_id: 'node-id',

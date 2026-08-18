@@ -23,7 +23,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-    restored: [nodeData: Record<string, unknown> | unknown[]];
+    restored: [nodeData: Record<string, JsonValue> | unknown[]];
 }>();
 
 const { ensureGenerationHistory, restoreGenerationHistory } = useAPI();
@@ -219,13 +219,14 @@ const getToolLabel = (toolName: string): string => {
 };
 
 const loadHistory = async () => {
-    if (!canLoad.value || isLoading.value) return;
+    const nodeId = props.nodeId;
+    if (!canLoad.value || !nodeId || isLoading.value) return;
 
     isLoading.value = true;
     loadError.value = null;
     try {
         await canvasSaveStore.ensureGraphSaved();
-        entries.value = await ensureGenerationHistory(props.graphId, props.nodeId as string);
+        entries.value = await ensureGenerationHistory(props.graphId, nodeId);
     } catch (err) {
         console.error('Failed to load generation history:', err);
         loadError.value = 'Could not load history.';
@@ -260,20 +261,21 @@ const markEntryActive = (entryId: string) => {
 };
 
 const restoreEntry = async (entry: GenerationHistoryEntry) => {
-    if (!canLoad.value || entry.is_active || restoringId.value) return;
+    const nodeId = props.nodeId;
+    if (!canLoad.value || !nodeId || entry.is_active || restoringId.value) return;
 
     restoringId.value = entry.id;
     try {
         const restored = await restoreGenerationHistory(
             props.graphId,
-            props.nodeId as string,
+            nodeId,
             entry.id,
         );
-        replaceNodeData(props.graphId, props.nodeId as string, restored.node_data);
+        replaceNodeData(props.graphId, nodeId, restored.node_data);
         emit('restored', restored.node_data);
 
         if (props.refreshChatOnRestore && chatStore.openChatId === props.nodeId) {
-            await chatStore.refreshChat(props.graphId, props.nodeId as string);
+            await chatStore.refreshChat(props.graphId, nodeId);
         }
 
         if (generationHistorySettings.value.close_modal_on_restore) {

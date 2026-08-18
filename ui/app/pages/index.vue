@@ -6,8 +6,7 @@ import type { User } from '@/types/user';
 import type { ChatInputSubmission } from '@/types/chat';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
-
-import { useSpring } from 'motion-v';
+import { normalizeToolSelection } from '@/utils/toolSelection';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'blank', middleware: 'auth' });
@@ -36,9 +35,9 @@ const showWelcomeModal = ref(false);
 const isLoading = ref(false);
 
 // Motion state for scroll animation
-const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
-const mainContentHeight = useSpring(60, { stiffness: 200, damping: 30 });
-const mainContentOpacity = useSpring(1, { stiffness: 200, damping: 30 });
+const recentCanvasHeight = useMotionSpring(40, { stiffness: 200, damping: 30 });
+const mainContentHeight = useMotionSpring(60, { stiffness: 200, damping: 30 });
+const mainContentOpacity = useMotionSpring(1, { stiffness: 200, damping: 30 });
 
 const recentCanvasStyle = reactive({ height: '40%' });
 const mainContentStyle = reactive({ height: '60%', opacity: 1 });
@@ -132,7 +131,7 @@ const loadMoreGraphs = async () => {
 };
 
 const openNewFromInput = async (submission: ChatInputSubmission) => {
-    if ((user.value as User)?.plan_type === 'free') {
+    if ((user.value)?.plan_type === 'free') {
         const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
         if (nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS) {
             error('You have reached the maximum number of canvases for the Free plan.', {
@@ -157,9 +156,9 @@ const openNewFromInput = async (submission: ChatInputSubmission) => {
     syncUpcomingModelDefaults();
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
-    upcomingModelData.value.data.selectedTools = [
-        ...(toolsSettings.value.defaultSelectedTools || []),
-    ];
+    upcomingModelData.value.data.selectedTools = normalizeToolSelection(
+        toolsSettings.value.defaultSelectedTools || [],
+    );
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -179,12 +178,12 @@ const openNewFromInput = async (submission: ChatInputSubmission) => {
                 },
                 ...filesContent,
             ],
-            model: upcomingModelData.value.data.model as string,
+            model: runtimeString(upcomingModelData.value.data.model),
             node_id: textToTextNodeId,
             type: selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
             data: {
                 reply: '',
-                model: upcomingModelData.value.data.model as string,
+                model: runtimeString(upcomingModelData.value.data.model),
                 files: submission.files,
                 githubContext: submission.githubContext,
             },
@@ -197,7 +196,7 @@ const openNewFromInput = async (submission: ChatInputSubmission) => {
 };
 
 const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
-    if (wanted !== 'temporary' && (user.value as User)?.plan_type === 'free') {
+    if (wanted !== 'temporary' && (user.value)?.plan_type === 'free') {
         const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
         if (nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS) {
             error('You have reached the maximum number of canvases for the Free plan.', {
@@ -226,9 +225,9 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     syncUpcomingModelDefaults();
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
-    upcomingModelData.value.data.selectedTools = [
-        ...(toolsSettings.value.defaultSelectedTools || []),
-    ];
+    upcomingModelData.value.data.selectedTools = normalizeToolSelection(
+        toolsSettings.value.defaultSelectedTools || [],
+    );
     openChatId.value = wanted === 'chat' || newGraph.temporary ? DEFAULT_NODE_ID : null;
     navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${newGraph.temporary}`);
 };
@@ -257,7 +256,7 @@ watch(
         if (
             newVal &&
             user.value &&
-            !(user.value as User).has_seen_welcome &&
+            !(user.value).has_seen_welcome &&
             !accountSettings.value.openRouterApiKey
         ) {
             showWelcomeModal.value = true;

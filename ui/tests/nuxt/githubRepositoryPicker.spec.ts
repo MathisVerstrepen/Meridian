@@ -6,7 +6,7 @@ import RepositoryPicker from '@/components/ui/graph/node/utils/github/repository
 import type { RepositoryInfo } from '@/types/github';
 
 const stubs = vi.hoisted(() => ({
-    repositoryValues: [] as RepositoryInfo[],
+    repositoryValues: Array<RepositoryInfo>(),
     loading: false,
     fetchRepositories: vi.fn(),
     error: vi.fn(),

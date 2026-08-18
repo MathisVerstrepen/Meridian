@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { isRuntimeString } from '../../app/utils/runtimeTypes';
 
 import { CANVAS_QUICK_ACTION_FIXTURE_ROUTE } from '../fixtures/canvasQuickActionWheelFixture';
 import {
@@ -22,7 +23,7 @@ export interface CanvasQuickActionState {
         width: number;
         height: number;
         parentNode?: string;
-        data: Record<string, unknown>;
+        data: Record<string, JsonValue>;
     }>;
     edges: Array<{
         id: string;
@@ -51,7 +52,7 @@ export const test = diagnosticsTest.extend<Record<string, never>, WorkerFixtures
             const diagnostics = startBrowserDiagnostics(page);
             try {
                 const baseURL = workerInfo.project.use.baseURL;
-                if (typeof baseURL !== 'string') throw new Error('Fixture requires configured baseURL');
+                if (!isRuntimeString(baseURL)) throw new Error('Fixture requires configured baseURL');
                 await page.goto(new URL(CANVAS_QUICK_ACTION_FIXTURE_ROUTE, baseURL).toString(), {
                     timeout: NAVIGATION_TIMEOUT,
                 });
@@ -83,6 +84,6 @@ export const mountCanvasQuickActionFixture = async (page: Page) => {
 };
 
 export const readCanvasQuickActionState = async (page: Page): Promise<CanvasQuickActionState> =>
-    JSON.parse(
-        (await page.getByTestId('canvas-quick-action-state').textContent()) ?? '{}',
-    ) as CanvasQuickActionState;
+    page.getByTestId('canvas-quick-action-state').evaluate<CanvasQuickActionState>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );

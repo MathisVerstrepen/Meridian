@@ -1,13 +1,12 @@
 import type { NodeWithDimensions } from '@/types/graph';
 import {
-    useVueFlow,
     type XYPosition,
     type GraphNode,
     type Node,
     type Connection,
 } from '@vue-flow/core';
 
-interface PlaceBlockOptions {
+interface PlaceBlockOptions<Data extends object> {
     graphId: string;
     flowId?: string;
     blocId: string;
@@ -15,7 +14,7 @@ interface PlaceBlockOptions {
     positionFrom: { x: number; y: number };
     positionOffset?: { x: number; y: number };
     center?: boolean;
-    data?: Record<string, unknown>;
+    data?: Data;
     forcedId?: string | null;
 }
 
@@ -24,8 +23,8 @@ export const useGraphActions = () => {
     const { generateId } = useUniqueId();
     const { error, info, warning } = useToast();
 
-    const placeBlock = (options: PlaceBlockOptions) => {
-        const { addNodes, getNodes } = useVueFlow(options.flowId ?? 'main-graph-' + options.graphId);
+    const placeBlock = <Data extends object>(options: PlaceBlockOptions<Data>) => {
+        const { addNodes, getNodes } = useGraphFlow(options.flowId ?? 'main-graph-' + options.graphId);
 
         const blockData = getBlockById(options.blocId);
         if (!blockData) {
@@ -75,7 +74,7 @@ export const useGraphActions = () => {
         targetHandleId: string | null = null,
         flowId?: string,
     ) => {
-        const { addEdges } = useVueFlow(flowId ?? 'main-graph-' + graphId);
+        const { addEdges } = useGraphFlow(flowId ?? 'main-graph-' + graphId);
 
         if (!sourceId || !targetId) {
             console.error('Source or target ID is missing for edge placement.');
@@ -103,7 +102,7 @@ export const useGraphActions = () => {
         sourceId: string | null,
         targetId: string | null,
     ) => {
-        const { edges } = useVueFlow('main-graph-' + graphId);
+        const { edges } = useGraphFlow('main-graph-' + graphId);
 
         if (sourceId) {
             edges.value.forEach((edge) => {
@@ -127,7 +126,7 @@ export const useGraphActions = () => {
         nodeId: string,
         handleId: string | null = null,
     ) => {
-        const { getEdges } = useVueFlow('main-graph-' + graphId);
+        const { getEdges } = useGraphFlow('main-graph-' + graphId);
 
         return getEdges.value.filter((edge) => {
             const isSource = edge.source === nodeId;
@@ -140,7 +139,7 @@ export const useGraphActions = () => {
     };
 
     const numberOfConnectedHandles = (graphId: string, nodeId: string) => {
-        const { getEdges } = useVueFlow('main-graph-' + graphId);
+        const { getEdges } = useGraphFlow('main-graph-' + graphId);
 
         return getEdges.value.filter((edge) => {
             const isSource = edge.source === nodeId;
@@ -151,7 +150,7 @@ export const useGraphActions = () => {
     };
 
     const duplicateNode = async (graphId: string, nodeId: string) => {
-        const { getNodes, addNodes, removeSelectedNodes } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, addNodes, removeSelectedNodes } = useGraphFlow('main-graph-' + graphId);
         const node = getNodes.value.find((n) => n.id === nodeId);
 
         if (!node) {
@@ -199,7 +198,7 @@ export const useGraphActions = () => {
     };
 
     const copyNode = async (graphId: string, nodeIds: string[]) => {
-        const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, getEdges } = useGraphFlow('main-graph-' + graphId);
         const nodes = getNodes.value.filter((n) => nodeIds.includes(n.id));
 
         if (nodes.length === 0) {
@@ -243,7 +242,7 @@ export const useGraphActions = () => {
     };
 
     const pasteNodes = async (graphId: string, position: XYPosition) => {
-        const { addNodes, addEdges, getSelectedNodes, removeSelectedNodes } = useVueFlow(
+        const { addNodes, addEdges, getSelectedNodes, removeSelectedNodes } = useGraphFlow(
             'main-graph-' + graphId,
         );
 
@@ -388,7 +387,7 @@ export const useGraphActions = () => {
         closeMenu: () => void = () => {},
         flowId?: string,
     ) => {
-        const { addNodes, setNodes, getNodes } = useVueFlow(flowId ?? 'main-graph-' + graphId);
+        const { addNodes, setNodes, getNodes } = useGraphFlow(flowId ?? 'main-graph-' + graphId);
 
         if (nodesForMenu.length === 0) {
             console.warn('No nodes selected for grouping.');
@@ -472,7 +471,7 @@ export const useGraphActions = () => {
     };
 
     const deleteCommentGroup = (graphId: string, groupId: string, flowId?: string) => {
-        const { getNodes, setNodes } = useVueFlow(flowId ?? 'main-graph-' + graphId);
+        const { getNodes, setNodes } = useGraphFlow(flowId ?? 'main-graph-' + graphId);
         const nodes = getNodes.value;
         const groupNode = nodes.find((n) => n.id === groupId);
 
@@ -501,7 +500,11 @@ export const useGraphActions = () => {
         ]);
     };
 
-    const handleNodeDataUpdate = (graphId: string, nodeId: string, payload: object) => {
+    const handleNodeDataUpdate = <Payload extends object>(
+        graphId: string,
+        nodeId: string,
+        payload: Payload,
+    ) => {
         if (!graphId || !nodeId || !payload) {
             console.warn(
                 'handleNodeDataUpdate called with missing parameters:',
@@ -512,15 +515,15 @@ export const useGraphActions = () => {
             return;
         }
 
-        const { getNodes, updateNode } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, updateNode } = useGraphFlow('main-graph-' + graphId);
         const nodeToUpdate = getNodes.value.find((n: Node) => n.id === nodeId);
 
         if (nodeToUpdate) {
             const updatedNode = {
                 ...nodeToUpdate,
                 data: {
-                    ...((nodeToUpdate.data as Record<string, unknown>) || {}),
-                    ...(payload as Record<string, unknown>),
+                    ...nodeToUpdate.data,
+                    ...payload,
                 },
             };
             updateNode(nodeId, updatedNode);
@@ -532,14 +535,14 @@ export const useGraphActions = () => {
     const replaceNodeData = (
         graphId: string,
         nodeId: string,
-        nodeData: Record<string, unknown> | unknown[],
+        nodeData: Record<string, JsonValue> | unknown[],
     ) => {
         if (!graphId || !nodeId || !nodeData) {
             console.warn('replaceNodeData called with missing parameters:', graphId, nodeId, nodeData);
             return;
         }
 
-        const { getNodes, updateNode } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, updateNode } = useGraphFlow('main-graph-' + graphId);
         const nodeToUpdate = getNodes.value.find((n: Node) => n.id === nodeId);
 
         if (nodeToUpdate) {
@@ -558,7 +561,7 @@ export const useGraphActions = () => {
         newEdgeId: string,
         flowId?: string,
     ) => {
-        const { getNodes, getEdges, removeEdges, addEdges } = useVueFlow(
+        const { getNodes, getEdges, removeEdges, addEdges } = useGraphFlow(
             flowId ?? 'main-graph-' + graphId,
         );
 
@@ -568,9 +571,9 @@ export const useGraphActions = () => {
             return;
         }
 
-        const isGenerator = ['textToText', 'parallelization', 'routing'].includes(
-            targetNode.type as string,
-        );
+        const isGenerator = targetNode.type
+            ? ['textToText', 'parallelization', 'routing'].includes(targetNode.type)
+            : false;
         const isContextHandle = connection.targetHandle?.startsWith('context_');
 
         if (isGenerator && isContextHandle) {
@@ -672,7 +675,7 @@ export const useGraphActions = () => {
     };
 
     const teleportViewportToNode = async (graphId: string, nodeId: string) => {
-        const { getNodes, getViewport, setCenter } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, getViewport, setCenter } = useGraphFlow('main-graph-' + graphId);
         const node = getNodes.value.find((n) => n.id === nodeId);
         if (node) {
             const { zoom } = getViewport();

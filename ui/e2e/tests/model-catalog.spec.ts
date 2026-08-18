@@ -37,7 +37,7 @@ interface CatalogSummary {
         supportedTools: string[];
         requiresConnection: boolean;
     };
-    warnings: Array<Record<string, unknown>>;
+    warnings: Array<Record<string, JsonValue>>;
     unsupportedVersion: { error: string; countBefore: number; countAfter: number };
     malformedRequiredValue: { error: string; countBefore: number; countAfter: number };
     sorting: { nameDescending: string[]; dateDescending: string[] };
@@ -58,13 +58,14 @@ const mountFixture = async (page: Page) => {
 
     const fixturePage = page.getByTestId('model-catalog-fixture-page');
     await expect(fixturePage).toBeVisible();
-    const summaryText = await page.getByTestId('model-catalog-summary').textContent();
-    expect(summaryText).not.toBeNull();
+    const summary = await page.getByTestId('model-catalog-summary').evaluate<CatalogSummary>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );
 
     return {
         page,
         fixturePage,
-        summary: JSON.parse(summaryText ?? '{}') as CatalogSummary,
+        summary,
         modelRequestCount,
     };
 };
@@ -211,9 +212,9 @@ test('decodes 500 models within the browser timing budget after warm-up', {
     await expect(page.getByTestId('model-catalog-performance-fixture-page')).toBeVisible();
     const summaryElement = page.getByTestId('model-catalog-performance-summary');
     await expect(summaryElement).toBeVisible();
-    const text = await summaryElement.textContent();
-    expect(text).not.toBeNull();
-    const summary = JSON.parse(text ?? '{}') as CatalogPerformanceSummary;
+    const summary = await summaryElement.evaluate<CatalogPerformanceSummary>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );
 
     expect(summary.modelCount).toBe(MODEL_CATALOG_PERFORMANCE_MODEL_COUNT);
     expect(summary.timing.iterations).toBe(50);

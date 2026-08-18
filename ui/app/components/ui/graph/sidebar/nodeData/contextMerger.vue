@@ -4,7 +4,7 @@ import type { DataContextMerger, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
     node: SidebarNode<DataContextMerger>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
 }>();
 
 const modes = [
@@ -21,7 +21,7 @@ const positions = {
 
 // --- Computed properties ---
 const currentPosition = computed(
-    () => positions[props.node.data.mode as ContextMergerModeEnum] ?? 0,
+    () => positions[props.node.data.mode] ?? 0,
 );
 
 const sliderStyle = computed(() => {

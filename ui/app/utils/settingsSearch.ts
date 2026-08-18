@@ -35,14 +35,14 @@ interface TokenMatch {
     score: number;
 }
 
-const FIELD_WEIGHTS: Record<SettingSearchMatchField, number> = {
+const FIELD_WEIGHTS = {
     title: 90,
     tab: 55,
     group: 40,
     keyword: 35,
     option: 30,
     description: 12,
-};
+} satisfies Record<SettingSearchMatchField, number>;
 
 const normalizeSearchText = (value: string) =>
     value
@@ -122,9 +122,8 @@ const scoreEntry = (query: string, queryTokens: string[], entry: SettingSearchEn
     const normalizedTitle = normalizeSearchText(entry.title);
     const tokenMatches = queryTokens.map((token) => bestTokenMatch(token, fields));
 
-    if (tokenMatches.some((match) => !match)) return null;
-
-    const resolvedMatches = tokenMatches as TokenMatch[];
+    const resolvedMatches = tokenMatches.filter((match): match is TokenMatch => match !== null);
+    if (resolvedMatches.length !== tokenMatches.length) return null;
     let score = resolvedMatches.reduce((total, match) => total + match.score, 0);
 
     if (normalizedTitle === normalizedQuery) {

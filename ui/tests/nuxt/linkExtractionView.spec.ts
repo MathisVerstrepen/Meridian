@@ -7,8 +7,8 @@ import LinkExtractionView from '@/components/ui/chat/utils/toolCallFormatted/Lin
 import type { FetchedPageDetailSelection, ToolCallDetail } from '@/types/toolCall';
 
 const createDetail = (
-    argumentsValue: Record<string, unknown> | unknown[],
-    result: Record<string, unknown> | unknown[],
+    argumentsValue: Record<string, JsonValue> | unknown[],
+    result: Record<string, JsonValue> | unknown[],
 ): ToolCallDetail => ({
     id: 'detail-id',
     node_id: 'node-id',
@@ -122,7 +122,7 @@ describe('LinkExtractionView', () => {
         ['negative', selection(-1)],
         ['non-integer', selection(0.5)],
         ['out-of-range', selection(2)],
-        ['malformed', { kind: 'fetched-page', index: '1', url: 42 } as unknown],
+        ['malformed', { kind: 'fetched-page', index: '1', url: 42 } satisfies unknown],
     ])('does not choose a page for %s canonical selection', async (_label, selected) => {
         const wrapper = await mountSuspended(LinkExtractionView, {
             props: {
@@ -136,7 +136,7 @@ describe('LinkExtractionView', () => {
                         error: 'ROOT_ERROR_STILL_VISIBLE',
                     },
                 ),
-                fetchedPageSelection: selected as FetchedPageDetailSelection | null,
+                fetchedPageSelection: selected,
             },
         });
 

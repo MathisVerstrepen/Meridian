@@ -1,5 +1,3 @@
-import type { User } from '@/types/user';
-
 export default defineNuxtRouteMiddleware(async () => {
     const { loggedIn, ready, user, clear, fetch: fetchSession } = useUserSession();
 
@@ -26,10 +24,10 @@ export default defineNuxtRouteMiddleware(async () => {
     }
 
     // Force update/verification for legacy accounts with missing email or unverified status
-    if (user.value && (user.value as User).provider === 'userpass') {
-        if (!(user.value as User).email || !(user.value as User).is_verified) {
-            const reason = !(user.value as User).email ? 'missing' : 'unverified';
-            const username = (user.value as User).name;
+    if (user.value && (user.value).provider === 'userpass') {
+        if (!(user.value).email || !(user.value).is_verified) {
+            const reason = !(user.value).email ? 'missing' : 'unverified';
+            const username = (user.value).name;
 
             // Clear the session to force them to re-authenticate at the update page
             await clear();

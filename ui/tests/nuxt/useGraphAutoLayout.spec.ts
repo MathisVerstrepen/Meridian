@@ -4,28 +4,28 @@ import { computed, nextTick } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGraphAutoLayout } from '@/composables/useGraphAutoLayout';
+import { graphNode } from './support/graphNode';
 
-const stubs = vi.hoisted(() => ({
-    nodes: { value: [] as GraphNode[] },
-    edges: { value: [] as Edge[] },
-    setNodes: vi.fn(),
+const stubs = vi.hoisted(() => {
+    const nodes: GraphNode[] = [];
+    const edges: Edge[] = [];
+    const calls: string[] = [];
+    return {
+    nodes: { value: nodes },
+    edges: { value: edges },
+    setNodes: vi.fn<(nodes: GraphNode[]) => void>(),
     calculateGraphAutoLayout: vi.fn(),
     getBlockByNodeType: vi.fn(),
     saveGraph: vi.fn(),
-    calls: [] as string[],
-}));
+    calls,
+    };
+});
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({
+mockNuxtImport('useGraphFlow', () => () => ({
         getNodes: stubs.nodes,
         getEdges: stubs.edges,
         setNodes: stubs.setNodes,
-    }),
-}));
-
-vi.mock('@/utils/graphAutoLayout', () => ({
-    calculateGraphAutoLayout: stubs.calculateGraphAutoLayout,
-}));
+    }));
 
 mockNuxtImport('useBlocks', () => () => ({
     getBlockByNodeType: stubs.getBlockByNodeType,
@@ -36,13 +36,13 @@ mockNuxtImport('useCanvasSaveStore', () => () => ({
 }));
 
 const node = (id: string, overrides: Partial<GraphNode> = {}): GraphNode =>
-    ({
+    graphNode({
         id,
         type: 'prompt',
         position: { x: 10, y: 20 },
         data: { marker: id },
         ...overrides,
-    }) as GraphNode;
+    });
 
 describe('useGraphAutoLayout', () => {
     beforeEach(() => {
@@ -101,6 +101,7 @@ describe('useGraphAutoLayout', () => {
         const result = await useGraphAutoLayout({
             graphId: computed(() => 'graph-id'),
             fitGraph,
+            calculateLayout: stubs.calculateGraphAutoLayout,
         }).autoLayoutGraph();
 
         const layoutNodes = stubs.calculateGraphAutoLayout.mock.calls[0]![0];
@@ -167,6 +168,7 @@ describe('useGraphAutoLayout', () => {
         await useGraphAutoLayout({
             graphId: computed(() => 'graph-id'),
             fitGraph,
+            calculateLayout: stubs.calculateGraphAutoLayout,
         }).autoLayoutGraph();
 
         expect(stubs.calculateGraphAutoLayout.mock.calls[0]![0]).toEqual([
@@ -174,7 +176,7 @@ describe('useGraphAutoLayout', () => {
             expect.objectContaining({ id: 'group', type: 'group', parentNode: undefined }),
             expect.objectContaining({ id: 'external', type: 'prompt', parentNode: undefined }),
         ]);
-        const updated = stubs.setNodes.mock.calls[0]![0] as GraphNode[];
+        const updated = stubs.setNodes.mock.calls[0]![0];
         expect(updated.map(({ id }) => id)).toEqual(['child', 'group', 'external']);
         expect(updated[0]).toBe(child);
         expect(updated[0]).toEqual(child);
@@ -193,6 +195,7 @@ describe('useGraphAutoLayout', () => {
         const result = await useGraphAutoLayout({
             graphId: computed(() => 'graph-id'),
             fitGraph,
+            calculateLayout: stubs.calculateGraphAutoLayout,
         }).autoLayoutGraph();
 
         expect(result).toBe(false);
@@ -215,6 +218,7 @@ describe('useGraphAutoLayout', () => {
             useGraphAutoLayout({
                 graphId: computed(() => 'graph-id'),
                 fitGraph,
+                calculateLayout: stubs.calculateGraphAutoLayout,
             }).autoLayoutGraph(),
         ).rejects.toBe(failure);
 

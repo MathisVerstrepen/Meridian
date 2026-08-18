@@ -85,17 +85,18 @@ const requestCounts = new Map();
 const sendJson = (response, value, gzip = false) => {
     const json = Buffer.from(JSON.stringify(value));
     const body = gzip ? gzipSync(json) : json;
-    response.writeHead(200, {
+    const headers = {
         'content-type': 'application/json',
         'content-length': String(body.length),
-        ...(gzip
-            ? {
-                  'content-encoding': 'gzip',
-                  'x-fixture-upstream-encoding': 'gzip',
-                  'x-fixture-upstream-length': String(body.length),
-              }
-            : {}),
-    });
+    };
+    if (gzip) {
+        Object.assign(headers, {
+            'content-encoding': 'gzip',
+            'x-fixture-upstream-encoding': 'gzip',
+            'x-fixture-upstream-length': String(body.length),
+        });
+    }
+    response.writeHead(200, headers);
     response.end(body);
 };
 

@@ -4,7 +4,7 @@ import { useMarkdownProcessor } from '@/composables/useMarkdownProcessor';
 interface Deferred<T> {
     promise: Promise<T>;
     resolve: (value: T | PromiseLike<T>) => void;
-    reject: (reason?: unknown) => void;
+    reject: (reason?: RuntimeValue) => void;
 }
 
 const deferred = <T>(): Deferred<T> => {

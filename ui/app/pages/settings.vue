@@ -59,7 +59,7 @@ const { hasChanged, nodePresetSaveBlocked } = storeToRefs(settingsStore);
 const { getUserSettings } = useAPI();
 const { user } = useUserSession();
 
-const isAdmin = computed(() => (user.value as User)?.is_admin ?? false);
+const isAdmin = computed(() => (user.value)?.is_admin ?? false);
 
 enum TabNames {
     PROFILE = 'Profile',
@@ -129,7 +129,7 @@ const createTab = (
     component: markRaw(component),
 });
 
-const tabAliases: Record<string, TabNames> = {
+const tabAliases = {
     account: TabNames.PROFILE,
     providers: TabNames.INFERENCE_PROVIDERS,
     usage: TabNames.USAGE_LIMITS,
@@ -147,7 +147,7 @@ const tabAliases: Record<string, TabNames> = {
     tools: TabNames.TOOL_DEFAULTS,
     'image generation': TabNames.IMAGE_VIDEO_GENERATION,
     'user management': TabNames.ADMIN,
-};
+} satisfies Record<string, TabNames>;
 
 const settingsSearchEntries = SETTINGS_SEARCH_ENTRIES;
 
@@ -388,7 +388,7 @@ const groups = computed<ISettingsGroup[]>(() => {
 const allTabs = computed(() => groups.value.flatMap((group) => group.tabs));
 
 // --- Local State ---
-const query = route.query.tab as string;
+const query = firstRouteString(route.query.tab) ?? '';
 const settingsSearch = ref('');
 const sidebarNavRef = ref<HTMLElement | null>(null);
 const isMounted = ref(false);
@@ -423,14 +423,14 @@ const settingsSearchResults = computed<SettingSearchResult[]>(() =>
 );
 const hasSearchResults = computed(() => settingsSearchResults.value.length > 0);
 
-const searchFieldLabels: Record<SettingSearchMatchField, string> = {
+const searchFieldLabels = {
     title: 'Setting',
     tab: 'Section',
     group: 'Category',
     keyword: 'Related',
     option: 'Option',
     description: 'Details',
-};
+} satisfies Record<SettingSearchMatchField, string>;
 
 const getSearchResultTab = (result: SettingSearchResult) => tabsByName.value.get(result.entry.tab);
 

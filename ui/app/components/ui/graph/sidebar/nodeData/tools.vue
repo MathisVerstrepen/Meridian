@@ -5,7 +5,7 @@ import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
     node: SidebarNode<DataRouting | DataTextToText>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
     availableTools?: ToolEnum[];
     disabled?: boolean;
 }>();

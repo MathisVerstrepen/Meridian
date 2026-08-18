@@ -500,8 +500,8 @@ const handleDragMoveOver = (event: DragEvent, destination: FileSystemObject) => 
 };
 
 const handleDragMoveLeave = (event: DragEvent, destination: FileSystemObject) => {
-    const currentTarget = event.currentTarget as HTMLElement | null;
-    const relatedTarget = event.relatedTarget as Node | null;
+    const currentTarget = elementOrNull(event.currentTarget, HTMLElement);
+    const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
     if (currentTarget && relatedTarget && currentTarget.contains(relatedTarget)) return;
     if (dragMoveTargetId.value === destination.id) dragMoveTargetId.value = null;
 };
@@ -633,7 +633,7 @@ const isTypingTarget = (target: EventTarget | null) => {
 };
 
 const handleKeyboardShortcuts = (event: KeyboardEvent) => {
-    const target = event.target as HTMLElement | null;
+    const target = elementOrNull(event.target, HTMLElement);
 
     if (event.key === 'F2' && !isRenaming.value && !isTypingTarget(target)) {
         if (selectedItems.value.length === 1) {
@@ -695,11 +695,11 @@ const handleFileDrop = async (event: DragEvent) => {
 
     const files = event.dataTransfer?.files;
     if (files && files.length) {
-        const mockTarget = {
-            files: files,
-            value: '',
-        } as unknown as HTMLInputElement;
-        await handleFileUploadFromEvent({ target: mockTarget } as unknown as Event);
+        const mockTarget = document.createElement('input');
+        Object.defineProperty(mockTarget, 'files', { value: files });
+        const uploadEvent = new Event('change');
+        Object.defineProperty(uploadEvent, 'target', { value: mockTarget });
+        await handleFileUploadFromEvent(uploadEvent);
     }
 };
 

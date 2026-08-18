@@ -28,7 +28,7 @@ const edge = (
     targetHandle: `${category}_${target}`,
 });
 
-const fanout = (prefix = ''): { nodes: GraphAutoLayoutNode[]; edges: GraphAutoLayoutEdge[] } => {
+const fanout = (prefix = '') => {
     const root = `${prefix}root`;
     const promptWidths = [130, 210, 170, 250];
     const childWidths = [220, 160, 280, 190];

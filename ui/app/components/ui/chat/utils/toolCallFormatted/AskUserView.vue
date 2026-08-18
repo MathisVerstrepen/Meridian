@@ -17,23 +17,36 @@ interface AnswerItem {
     id: string;
     question: string;
     input_type: string;
-    answer: Record<string, unknown>;
+    answer: JsonObject;
 }
 
+const isQuestionItem = (value: JsonValue): value is QuestionItem & JsonObject =>
+    isJsonObject(value) &&
+    isRuntimeString(value.id) &&
+    isRuntimeString(value.question) &&
+    isRuntimeString(value.input_type);
+
+const isAnswerItem = (value: JsonValue): value is AnswerItem & JsonObject =>
+    isJsonObject(value) &&
+    isRuntimeString(value.id) &&
+    isRuntimeString(value.question) &&
+    isRuntimeString(value.input_type) &&
+    isJsonObject(value.answer);
+
 const args = computed(() => {
-    const a = props.detail.arguments as Record<string, unknown>;
+    const a = jsonObjectOrEmpty(props.detail.arguments);
     return {
         title: a?.title ? String(a.title) : null,
-        questions: Array.isArray(a?.questions) ? (a.questions as QuestionItem[]) : [],
+        questions: Array.isArray(a.questions) ? a.questions.filter(isQuestionItem) : [],
     };
 });
 
 const result = computed(() => {
-    const r = props.detail.result as Record<string, unknown>;
+    const r = jsonObjectOrEmpty(props.detail.result);
     return {
         title: r?.title ? String(r.title) : null,
         submitted_at: r?.submitted_at ? String(r.submitted_at) : null,
-        answers: Array.isArray(r?.answers) ? (r.answers as AnswerItem[]) : [],
+        answers: Array.isArray(r.answers) ? r.answers.filter(isAnswerItem) : [],
     };
 });
 
@@ -47,12 +60,14 @@ const answerMap = computed(() => {
     return map;
 });
 
-const formatAnswer = (answer: Record<string, unknown>): string => {
-    if (typeof answer.value === 'boolean') return answer.value ? 'Yes' : 'No';
-    if (typeof answer.value === 'string') return answer.value;
+const formatAnswer = (answer: JsonObject): string => {
+    if (isRuntimeBoolean(answer.value)) return answer.value ? 'Yes' : 'No';
+    if (isRuntimeString(answer.value)) return answer.value;
     if (Array.isArray(answer.values)) return answer.values.join(', ');
     if (answer.label) return String(answer.label);
-    if (Array.isArray(answer.labels)) return (answer.labels as string[]).join(', ');
+    if (Array.isArray(answer.labels) && answer.labels.every(isRuntimeString)) {
+        return answer.labels.join(', ');
+    }
     return JSON.stringify(answer);
 };
 

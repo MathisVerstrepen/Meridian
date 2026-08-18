@@ -58,7 +58,7 @@ const healthGlowClass = computed(() => {
 });
 
 const getTargetBlockIcon = (target: PromptImproverTarget) => {
-    const block = getBlockByNodeType(target.nodeType as NodeTypeEnum);
+    const block = getBlockByNodeType(nodeTypeOrUndefined(target.nodeType));
     return block?.icon || 'MaterialSymbolsSmartToyRounded';
 };
 

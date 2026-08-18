@@ -19,14 +19,14 @@ interface ToolDetailMeta {
     type: ToolEnum | null;
 }
 
-const TOOL_DETAIL_COMPONENTS: Record<ToolEnum, Component> = {
+const TOOL_DETAIL_COMPONENTS = {
     [ToolEnum.WEB_SEARCH]: WebSearchView,
     [ToolEnum.LINK_EXTRACTION]: LinkExtractionView,
     [ToolEnum.IMAGE_GENERATION]: ImageGenerationView,
     [ToolEnum.EXECUTE_CODE]: ExecuteCodeView,
     [ToolEnum.VISUALISE]: VisualiseView,
     [ToolEnum.ASK_USER]: AskUserView,
-};
+} satisfies Record<ToolEnum, Component>;
 
 const FALLBACK_META: ToolDetailMeta = {
     component: FallbackView,
@@ -65,18 +65,14 @@ const toolMeta = computed<ToolDetailMeta>(() => {
 });
 
 const formattedViewProps = computed(() => {
-    const viewProps: {
-        detail: ToolCallDetail | null;
-        fetchedPageSelection?: FetchedPageDetailSelection | null;
-    } = {
-        detail: props.detail,
-    };
-
     if (toolMeta.value.type === ToolEnum.LINK_EXTRACTION) {
-        viewProps.fetchedPageSelection = props.fetchedPageSelection ?? null;
+        return {
+            detail: props.detail,
+            fetchedPageSelection: props.fetchedPageSelection ?? null,
+        };
     }
 
-    return viewProps;
+    return { detail: props.detail };
 });
 
 const statusMeta = computed(() => {
@@ -117,7 +113,7 @@ const formattedCreatedAt = computed(() => {
     }
 });
 
-const toJsonCodeFence = (value: Record<string, unknown> | unknown[] | undefined) => {
+const toJsonCodeFence = (value: Record<string, JsonValue> | unknown[] | undefined) => {
     const formatted = JSON.stringify(value ?? {}, null, 2);
     return `\`\`\`json\n${formatted}\n\`\`\``;
 };

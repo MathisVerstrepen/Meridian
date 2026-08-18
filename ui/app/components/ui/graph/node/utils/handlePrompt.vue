@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
-import { Position, Handle, useVueFlow } from '@vue-flow/core';
+import { Position } from '@vue-flow/core';
 
 // --- Props ---
 const props = withDefaults(
@@ -24,7 +24,7 @@ const { blockSettings } = storeToRefs(settingsStore);
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
-const { getNodes, getEdges } = useVueFlow();
+const { getNodes, getEdges } = useGraphFlow();
 const isHovering = ref(false);
 
 const compatibleSourceNodeTypes = [
@@ -63,7 +63,7 @@ const wheelOptions = computed(() =>
         @mouseenter="isHovering = true"
         @mouseleave="isHovering = false"
     >
-        <Handle
+        <UiGraphNodeUtilsHandleCore
             :id="`prompt_${props.id}`"
             :type="props.type"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"

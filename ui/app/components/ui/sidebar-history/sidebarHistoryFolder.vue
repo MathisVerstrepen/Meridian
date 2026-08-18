@@ -3,35 +3,17 @@ import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { ChromePicker } from 'vue-color';
 
 // --- Props ---
-const props = defineProps({
-    folder: {
-        type: Object as PropType<Folder & { graphs: GraphSummary[]; color?: string }>,
-        required: true,
-    },
-    isExpanded: {
-        type: Boolean,
-        required: true,
-    },
-    editingId: {
-        type: String as PropType<string | null>,
-        default: null,
-    },
-    editInputValue: {
-        type: String,
-        required: true,
-    },
-    currentGraphId: {
-        type: String as PropType<string | undefined>,
-        required: true,
-    },
-    allFolders: {
-        type: Array as PropType<Folder[]>,
-        required: true,
-    },
-    workspaces: {
-        type: Array as PropType<Workspace[]>,
-        default: () => [],
-    },
+const props = withDefaults(defineProps<{
+    folder: Folder & { graphs: GraphSummary[]; color?: string };
+    isExpanded: boolean;
+    editingId?: string | null;
+    editInputValue: string;
+    currentGraphId?: string;
+    allFolders: Folder[];
+    workspaces?: Workspace[];
+}>(), {
+    editingId: null,
+    workspaces: () => [],
 });
 
 // --- Emits ---
@@ -51,7 +33,7 @@ const emit = defineEmits<{
 
     // Generic input/rename actions
     (e: 'confirmRename' | 'cancelRename'): void;
-    (e: 'setInputRef', id: string, el: unknown): void;
+    (e: 'setInputRef', id: string, el: RuntimeValue): void;
 
     // Bubbled events from child UiSidebarHistoryItem
     (e: 'navigate', graphId: string, temporary: boolean): void;
@@ -89,7 +71,7 @@ const moveItems = computed(() => {
 
 // --- Handlers ---
 const onInput = (event: Event) => {
-    emit('update:editInputValue', (event.target as HTMLInputElement).value);
+    emit('update:editInputValue', (requireElement(event.target, HTMLInputElement)).value);
 };
 
 const onKeyDown = (event: KeyboardEvent) => {

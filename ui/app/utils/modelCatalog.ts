@@ -16,7 +16,7 @@ import type {
     ResponseModel,
 } from '@/types/model';
 
-const INFERENCE_PROVIDERS = new Set<InferenceProvider>([
+const INFERENCE_PROVIDERS: InferenceProvider[] = [
     'openrouter',
     'claude_agent',
     'github_copilot',
@@ -25,7 +25,10 @@ const INFERENCE_PROVIDERS = new Set<InferenceProvider>([
     'gemini_cli',
     'openai_codex',
     'opencode_go',
-]);
+];
+
+const isInferenceProvider = <Value>(value: Value): value is Value & InferenceProvider =>
+    isRuntimeString(value) && INFERENCE_PROVIDERS.some((provider) => provider === value);
 
 const TOOL_BITS = [
     [ToolEnum.WEB_SEARCH, MODEL_SUPPORTED_TOOL_BITS.web_search],
@@ -36,36 +39,36 @@ const TOOL_BITS = [
     [ToolEnum.ASK_USER, MODEL_SUPPORTED_TOOL_BITS.ask_user],
 ] as const;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+const isRecord = <Value>(value: Value): value is Value & Record<string, JsonValue> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const invalid = (path: string, expected: string): never => {
     throw new Error(`Invalid model catalog value at ${path}: expected ${expected}`);
 };
 
-const requiredString = (value: unknown, path: string): string => {
-    if (typeof value !== 'string') return invalid(path, 'a string');
+const requiredString = (value: RuntimeValue, path: string): string => {
+    if (!isRuntimeString(value)) return invalid(path, 'a string');
     return value;
 };
 
-const optionalString = (value: unknown, path: string): string | undefined => {
+const optionalString = (value: RuntimeValue, path: string): string | undefined => {
     if (value === undefined) return undefined;
     return requiredString(value, path);
 };
 
 const optionalNullableString = (
-    value: unknown,
+    value: RuntimeValue,
     path: string,
 ): string | null | undefined => {
     if (value === undefined) return undefined;
     if (value === null) return null;
-    if (typeof value === 'string') return value;
+    if (isRuntimeString(value)) return value;
     return invalid(path, 'a string or null');
 };
 
-const requiredMask = (value: unknown, path: string): number => {
+const requiredMask = (value: RuntimeValue, path: string): number => {
     if (
-        typeof value !== 'number' ||
+        !isRuntimeNumber(value) ||
         !Number.isSafeInteger(value) ||
         value < 0 ||
         value > 0x7fffffff
@@ -75,32 +78,33 @@ const requiredMask = (value: unknown, path: string): number => {
     return value;
 };
 
-const optionalInteger = (value: unknown, path: string): number | undefined => {
+const optionalInteger = (value: RuntimeValue, path: string): number | undefined => {
     if (value === undefined) return undefined;
-    if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    if (!isRuntimeNumber(value) || !Number.isSafeInteger(value)) {
         return invalid(path, 'a safe integer');
     }
     return value;
 };
 
-const parseProvider = (value: unknown, path: string): InferenceProvider => {
-    if (typeof value !== 'string' || !INFERENCE_PROVIDERS.has(value as InferenceProvider)) {
+const parseProvider = (value: RuntimeValue, path: string): InferenceProvider => {
+    if (!isInferenceProvider(value)) {
         return invalid(path, 'a supported inference provider');
     }
-    return value as InferenceProvider;
+    return value;
 };
 
-const parsePricing = (value: unknown, path: string): CompactModelPricing => {
+const parsePricing = (value: RuntimeValue, path: string): CompactModelPricing => {
     if (!isRecord(value)) return invalid(path, 'an object');
     const image = optionalString(value.image, `${path}.image`);
-    return {
+    const pricing = {
         prompt: requiredString(value.prompt, `${path}.prompt`),
         completion: requiredString(value.completion, `${path}.completion`),
-        ...(image === undefined ? {} : { image }),
     };
+    if (image !== undefined) Object.assign(pricing, { image });
+    return pricing;
 };
 
-const parseCompactModel = (value: unknown, index: number): CompactModelInfo => {
+const parseCompactModel = (value: RuntimeValue, index: number): CompactModelInfo => {
     const path = `data[${index}]`;
     if (!isRecord(value)) return invalid(path, 'an object');
 
@@ -117,37 +121,39 @@ const parseCompactModel = (value: unknown, index: number): CompactModelInfo => {
             : requiredMask(value.supportedTools, `${path}.supportedTools`);
     const reasoningEfforts = optionalInteger(value.reasoningEfforts, `${path}.reasoningEfforts`);
 
-    return {
+    const model = {
         id: requiredString(value.id, `${path}.id`),
         name: requiredString(value.name, `${path}.name`),
         pricing: parsePricing(value.pricing, `${path}.pricing`),
         capabilities: requiredMask(value.capabilities, `${path}.capabilities`),
-        ...(icon === undefined ? {} : { icon }),
-        ...(provider === undefined ? {} : { provider }),
-        ...(created === undefined ? {} : { created }),
-        ...(contextLength === undefined ? {} : { contextLength }),
-        ...(supportedTools === undefined ? {} : { supportedTools }),
-        ...(reasoningEfforts === undefined ? {} : { reasoningEfforts }),
     };
+    if (icon !== undefined) Object.assign(model, { icon });
+    if (provider !== undefined) Object.assign(model, { provider });
+    if (created !== undefined) Object.assign(model, { created });
+    if (contextLength !== undefined) Object.assign(model, { contextLength });
+    if (supportedTools !== undefined) Object.assign(model, { supportedTools });
+    if (reasoningEfforts !== undefined) Object.assign(model, { reasoningEfforts });
+    return model;
 };
 
-const parseWarning = (value: unknown, index: number): ModelDiscoveryWarning => {
+const parseWarning = (value: RuntimeValue, index: number): ModelDiscoveryWarning => {
     const path = `warnings[${index}]`;
     if (!isRecord(value)) return invalid(path, 'an object');
 
     const actionLabel = optionalNullableString(value.actionLabel, `${path}.actionLabel`);
     const actionUrl = optionalNullableString(value.actionUrl, `${path}.actionUrl`);
 
-    return {
+    const warning = {
         provider: parseProvider(value.provider, `${path}.provider`),
         title: requiredString(value.title, `${path}.title`),
         message: requiredString(value.message, `${path}.message`),
-        ...(actionLabel === undefined ? {} : { actionLabel }),
-        ...(actionUrl === undefined ? {} : { actionUrl }),
     };
+    if (actionLabel !== undefined) Object.assign(warning, { actionLabel });
+    if (actionUrl !== undefined) Object.assign(warning, { actionUrl });
+    return warning;
 };
 
-const parseCatalog = (value: unknown): CompactModelCatalogResponse => {
+const parseCatalog = <Value>(value: Value): CompactModelCatalogResponse => {
     if (!isRecord(value)) return invalid('response', 'an object');
     if (value.version !== MODEL_CATALOG_VERSION) {
         throw new Error(`Unsupported model catalog version: ${String(value.version)}`);
@@ -160,11 +166,12 @@ const parseCatalog = (value: unknown): CompactModelCatalogResponse => {
               ? value.warnings.map(parseWarning)
               : invalid('warnings', 'an array');
 
-    return {
+    const catalog = {
         version: MODEL_CATALOG_VERSION,
         data: value.data.map(parseCompactModel),
-        ...(warnings === undefined ? {} : { warnings }),
     };
+    if (warnings !== undefined) Object.assign(catalog, { warnings });
+    return catalog;
 };
 
 const hasBit = (mask: number, bit: number): boolean => (mask & bit) !== 0;
@@ -179,7 +186,15 @@ const decodeModel = (model: CompactModelInfo): ModelInfo => {
     if (hasBit(capabilities, MODEL_CAPABILITY_BITS.imageOutput)) outputModalities.push('image');
     if (hasBit(capabilities, MODEL_CAPABILITY_BITS.videoOutput)) outputModalities.push('video');
 
-    return {
+    const pricing = {
+        prompt: model.pricing.prompt,
+        completion: model.pricing.completion,
+    };
+    if (model.pricing.image !== undefined) {
+        Object.assign(pricing, { image: model.pricing.image });
+    }
+
+    const decoded = {
         architecture: {
             // These normalized fields are required by ModelInfo but are intentionally absent
             // from the compact wire contract and have no model-catalog UI consumers.
@@ -191,13 +206,9 @@ const decodeModel = (model: CompactModelInfo): ModelInfo => {
         id: model.id,
         name: model.name,
         icon: model.icon ?? '',
-        pricing: {
-            prompt: model.pricing.prompt,
-            completion: model.pricing.completion,
-            ...(model.pricing.image === undefined ? {} : { image: model.pricing.image }),
-        },
+        pricing,
         provider: model.provider ?? 'openrouter',
-        billingType: isSubscription ? 'subscription' : 'metered',
+        billingType: isSubscription ? ('subscription' as const) : ('metered' as const),
         requiresConnection: isSubscription,
         supportsStructuredOutputs: hasBit(
             capabilities,
@@ -209,15 +220,19 @@ const decodeModel = (model: CompactModelInfo): ModelInfo => {
         ),
         toolsSupport: hasBit(capabilities, MODEL_CAPABILITY_BITS.nativeTools),
         reasoningEfforts: model.reasoningEfforts ?? 0,
-        ...(model.created === undefined ? {} : { created: model.created }),
-        ...(model.contextLength === undefined ? {} : { context_length: model.contextLength }),
     };
+    if (model.created !== undefined) Object.assign(decoded, { created: model.created });
+    if (model.contextLength !== undefined) {
+        Object.assign(decoded, { context_length: model.contextLength });
+    }
+    return decoded;
 };
 
-export const decodeModelCatalog = (value: unknown): ResponseModel => {
+export const decodeModelCatalog = <Value>(value: Value): ResponseModel => {
     const catalog = parseCatalog(value);
     return {
         data: catalog.data.map(decodeModel),
         warnings: catalog.warnings ?? [],
     };
 };
+import { isRuntimeNumber, isRuntimeString } from '@/utils/runtimeTypes';

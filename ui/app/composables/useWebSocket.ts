@@ -1,9 +1,27 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { ImageGenerationJob } from '@/types/imagePlayground';
+import type {
+    ImageGenerationJob,
+    ImagePlaygroundJobStatus,
+    ImagePlaygroundMediaType,
+} from '@/types/imagePlayground';
 
 // --- Reactive State (Singleton) ---
-const state = reactive({
-    ws: null as WebSocket | null,
+interface WebSocketState {
+    ws: WebSocket | null;
+    isConnected: boolean;
+    isConnecting: boolean;
+    isReconnecting: boolean;
+    reconnectAttempts: number;
+    clientId: string;
+}
+
+interface ToolQuestionErrorPayload {
+    tool_call_id?: string;
+    message?: string;
+}
+
+const state = reactive<WebSocketState>({
+    ws: null,
     isConnected: false,
     isConnecting: false,
     isReconnecting: false,
@@ -19,6 +37,50 @@ const NODE_OPTIONAL_MESSAGE_TYPES = new Set([
 ]);
 let connectionPromise: Promise<void> | null = null;
 
+const IMAGE_JOB_STATUSES: ImagePlaygroundJobStatus[] = [
+    'pending',
+    'processing',
+    'retrying',
+    'completed',
+    'failed',
+    'cancelled',
+];
+const IMAGE_MEDIA_TYPES: ImagePlaygroundMediaType[] = ['image', 'video'];
+const isOptionalString = (value: JsonValue) =>
+    value === undefined || value === null || isRuntimeString(value);
+const isOptionalNumber = (value: JsonValue) =>
+    value === undefined || value === null || isRuntimeNumber(value);
+
+const isImageGenerationJob = (value: JsonValue): value is ImageGenerationJob & JsonObject =>
+    isJsonObject(value) &&
+    isRuntimeString(value.id) &&
+    isRuntimeString(value.batch_id) &&
+    isRuntimeString(value.status) &&
+    IMAGE_JOB_STATUSES.some((status) => status === value.status) &&
+    isRuntimeString(value.prompt) &&
+    isRuntimeString(value.effective_prompt) &&
+    isRuntimeString(value.model) &&
+    isRuntimeString(value.media_type) &&
+    IMAGE_MEDIA_TYPES.some((mediaType) => mediaType === value.media_type) &&
+    isRuntimeString(value.aspect_ratio) &&
+    isRuntimeString(value.resolution) &&
+    isOptionalNumber(value.duration) &&
+    isRuntimeBoolean(value.generate_audio) &&
+    isOptionalNumber(value.actual_width) &&
+    isOptionalNumber(value.actual_height) &&
+    isOptionalString(value.actual_aspect_ratio) &&
+    isOptionalString(value.style_preset) &&
+    Array.isArray(value.source_image_ids) &&
+    value.source_image_ids.every(isRuntimeString) &&
+    isOptionalString(value.file_id) &&
+    isOptionalString(value.error) &&
+    isRuntimeNumber(value.attempts) &&
+    isRuntimeNumber(value.max_attempts) &&
+    (value.is_preview === undefined || isRuntimeBoolean(value.is_preview)) &&
+    isRuntimeString(value.created_at) &&
+    isRuntimeString(value.updated_at) &&
+    isOptionalString(value.completed_at);
+
 // --- Private Functions ---
 const handleOpen = () => {
     console.log('WebSocket connection established.');
@@ -32,45 +94,81 @@ const handleMessage = (event: MessageEvent) => {
     const { handleNodeDataUpdate, replaceNodeData } = useGraphActions();
 
     try {
-        const message = JSON.parse(event.data);
+        if (!isRuntimeString(event.data)) throw new TypeError('WebSocket message is not text');
+        const message: JsonValue = JSON.parse(event.data);
+        if (!isJsonObject(message)) throw new TypeError('WebSocket message is not an object');
         const { type, node_id, payload, model_id } = message;
         const streamStore = useStreamStore();
 
-        if (!type || (!node_id && !NODE_OPTIONAL_MESSAGE_TYPES.has(type))) {
+        if (
+            !isRuntimeString(type) ||
+            (!isRuntimeString(node_id) && !NODE_OPTIONAL_MESSAGE_TYPES.has(type))
+        ) {
             console.warn('Received WebSocket message without type or node_id:', message);
             return;
         }
+        const nodeId = runtimeString(node_id);
+        const modelId = isRuntimeString(model_id) ? model_id : undefined;
 
         switch (type) {
             case 'stream_chunk':
-                streamStore.handleStreamChunk(node_id, payload, model_id);
+                if (isRuntimeString(payload)) streamStore.handleStreamChunk(nodeId, payload, modelId);
                 break;
             case 'stream_end':
-                streamStore.handleStreamEnd(node_id, payload, model_id);
+                streamStore.handleStreamEnd(
+                    nodeId,
+                    {
+                        refresh_tool_usage:
+                            isJsonObject(payload) && payload.refresh_tool_usage === true,
+                    },
+                    modelId,
+                );
                 break;
             case 'stream_error':
-                streamStore.handleStreamError(node_id, payload);
+                streamStore.handleStreamError(nodeId, {
+                    message: runtimeErrorMessage(payload) ?? 'Unknown stream error',
+                });
                 break;
-            case 'tool_question_error':
-                streamStore.handleToolQuestionError(node_id, payload);
+            case 'tool_question_error': {
+                const toolError: ToolQuestionErrorPayload = {};
+                if (isJsonObject(payload) && isRuntimeString(payload.tool_call_id)) {
+                    toolError.tool_call_id = payload.tool_call_id;
+                }
+                if (isJsonObject(payload) && isRuntimeString(payload.message)) {
+                    toolError.message = payload.message;
+                }
+                streamStore.handleToolQuestionError(nodeId, toolError);
                 break;
+            }
             case 'routing_response':
-                streamStore.handleRoutingResponse(node_id, payload);
+                streamStore.handleRoutingResponse(nodeId, payload);
                 break;
             case 'title_response':
-                streamStore.handleTitleResponse(node_id, payload);
+                if (isJsonObject(payload) && isRuntimeString(payload.title)) {
+                    streamStore.handleTitleResponse(nodeId, { title: payload.title });
+                }
                 break;
-            case 'usage_data_update':
-                streamStore.handleUsageDataUpdate(node_id, payload);
+            case 'usage_data_update': {
+                const usageData = parseUsageData(payload);
+                if (usageData) streamStore.handleUsageDataUpdate(nodeId, usageData);
                 break;
+            }
             case 'node_data_update':
-                handleNodeDataUpdate(message?.graph_id, node_id, payload);
+                if (isJsonObject(payload)) {
+                    handleNodeDataUpdate(runtimeString(message.graph_id), nodeId, payload);
+                }
                 break;
             case 'node_data_replace':
-                replaceNodeData(message?.graph_id, node_id, payload);
+                if (isJsonObject(payload) || Array.isArray(payload)) {
+                    replaceNodeData(runtimeString(message.graph_id), nodeId, payload);
+                }
                 break;
             case 'image_generation_job_update':
-                useImagePlaygroundStore().handleJobUpdate(payload as ImageGenerationJob);
+                if (isImageGenerationJob(payload)) {
+                    useImagePlaygroundStore().handleJobUpdate(payload);
+                } else {
+                    console.warn('Received invalid image generation job update:', payload);
+                }
                 break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);
@@ -179,7 +277,7 @@ const disconnect = () => {
     }
 };
 
-const sendMessage = (message: object): boolean => {
+const sendMessage = <Message extends object>(message: Message): boolean => {
     if (state.ws && state.isConnected) {
         try {
             state.ws.send(JSON.stringify(message));

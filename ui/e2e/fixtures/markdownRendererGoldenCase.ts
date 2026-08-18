@@ -232,17 +232,30 @@ const INLINE_DATA_IMAGE =
     `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
 const INLINE_CODE_DELIMITER = '`';
 
+interface ToolCallDetailFixture {
+    id: string;
+    node_id: string;
+    model_id: string;
+    tool_call_id: string;
+    tool_name: string;
+    status?: string;
+    arguments: object;
+    result: object;
+    model_context_payload: string;
+    created_at: RuntimeValue;
+}
+
 export type MarkdownRendererFixtureCase = {
     key: string;
     nodeId: string;
     rawMessage: string;
-    toolCallDetails?: Record<string, unknown>;
+    toolCallDetails?: Record<string, ToolCallDetailFixture>;
     generatedImageIds?: string[];
     embeddedArtifactIds?: string[];
     downloadableArtifactIds?: string[];
 };
 
-export const MARKDOWN_RENDERER_FIXTURE_CASES: Record<string, MarkdownRendererFixtureCase> = {
+const BASE_MARKDOWN_RENDERER_FIXTURE_CASES = {
     golden: {
         key: 'golden',
         nodeId: GOLDEN_MARKDOWN_RENDERER_NODE_ID,
@@ -499,7 +512,7 @@ graph TD
         downloadableArtifactIds: [SANDBOX_ARTIFACT_FILE_ID],
         embeddedArtifactIds: [SANDBOX_ARTIFACT_HTML_ID],
     },
-};
+} satisfies Record<string, MarkdownRendererFixtureCase>;
 
 export const HEAVY_STREAMING_CASE_NODE_ID = 'fixture-node-heavy-streaming';
 
@@ -695,10 +708,13 @@ The key security considerations here:
 3. **Rate limiting** uses a sliding window to prevent brute force attempts with $O(\\log n)$ complexity per request
 4. The access token lifetime of $15$ minutes balances security with user convenience`;
 
-MARKDOWN_RENDERER_FIXTURE_CASES.heavyStreaming = {
-    key: 'heavyStreaming',
-    nodeId: HEAVY_STREAMING_CASE_NODE_ID,
-    rawMessage: HEAVY_STREAMING_RAW_MESSAGE,
-};
+export const MARKDOWN_RENDERER_FIXTURE_CASES = {
+    ...BASE_MARKDOWN_RENDERER_FIXTURE_CASES,
+    heavyStreaming: {
+        key: 'heavyStreaming',
+        nodeId: HEAVY_STREAMING_CASE_NODE_ID,
+        rawMessage: HEAVY_STREAMING_RAW_MESSAGE,
+    },
+} satisfies Record<string, MarkdownRendererFixtureCase>;
 
 export const DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY = 'golden';

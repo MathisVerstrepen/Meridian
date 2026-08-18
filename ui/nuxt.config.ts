@@ -100,7 +100,7 @@ export default defineNuxtConfig({
     },
 
     vite: {
-        plugins: [tailwindcss() as never],
+        plugins: [/* SAFETY: Tailwind returns a Vite plugin accepted by Nuxt; duplicate Vite type copies make this boundary appear as never. */ tailwindcss() as never],
         build: {
             chunkSizeWarningLimit: 900,
         },
@@ -137,7 +137,6 @@ export default defineNuxtConfig({
         'nuxt-auth-utils',
         '@nuxt/image',
         'motion-v/nuxt',
-        '@nuxt/eslint',
     ],
 
     imports: {

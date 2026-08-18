@@ -57,8 +57,8 @@ export interface PromptImproverAudit {
 export interface PromptImproverClarificationRound {
     id: string;
     status: string;
-    arguments: Record<string, unknown> | unknown[];
-    result: Record<string, unknown> | unknown[];
+    arguments: Record<string, JsonValue> | unknown[];
+    result: Record<string, JsonValue> | unknown[];
     createdAt: string | null;
 }
 

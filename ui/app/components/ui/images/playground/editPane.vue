@@ -170,7 +170,7 @@ const floatingPanelStyle = computed(() => {
     return { left: `${left}%`, top: `${top}%` };
 });
 
-const handlePositions: Record<ResizeHandle, string> = {
+const handlePositions = {
     nw: '-top-1.5 -left-1.5 cursor-nwse-resize',
     n: '-top-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize',
     ne: '-top-1.5 -right-1.5 cursor-nesw-resize',
@@ -179,8 +179,8 @@ const handlePositions: Record<ResizeHandle, string> = {
     s: '-bottom-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize',
     sw: '-bottom-1.5 -left-1.5 cursor-nesw-resize',
     w: 'top-1/2 -left-1.5 -translate-y-1/2 cursor-ew-resize',
-};
-const resizeHandles = Object.keys(handlePositions) as ResizeHandle[];
+} satisfies Record<ResizeHandle, string>;
+const resizeHandles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] satisfies ResizeHandle[];
 
 watch(
     [imageModels, () => toolsImageGenerationSettings.value.defaultModel, settingsReady],
@@ -343,7 +343,7 @@ const handleFiles = (files: FileList | File[] | null) => {
 defineExpose({ handleFiles });
 
 const onFileInputChange = (event: Event) => {
-    const input = event.target as HTMLInputElement;
+    const input = requireElement(event.target, HTMLInputElement);
     handleFiles(input.files);
     input.value = '';
 };
@@ -438,7 +438,7 @@ const startPan = (event: PointerEvent) => {
     interaction.value = 'pan';
     panAnchor.value = { x: event.clientX, y: event.clientY };
     panStart.value = { ...pan.value };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    (requireElement(event.currentTarget, HTMLElement)).setPointerCapture(event.pointerId);
 };
 
 const onStagePointerDown = (event: PointerEvent) => {
@@ -453,7 +453,7 @@ const onStagePointerDown = (event: PointerEvent) => {
     interaction.value = 'draw';
     dragAnchor.value = point;
     draftSelection.value = { x: point.x, y: point.y, width: 1, height: 1 };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    (requireElement(event.currentTarget, HTMLElement)).setPointerCapture(event.pointerId);
 };
 
 const startResize = (handle: ResizeHandle, event: PointerEvent) => {
@@ -465,7 +465,7 @@ const startResize = (handle: ResizeHandle, event: PointerEvent) => {
     resizeHandle.value = handle;
     resizeStartSelection.value = selection.value;
     draftSelection.value = selection.value;
-    const target = stageRef.value || (event.currentTarget as HTMLElement);
+    const target = stageRef.value || (requireElement(event.currentTarget, HTMLElement));
     target.setPointerCapture(event.pointerId);
 };
 

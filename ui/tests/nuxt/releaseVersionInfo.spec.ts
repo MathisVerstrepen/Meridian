@@ -1,15 +1,33 @@
+import { resolve } from 'node:path';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
-import { defineComponent, h, nextTick, type PropType } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReleaseVersionInfo from '@/components/ui/home/releaseVersionInfo.vue';
+import { loadReleaseChangelogs } from '../../build/releaseChangelogs';
+import { parseReleaseVersion } from '@/utils/releaseVersions';
 
 const STORAGE_KEY = 'meridian-last-seen-release';
+const changelogDirectory = resolve(process.cwd(), '../docs/changelogs');
+const changelogs = await loadReleaseChangelogs(changelogDirectory);
+const latestRelease = changelogs[0];
+const previousRelease = changelogs[1];
+const oldestRelease = changelogs.at(-1);
+
+if (!latestRelease || !previousRelease || !oldestRelease) {
+    throw new Error('Release version component tests require at least two changelogs');
+}
+
+const latestVersionParts = parseReleaseVersion(latestRelease.version);
+if (!latestVersionParts) {
+    throw new Error(`Latest changelog has invalid version ${latestRelease.version}`);
+}
+const newerVersion = `${latestVersionParts[0]}.${latestVersionParts[1]}.${latestVersionParts[2] + 1}-beta`;
 
 const BaseModalStub = defineComponent({
     name: 'UiUtilsBaseModal',
     props: {
         modelValue: { type: Boolean, required: true },
-        title: { type: String as PropType<string | undefined>, default: undefined },
+        title: { type: String, default: undefined },
     },
     emits: ['update:modelValue', 'close'],
     setup(props, { emit, slots }) {
@@ -34,7 +52,7 @@ const BaseModalStub = defineComponent({
     },
 });
 
-const mountReleaseVersion = (currentVersion = '1.7.8-beta') =>
+const mountReleaseVersion = (currentVersion = latestRelease.version) =>
     mountSuspended(ReleaseVersionInfo, {
         props: { currentVersion },
         global: {
@@ -61,15 +79,16 @@ describe('releaseVersionInfo', () => {
         await wrapper.get('[aria-haspopup="dialog"]').trigger('click');
 
         expect(wrapper.find('[data-testid="release-unread-indicator"]').exists()).toBe(false);
-        expect(window.localStorage.getItem(STORAGE_KEY)).toBe('1.7.8-beta');
+        expect(window.localStorage.getItem(STORAGE_KEY)).toBe(latestRelease.version);
         expect(wrapper.find('[data-testid="release-modal"]').exists()).toBe(true);
 
         const versions = wrapper.findAll('[data-release-version]').map((button) => button.text());
-        expect(versions).toHaveLength(13);
-        expect(versions[0]).toBe('1.7.8-beta');
-        expect(versions.at(-1)).toBe('1.4.0-beta');
+        expect(versions).toEqual(changelogs.map(({ version }) => version));
+        expect(versions).toHaveLength(changelogs.length);
+        expect(versions[0]).toBe(latestRelease.version);
+        expect(versions.at(-1)).toBe(oldestRelease.version);
         expect(wrapper.get('[data-release-version][aria-current="true"]').text()).toBe(
-            '1.7.8-beta',
+            latestRelease.version,
         );
 
         wrapper.unmount();
@@ -81,28 +100,28 @@ describe('releaseVersionInfo', () => {
         const latestHtml = wrapper.get('[data-testid="release-changelog-content"]').html();
         const olderRelease = wrapper
             .findAll('[data-release-version]')
-            .find((button) => button.text() === '1.7.7-beta');
+            .find((button) => button.text() === oldestRelease.version);
 
         expect(olderRelease).toBeDefined();
         await olderRelease!.trigger('click');
         expect(wrapper.get('[data-release-version][aria-current="true"]').text()).toBe(
-            '1.7.7-beta',
+            oldestRelease.version,
         );
         expect(wrapper.get('[data-testid="release-changelog-content"]').html()).not.toBe(latestHtml);
 
         await wrapper.get('[data-testid="close-modal"]').trigger('click');
         await wrapper.get('[aria-haspopup="dialog"]').trigger('click');
         expect(wrapper.get('[data-release-version][aria-current="true"]').text()).toBe(
-            '1.7.8-beta',
+            latestRelease.version,
         );
 
         wrapper.unmount();
     });
 
     it.each([
-        ['1.7.7-beta', true],
-        ['1.7.8-beta', false],
-        ['1.8.0-beta', false],
+        [previousRelease.version, true],
+        [latestRelease.version, false],
+        [newerVersion, false],
         ['malformed', true],
     ])('compares stored version %s against current release', async (storedVersion, expectedUnread) => {
         window.localStorage.setItem(STORAGE_KEY, storedVersion);
@@ -126,11 +145,11 @@ describe('releaseVersionInfo', () => {
     });
 
     it('preserves a newer stored watermark when opening a rolled-back build', async () => {
-        window.localStorage.setItem(STORAGE_KEY, '1.8.0-beta');
+        window.localStorage.setItem(STORAGE_KEY, newerVersion);
         const wrapper = await mountReleaseVersion();
 
         await wrapper.get('[aria-haspopup="dialog"]').trigger('click');
-        expect(window.localStorage.getItem(STORAGE_KEY)).toBe('1.8.0-beta');
+        expect(window.localStorage.getItem(STORAGE_KEY)).toBe(newerVersion);
 
         wrapper.unmount();
     });

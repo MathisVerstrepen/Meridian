@@ -32,25 +32,25 @@ const loginWithPassword = async () => {
         await fetchUserSession();
         await navigateTo('/');
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { message?: string } };
-        console.error('Error logging in:', err.response?.status);
+        const status = runtimeErrorStatus(error);
+        const message = runtimeErrorDetail(error) ?? '';
+        console.error('Error logging in:', status);
 
-        if (err.response?.status === 429) {
+        if (status === 429) {
             errorMessage.value = 'Too many login attempts. Please try again later.';
-        } else if (err.response?.status === 403) {
-            const msg = err.data?.message || '';
-            if (msg === 'Email required' || msg === 'Email not verified') {
+        } else if (status === 403) {
+            if (message === 'Email required' || message === 'Email not verified') {
                 return navigateTo({
                     path: '/auth/update-email',
                     query: {
                         username: username.value.trim(),
-                        reason: msg === 'Email required' ? 'missing' : 'unverified',
+                        reason: message === 'Email required' ? 'missing' : 'unverified',
                     },
                 });
             }
-            errorMessage.value = msg || 'Access denied.';
+            errorMessage.value = message || 'Access denied.';
         } else {
-            errorMessage.value = err.data?.message || 'An unexpected error occurred.';
+            errorMessage.value = message || 'An unexpected error occurred.';
         }
     }
 };

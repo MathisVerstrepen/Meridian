@@ -10,7 +10,7 @@ import type {
     PromptImproverTaxonomyResponse,
     PromptImproverTarget,
 } from '@/types/promptImprover';
-import type { DataPrompt } from '@/types/graph';
+import type { ToolQuestionAnswerMap } from '@/types/toolCall';
 
 export function usePromptImprover() {
     const graphEvents = useGraphEvents();
@@ -161,8 +161,9 @@ export function usePromptImprover() {
     const getPromptNodeText = (graphId: string, nodeId: string) => {
         const { findNode } = useVueFlow('main-graph-' + graphId);
         const node = findNode(nodeId);
-        const data = node?.data as DataPrompt | undefined;
-        return data?.prompt?.trim() || '';
+        return isJsonObject(node?.data) && isRuntimeString(node.data.prompt)
+            ? node.data.prompt.trim()
+            : '';
     };
 
     const mergeRunIntoHistory = (run: PromptImproverRun) => {
@@ -176,9 +177,8 @@ export function usePromptImprover() {
         setCurrentRun(draftResponse.activeRun);
     };
 
-    const isBadRequestError = (err: unknown): boolean => {
-        const apiError = err as { response?: { status?: number } };
-        return apiError?.response?.status === 400;
+    const isBadRequestError = (err: RuntimeValue): boolean => {
+        return runtimeErrorStatus(err) === 400;
     };
 
     const setCurrentRun = (run: PromptImproverRun | null) => {
@@ -411,7 +411,7 @@ export function usePromptImprover() {
         }
     };
 
-    const submitClarificationAnswer = async (answer: Record<string, unknown>) => {
+    const submitClarificationAnswer = async (answer: ToolQuestionAnswerMap) => {
         if (!currentRun.value || !pendingClarificationRound.value) return;
         isQuestionSubmitting.value = true;
         localError.value = null;
@@ -463,7 +463,7 @@ export function usePromptImprover() {
             close();
         } catch (err) {
             console.error('Failed to apply improved prompt:', err);
-            error((err as Error).message || 'Failed to apply improved prompt.');
+            error(runtimeErrorMessage(err) || 'Failed to apply improved prompt.');
         } finally {
             isApplying.value = false;
         }

@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
-import { useChatGenerator } from '@/composables/useChatGenerator';
-import { useMessageEditing } from '@/composables/useMessageEditing';
 import type { ChatInputSubmission } from '@/types/chat';
 
 const props = defineProps<{
@@ -33,7 +31,7 @@ const { regenerateTitle, removeChatCallback } = streamStore;
 // --- Routing ---
 const route = useRoute();
 const router = useRouter();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 const isTemporaryGraph = computed(() => props.isTemporary === true || route.query.temporary === 'true');
 
 // --- Local State ---
@@ -86,10 +84,12 @@ const toggleMessageExpansion = (index: number) => {
     }
 };
 
-const setMessageRendererRef = (index: number, component: unknown) => {
-    const renderer = component as { submitEdit?: unknown } | null;
-    if (typeof renderer?.submitEdit === 'function') {
-        messageRendererRefs.value[index] = { submitEdit: renderer.submitEdit as () => void };
+const setMessageRendererRef = (index: number, component: RuntimeValue) => {
+    const submitEdit = isRuntimeObject(component) && 'submitEdit' in component
+        ? component.submitEdit
+        : undefined;
+    if (isRuntimeFunction(submitEdit)) {
+        messageRendererRefs.value[index] = { submitEdit: () => submitEdit() };
     } else {
         messageRendererRefs.value[index] = undefined;
     }
@@ -112,10 +112,7 @@ const handleSaveTemporaryGraph = async () => {
         await regenerateTitle(graphId.value, 'all');
     } catch (err) {
         console.error('Failed to create graph from component:', err);
-        const detail =
-            (err as { data?: { detail?: string } })?.data?.detail ||
-            (err as { message?: string })?.message ||
-            '';
+        const detail = runtimeErrorDetail(err) ?? '';
         if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
             error('You have reached the maximum number of canvases for the Free plan.', {
                 title: 'Limit Reached',
@@ -209,7 +206,7 @@ watch(
     ([newMessageCount], [oldMessageCount]) => {
         if (
             openChatId.value &&
-            typeof oldMessageCount === 'number' &&
+            isRuntimeNumber(oldMessageCount) &&
             newMessageCount > oldMessageCount
         ) {
             triggerScroll('smooth');

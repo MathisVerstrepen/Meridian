@@ -22,7 +22,7 @@ const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Constants ---
 const blockDefinition = getBlockById('primary-prompt-file');
@@ -82,10 +82,7 @@ const addFiles = async (newFiles: FileList) => {
             const newFile = await uploadFile(file, targetId);
             props.data.files.push(newFile);
         } catch (err) {
-            const detail =
-                (err as { data?: { detail?: string } })?.data?.detail ||
-                (err as { message?: string })?.message ||
-                '';
+            const detail = runtimeErrorDetail(err) ?? '';
             console.error(`Failed to upload file ${file.name}:`, err);
             error(`Failed to upload file ${file.name}. ${detail}`, {
                 title: 'Upload Error',

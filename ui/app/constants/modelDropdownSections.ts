@@ -14,10 +14,7 @@ export interface ModelDropdownSectionDefinition {
 export const MODEL_DROPDOWN_PINNED_SECTION_ID = 'pinned';
 export const MODEL_DROPDOWN_ALL_SECTION_ID = 'all';
 
-export const SUBSCRIPTION_PROVIDER_META: Record<
-    SubscriptionInferenceProvider,
-    { label: string; icon: string; description: string }
-> = {
+export const SUBSCRIPTION_PROVIDER_META = {
     claude_agent: {
         label: 'Claude Agent',
         icon: 'models/anthropic',
@@ -53,11 +50,25 @@ export const SUBSCRIPTION_PROVIDER_META: Record<
         icon: 'models/opencode',
         description: 'OpenCode Go subscription-backed open coding models.',
     },
-};
+} satisfies Record<
+    SubscriptionInferenceProvider,
+    { label: string; icon: string; description: string }
+>;
 
-export const SUBSCRIPTION_PROVIDERS = Object.keys(
-    SUBSCRIPTION_PROVIDER_META,
-) as SubscriptionInferenceProvider[];
+export const SUBSCRIPTION_PROVIDERS: SubscriptionInferenceProvider[] = [
+    'claude_agent',
+    'github_copilot',
+    'z_ai_coding_plan',
+    'alibaba_token_plan',
+    'gemini_cli',
+    'openai_codex',
+    'opencode_go',
+];
+
+export const isSubscriptionInferenceProvider = <Value>(
+    value: Value,
+): value is Value & SubscriptionInferenceProvider =>
+    isRuntimeString(value) && SUBSCRIPTION_PROVIDERS.some((provider) => provider === value);
 
 export const getSubscriptionSectionId = (provider: SubscriptionInferenceProvider) =>
     `subscription:${provider}`;
@@ -67,9 +78,9 @@ export const parseSubscriptionSectionId = (sectionId: string): SubscriptionInfer
         return null;
     }
 
-    const provider = sectionId.slice('subscription:'.length) as SubscriptionInferenceProvider;
+    const provider = sectionId.slice('subscription:'.length);
 
-    return provider in SUBSCRIPTION_PROVIDER_META ? provider : null;
+    return isSubscriptionInferenceProvider(provider) ? provider : null;
 };
 
 export const DEFAULT_MODEL_DROPDOWN_SECTION_ORDER = [

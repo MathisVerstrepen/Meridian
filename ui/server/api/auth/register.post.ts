@@ -19,10 +19,9 @@ export default defineEventHandler(async (event) => {
         // We do not set cookies here anymore, as the user is not verified yet.
         return { status: 'pending', message: 'Verification code sent' };
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { detail?: string } };
         throw createError({
-            statusCode: err.response?.status || 500,
-            message: err.data?.detail || 'An unexpected error occurred during registration.',
+            statusCode: runtimeErrorStatus(error) ?? 500,
+            message: runtimeErrorDetail(error) ?? 'An unexpected error occurred during registration.',
         });
     }
 });

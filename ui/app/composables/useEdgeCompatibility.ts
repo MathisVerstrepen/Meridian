@@ -1,11 +1,11 @@
-import type { GraphNode, Connection, GraphEdge } from '@vue-flow/core';
+import type { GraphNode, Connection, Edge, GraphEdge, Node } from '@vue-flow/core';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 
-const acceptedMapping: Record<string, string[]> = {
+const acceptedMapping = {
     prompt: ['prompt'],
     context: ['textToText', 'parallelization', 'routing', 'contextMerger'],
     attachment: ['filePrompt', 'github'],
-};
+} satisfies Record<string, string[]>;
 
 export const isSourceNodeTypeCompatibleWithTargetHandle = (
     sourceNodeType?: string,
@@ -20,7 +20,7 @@ export const isSourceNodeTypeCompatibleWithTargetHandle = (
     return acceptedMapping[targetType]?.includes(sourceNodeType) ?? false;
 };
 
-export const isDuplicateConnection = (existingEdges: GraphEdge[], candidate: Connection): boolean =>
+export const isDuplicateConnection = (existingEdges: Edge[], candidate: Connection): boolean =>
     existingEdges.some(
         (edge) =>
             edge.source === candidate.source &&
@@ -32,18 +32,18 @@ export const isDuplicateConnection = (existingEdges: GraphEdge[], candidate: Con
 export const useEdgeCompatibility = () => {
     const { warning } = useToast();
 
-    const acceptMultipleInputEdges: Record<NodeCategoryEnum, boolean> = {
+    const acceptMultipleInputEdges = {
         [NodeCategoryEnum.PROMPT]: false,
         [NodeCategoryEnum.CONTEXT]: false,
         [NodeCategoryEnum.ATTACHMENT]: true,
-    };
+    } satisfies Record<NodeCategoryEnum, boolean>;
 
     const acceptsMultipleInputEdges = (
         handleCategory: string,
         targetNodeType?: string,
         explicitMultiple = false,
     ): boolean =>
-        acceptMultipleInputEdges[handleCategory as NodeCategoryEnum] ||
+        handleCategory === NodeCategoryEnum.ATTACHMENT ||
         explicitMultiple ||
         (handleCategory === NodeCategoryEnum.CONTEXT &&
             targetNodeType === NodeTypeEnum.CONTEXT_MERGER);
@@ -62,7 +62,7 @@ export const useEdgeCompatibility = () => {
      */
     const checkEdgeCompatibility = (
         connection: Connection,
-        getNodes: GraphNode[],
+        getNodes: Node[],
         showWarning = true,
     ): boolean => {
         const sourceNode = getNodes.find((node) => node.id === connection.source);

@@ -1,4 +1,4 @@
-import { useVueFlow, type GraphNode, type HandleElement } from '@vue-flow/core';
+import { type GraphNode } from '@vue-flow/core';
 import { SpatialBucketIndex } from '@/utils/spatialIndex';
 
 export interface SnappedHandle {
@@ -38,7 +38,7 @@ export const useEdgeSnapping = () => {
         pendingMousePosition.value = null;
         pendingGraphId.value = null;
 
-        if (animationFrameId.value !== null && typeof window !== 'undefined') {
+        if (animationFrameId.value !== null && !isRuntimeUndefined(window)) {
             window.cancelAnimationFrame(animationFrameId.value);
         }
 
@@ -102,7 +102,7 @@ export const useEdgeSnapping = () => {
             return index;
         }
 
-        const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, getEdges } = useGraphFlow('main-graph-' + graphId);
         const nodes = getNodes.value;
         const nodeMap = new Map(nodes.map((node) => [node.id, node]));
         const absolutePositionCache = new Map<string, { x: number; y: number }>();
@@ -124,12 +124,12 @@ export const useEdgeSnapping = () => {
         for (const node of nodes) {
             if (node.id === sourceNodeId || !node.handleBounds) continue;
 
-            const handles = node.handleBounds[targetType] as HandleElement[] | undefined;
+            const handles = node.handleBounds[targetType];
             if (!handles?.length) continue;
 
             if (
                 fixedTargetHandleId &&
-                !isSourceNodeTypeCompatibleWithTargetHandle(node.type as string, fixedTargetHandleId)
+                !isSourceNodeTypeCompatibleWithTargetHandle(runtimeString(node.type), fixedTargetHandleId)
             ) {
                 continue;
             }
@@ -140,7 +140,7 @@ export const useEdgeSnapping = () => {
                 if (
                     sourceType === 'source' &&
                     !isSourceNodeTypeCompatibleWithTargetHandle(
-                        sourceNode.type as string,
+                        runtimeString(sourceNode.type),
                         handle.id,
                     )
                 ) {
@@ -208,7 +208,7 @@ export const useEdgeSnapping = () => {
             return;
         }
 
-        if (typeof window === 'undefined') {
+        if (isRuntimeUndefined(window)) {
             updateNearestHandle(mousePos, graphId);
             return;
         }

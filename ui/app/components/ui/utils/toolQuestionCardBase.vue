@@ -2,6 +2,7 @@
 import type {
     ToolQuestionAnswer,
     ToolQuestionAnswerMap,
+    ToolQuestionAnswerValue,
     ToolQuestionArguments,
     ToolQuestionInputType,
     ToolQuestionOption,
@@ -12,15 +13,15 @@ import type {
 type QuestionCardDetail = {
     id?: string | null;
     status: string;
-    arguments: Record<string, unknown> | unknown[];
-    result: Record<string, unknown> | unknown[];
+    arguments: JsonObject | unknown[];
+    result: JsonObject | unknown[];
 };
 
 type AnsweredItem = {
     id: string;
     question: string;
     input_type: ToolQuestionInputType;
-    answer: Record<string, unknown>;
+    answer: JsonObject;
 };
 
 const props = defineProps<{
@@ -52,11 +53,11 @@ const localError = ref('');
 const isExpanded = ref(false);
 
 const detailSessionKey = computed(() => {
-    const detailId = typeof props.detail.id === 'string' ? props.detail.id : '';
+    const detailId = isRuntimeString(props.detail.id) ? props.detail.id : '';
     return `${detailId}:${props.detail.status}`;
 });
 
-const normalizeInputType = (value: unknown): ToolQuestionInputType | null => {
+const normalizeInputType = (value: RuntimeValue): ToolQuestionInputType | null => {
     if (
         value === 'single_select' ||
         value === 'multi_select' ||
@@ -69,21 +70,21 @@ const normalizeInputType = (value: unknown): ToolQuestionInputType | null => {
     return null;
 };
 
-const normalizeOptions = (value: unknown): ToolQuestionOption[] | undefined => {
+const normalizeOptions = (value: RuntimeValue): ToolQuestionOption[] | undefined => {
     if (!Array.isArray(value)) {
         return undefined;
     }
 
     const options = value
         .map((option) => {
-            if (!option || typeof option !== 'object') {
+            if (!isJsonObject(option)) {
                 return null;
             }
 
-            const optionRecord = option as Record<string, unknown>;
+            const optionRecord = option;
 
-            const label = typeof optionRecord.label === 'string' ? optionRecord.label.trim() : '';
-            const optionValue = typeof optionRecord.value === 'string' ? optionRecord.value : '';
+            const label = isRuntimeString(optionRecord.label) ? optionRecord.label.trim() : '';
+            const optionValue = isRuntimeString(optionRecord.value) ? optionRecord.value : '';
             if (!label || !optionValue) {
                 return null;
             }
@@ -92,7 +93,7 @@ const normalizeOptions = (value: unknown): ToolQuestionOption[] | undefined => {
                 label,
                 value: optionValue,
                 subtext:
-                    typeof optionRecord.subtext === 'string' ? optionRecord.subtext.trim() : null,
+                    isRuntimeString(optionRecord.subtext) ? optionRecord.subtext.trim() : null,
             };
 
             return normalizedOption;
@@ -102,40 +103,40 @@ const normalizeOptions = (value: unknown): ToolQuestionOption[] | undefined => {
     return options.length ? options : undefined;
 };
 
-const normalizeValidation = (value: unknown): ToolQuestionValidation | undefined => {
-    if (!value || typeof value !== 'object') {
+const normalizeValidation = (value: RuntimeValue): ToolQuestionValidation | undefined => {
+    if (!isJsonObject(value)) {
         return undefined;
     }
 
-    const validationRecord = value as Record<string, unknown>;
+    const validationRecord = value;
 
     return {
         placeholder:
-            typeof validationRecord.placeholder === 'string' ? validationRecord.placeholder : null,
+            isRuntimeString(validationRecord.placeholder) ? validationRecord.placeholder : null,
     };
 };
 
-const normalizeQuestion = (value: unknown, index: number): ToolQuestionStep | null => {
-    if (!value || typeof value !== 'object') {
+const normalizeQuestion = (value: RuntimeValue, index: number): ToolQuestionStep | null => {
+    if (!isJsonObject(value)) {
         return null;
     }
 
-    const questionRecord = value as Record<string, unknown>;
+    const questionRecord = value;
     const inputType = normalizeInputType(questionRecord.input_type);
     const question =
-        typeof questionRecord.question === 'string' ? questionRecord.question.trim() : '';
+        isRuntimeString(questionRecord.question) ? questionRecord.question.trim() : '';
     if (!inputType || !question) {
         return null;
     }
 
     const normalizedQuestion: ToolQuestionStep = {
         id:
-            typeof questionRecord.id === 'string' && questionRecord.id.trim()
+            isRuntimeString(questionRecord.id) && questionRecord.id.trim()
                 ? questionRecord.id.trim()
                 : `question_${index + 1}`,
         question,
         input_type: inputType,
-        help_text: typeof questionRecord.help_text === 'string' ? questionRecord.help_text : null,
+        help_text: isRuntimeString(questionRecord.help_text) ? questionRecord.help_text : null,
         options: normalizeOptions(questionRecord.options),
         allow_other: questionRecord.allow_other === true,
         validation: normalizeValidation(questionRecord.validation),
@@ -144,13 +145,13 @@ const normalizeQuestion = (value: unknown, index: number): ToolQuestionStep | nu
     return normalizedQuestion;
 };
 
-const normalizeToolQuestionArguments = (value: unknown): ToolQuestionArguments | null => {
-    if (!value || Array.isArray(value) || typeof value !== 'object') {
+const normalizeToolQuestionArguments = (value: RuntimeValue): ToolQuestionArguments | null => {
+    if (!isJsonObject(value)) {
         return null;
     }
 
-    const argumentRecord = value as Record<string, unknown>;
-    const title = typeof argumentRecord.title === 'string' ? argumentRecord.title : null;
+    const argumentRecord = value;
+    const title = isRuntimeString(argumentRecord.title) ? argumentRecord.title : null;
     const questions = Array.isArray(argumentRecord.questions)
         ? argumentRecord.questions
               .map((question, index) => normalizeQuestion(question, index))
@@ -175,8 +176,8 @@ const normalizeToolQuestionArguments = (value: unknown): ToolQuestionArguments |
     };
 };
 
-const formatAnswerSummary = (answer: Record<string, unknown>): string => {
-    if (typeof answer.other_text === 'string' && answer.other_text.trim()) {
+const formatAnswerSummary = (answer: JsonObject): string => {
+    if (isRuntimeString(answer.other_text) && answer.other_text.trim()) {
         if (Array.isArray(answer.labels)) {
             return answer.labels
                 .filter((label): label is string => typeof label === 'string')
@@ -188,7 +189,7 @@ const formatAnswerSummary = (answer: Record<string, unknown>): string => {
                 .join(', ');
         }
 
-        if (typeof answer.label === 'string' && answer.label === OTHER_OPTION_LABEL) {
+        if (isRuntimeString(answer.label) && answer.label === OTHER_OPTION_LABEL) {
             return `${OTHER_OPTION_LABEL}: ${answer.other_text}`;
         }
     }
@@ -199,7 +200,7 @@ const formatAnswerSummary = (answer: Record<string, unknown>): string => {
             .join(', ');
     }
 
-    if (typeof answer.label === 'string') {
+    if (isRuntimeString(answer.label)) {
         return answer.label;
     }
 
@@ -209,54 +210,52 @@ const formatAnswerSummary = (answer: Record<string, unknown>): string => {
             .join(', ');
     }
 
-    if (typeof answer.value === 'boolean') {
+    if (isRuntimeBoolean(answer.value)) {
         return answer.value ? 'Yes' : 'No';
     }
 
-    if (typeof answer.value === 'string') {
+    if (isRuntimeString(answer.value)) {
         return answer.value;
     }
 
     return '';
 };
 
-const getAnswerNote = (answer: Record<string, unknown>): string => {
-    if (typeof answer.note !== 'string') {
+const getAnswerNote = (answer: JsonObject): string => {
+    if (!isRuntimeString(answer.note)) {
         return '';
     }
 
     return answer.note.trim();
 };
 
-const normalizeAnsweredItems = (result: unknown): AnsweredItem[] => {
-    if (!result || Array.isArray(result) || typeof result !== 'object') {
+const normalizeAnsweredItems = (result: RuntimeValue): AnsweredItem[] => {
+    if (!isJsonObject(result)) {
         return [];
     }
 
-    const resultRecord = result as Record<string, unknown>;
+    const resultRecord = result;
 
     if (Array.isArray(resultRecord.answers)) {
         return resultRecord.answers
             .map((item, index) => {
-                if (!item || typeof item !== 'object') {
+                if (!isJsonObject(item)) {
                     return null;
                 }
 
-                const itemRecord = item as Record<string, unknown>;
+                const itemRecord = item;
                 const inputType = normalizeInputType(itemRecord.input_type);
                 if (
-                    typeof itemRecord.question !== 'string' ||
+                    !isRuntimeString(itemRecord.question) ||
                     !inputType ||
-                    !itemRecord.answer ||
-                    Array.isArray(itemRecord.answer) ||
-                    typeof itemRecord.answer !== 'object'
+                    !isJsonObject(itemRecord.answer)
                 ) {
                     return null;
                 }
 
                 return {
                     id:
-                        typeof itemRecord.id === 'string' && itemRecord.id.trim()
+                        isRuntimeString(itemRecord.id) && itemRecord.id.trim()
                             ? itemRecord.id.trim()
                             : `question_${index + 1}`,
                     question: itemRecord.question,
@@ -269,18 +268,16 @@ const normalizeAnsweredItems = (result: unknown): AnsweredItem[] => {
 
     const inputType = normalizeInputType(resultRecord.input_type);
     if (
-        typeof resultRecord.question === 'string' &&
+        isRuntimeString(resultRecord.question) &&
         inputType &&
-        resultRecord.answer &&
-        !Array.isArray(resultRecord.answer) &&
-        typeof resultRecord.answer === 'object'
+        isJsonObject(resultRecord.answer)
     ) {
         return [
             {
                 id: 'question_1',
                 question: resultRecord.question,
                 input_type: inputType,
-                answer: resultRecord.answer as Record<string, unknown>,
+                answer: resultRecord.answer,
             },
         ];
     }
@@ -341,12 +338,12 @@ const cardTitle = computed(() => {
 
 const resultErrorMessage = computed(() => {
     const result = props.detail.result;
-    if (!result || Array.isArray(result) || typeof result !== 'object') {
+    if (!isJsonObject(result)) {
         return 'This question can no longer accept an answer.';
     }
 
-    const error = (result as Record<string, unknown>).error;
-    return typeof error === 'string' && error
+    const error = result.error;
+    return isRuntimeString(error) && error
         ? error
         : 'This question can no longer accept an answer.';
 });
@@ -415,7 +412,7 @@ const getDraftQuestionAnswerPayload = (question: ToolQuestionStep): ToolQuestion
             };
         }
 
-        if (typeof payload === 'string' || typeof payload === 'boolean') {
+        if (isRuntimeString(payload) || isRuntimeBoolean(payload)) {
             return {
                 value: payload,
                 note,
@@ -490,7 +487,7 @@ const getQuestionAnswerPayload = (
             };
         }
 
-        if (typeof payload === 'string' || typeof payload === 'boolean') {
+        if (isRuntimeString(payload) || isRuntimeBoolean(payload)) {
             return {
                 value: payload,
                 note,
@@ -672,9 +669,11 @@ const toggleMultiValue = (questionId: string, value: string, checked: boolean) =
     };
 };
 
-const isAnswerRecord = (answer: ToolQuestionAnswer | null | undefined): answer is Record<string, unknown> => {
-    return !!answer && !Array.isArray(answer) && typeof answer === 'object';
-};
+type ToolQuestionAnswerRecord = Exclude<ToolQuestionAnswer, ToolQuestionAnswerValue>;
+
+const isAnswerRecord = (
+    answer: ToolQuestionAnswer | null | undefined,
+): answer is ToolQuestionAnswerRecord => isRuntimeObject(answer) && !Array.isArray(answer);
 
 const applyDraftAnswer = (
     question: ToolQuestionStep,
@@ -691,25 +690,25 @@ const applyDraftAnswer = (
         return;
     }
 
-    if (isAnswerRecord(answer) && typeof answer.note === 'string') {
+    if (isAnswerRecord(answer) && isRuntimeString(answer.note)) {
         nextNoteValues[question.id] = answer.note;
         nextNoteEditorOpen[question.id] = !!answer.note.trim();
     }
 
     switch (question.input_type) {
         case 'boolean':
-            if (typeof answer === 'boolean') {
+            if (isRuntimeBoolean(answer)) {
                 nextBooleanValues[question.id] = answer;
-            } else if (isAnswerRecord(answer) && typeof answer.value === 'boolean') {
+            } else if (isAnswerRecord(answer) && isRuntimeBoolean(answer.value)) {
                 nextBooleanValues[question.id] = answer.value;
             }
             break;
         case 'single_select':
-            if (typeof answer === 'string') {
+            if (isRuntimeString(answer)) {
                 nextSingleValues[question.id] = answer;
-            } else if (isAnswerRecord(answer) && typeof answer.value === 'string') {
+            } else if (isAnswerRecord(answer) && isRuntimeString(answer.value)) {
                 nextSingleValues[question.id] = answer.value;
-                if (typeof answer.other_text === 'string') {
+                if ('other_text' in answer && isRuntimeString(answer.other_text)) {
                     nextOtherTextValues[question.id] = answer.other_text;
                 }
             }
@@ -717,21 +716,21 @@ const applyDraftAnswer = (
         case 'multi_select':
             if (Array.isArray(answer)) {
                 nextMultiValues[question.id] = answer.filter(
-                    (value): value is string => typeof value === 'string',
+                    isRuntimeString,
                 );
             } else if (isAnswerRecord(answer) && Array.isArray(answer.values)) {
                 nextMultiValues[question.id] = answer.values.filter(
-                    (value): value is string => typeof value === 'string',
+                    isRuntimeString,
                 );
-                if (typeof answer.other_text === 'string') {
+                if ('other_text' in answer && isRuntimeString(answer.other_text)) {
                     nextOtherTextValues[question.id] = answer.other_text;
                 }
             }
             break;
         case 'text':
-            if (typeof answer === 'string') {
+            if (isRuntimeString(answer)) {
                 nextTextValues[question.id] = answer;
-            } else if (isAnswerRecord(answer) && typeof answer.value === 'string') {
+            } else if (isAnswerRecord(answer) && isRuntimeString(answer.value)) {
                 nextTextValues[question.id] = answer.value;
             }
             break;

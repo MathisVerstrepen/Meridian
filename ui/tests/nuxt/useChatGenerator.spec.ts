@@ -29,13 +29,11 @@ const stubs = vi.hoisted(() => ({
     error: vi.fn(),
 }));
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({
+mockNuxtImport('useGraphFlow', () => () => ({
         getNodes: {
             value: [{ id: 'generator-node-id', data: { model: 'test-model' } }],
         },
-    }),
-}));
+    }));
 
 mockNuxtImport('useChatStore', () => () => ({
     storeKind: 'chat',
@@ -122,7 +120,9 @@ describe('useChatGenerator prompt identity', () => {
 
     it('stores both identities on a fresh follow-up while executing from the generator', async () => {
         const { session, generator } = setupGenerator([]);
-        generator.selectedNodeType.value = { nodeType: NodeTypeEnum.TEXT_TO_TEXT } as never;
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
 
         await generator.generateNew(null, {
             message: 'Fresh prompt',

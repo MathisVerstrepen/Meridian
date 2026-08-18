@@ -77,12 +77,12 @@ const fetchAndCreateBlobUrl = async (url: string) => {
 };
 
 const onImageLoad = (event: Event) => {
-    const img = event.target as HTMLImageElement;
+    const img = requireElement(event.target, HTMLImageElement);
     dimensions.value = `${img.naturalWidth}x${img.naturalHeight}`;
 };
 
 const onVideoMetadata = (event: Event) => {
-    const video = event.target as HTMLVideoElement;
+    const video = requireElement(event.target, HTMLVideoElement);
     dimensions.value = `${video.videoWidth}x${video.videoHeight}`;
 };
 

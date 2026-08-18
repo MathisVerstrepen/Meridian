@@ -58,13 +58,13 @@ const slots = useSlots();
 
 const modalId = `modal-${Math.random().toString(36).slice(2, 10)}`;
 
-const sizeClasses: Record<ModalSize, string> = {
+const sizeClasses = {
     sm: 'max-w-md',
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-6xl',
     fullscreen: 'max-w-7xl',
-};
+} satisfies Record<ModalSize, string>;
 
 const hasHeader = computed(() => Boolean(slots.header || props.title || props.description));
 const hasFooter = computed(() => Boolean(slots.footer));

@@ -4,8 +4,8 @@ definePageMeta({
 });
 
 const route = useRoute();
-const username = ref<string>((route.query.username as string) || '');
-const reason = ref<string>((route.query.reason as string) || 'unverified');
+const username = ref(firstRouteString(route.query.username) ?? '');
+const reason = ref(firstRouteString(route.query.reason) ?? 'unverified');
 const password = ref('');
 const email = ref('');
 const errorMessage = ref<string | null>(null);
@@ -55,11 +55,10 @@ const updateEmail = async () => {
         await navigateTo(`/auth/verify?email=${encodeURIComponent(email.value.trim())}`);
     } catch (error: unknown) {
         isLoading.value = false;
-        const err = error as { response?: { status?: number }; data?: { message?: string } };
-        if (err.response?.status === 429) {
+        if (runtimeErrorStatus(error) === 429) {
             errorMessage.value = 'Too many attempts. Please try again later.';
         } else {
-            errorMessage.value = err.data?.message || 'Failed to update email.';
+            errorMessage.value = runtimeErrorDetail(error) || 'Failed to update email.';
         }
     }
 };

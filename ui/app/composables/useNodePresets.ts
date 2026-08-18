@@ -1,17 +1,18 @@
 import {
-    useVueFlow,
     type Connection,
     type Edge,
-    type GraphEdge,
-    type GraphNode,
     type Node,
 } from '@vue-flow/core';
 
 import { isDuplicateConnection } from '@/composables/useEdgeCompatibility';
 import { NodeTypeEnum } from '@/types/enums';
-import type { NodePreset, NodePresetNodeType } from '@/types/nodePresets';
-import type { User } from '@/types/user';
+import {
+    isNodePresetNodeType,
+    type NodePreset,
+    type NodePresetNodeType,
+} from '@/types/nodePresets';
 import { materializeNodePreset, validateNodePresetSettings } from '@/utils/nodePresets';
+import type { NodePresetRuntimeDefaults } from '@/utils/nodePresets/contracts';
 
 export interface PlaceableNodePreset {
     preset: NodePreset;
@@ -27,16 +28,16 @@ export function useNodePresets(graphId: Ref<string>) {
     const { resolveOverlaps } = useGraphOverlaps(graphId);
     const { error } = useToast();
     const flowId = 'main-graph-' + graphId.value;
-    const { getNodes, addNodes, addEdges, removeNodes, removeEdges } = useVueFlow(flowId);
+    const { getNodes, addNodes, addEdges, removeNodes, removeEdges } = useGraphFlow(flowId);
 
-    const isFreePlan = computed(() => (user.value as User | null)?.plan_type === 'free');
+    const isFreePlan = computed(() => (user.value)?.plan_type === 'free');
     const placeablePresets = computed<PlaceableNodePreset[]>(() => {
         const settings = settingsStore.nodePresetSettings;
         const collectionValidation = validateNodePresetSettings(settings);
         const invalidIndexes = new Set<number>();
         let collectionInvalid = false;
         for (const issue of collectionValidation.issues) {
-            if (issue.path[0] === 'presets' && typeof issue.path[1] === 'number') {
+            if (issue.path[0] === 'presets' && isRuntimeNumber(issue.path[1])) {
                 invalidIndexes.add(issue.path[1]);
             } else {
                 collectionInvalid = true;
@@ -57,20 +58,22 @@ export function useNodePresets(graphId: Ref<string>) {
         });
     });
 
-    const dataDefaults = (): Partial<Record<NodePresetNodeType, Record<string, unknown>>> => {
-        const defaults: Partial<Record<NodePresetNodeType, Record<string, unknown>>> = {};
+    const dataDefaults = () => {
+        const defaults: Partial<Record<NodePresetNodeType, NodePresetRuntimeDefaults>> = {};
         for (const type of Object.values(NodeTypeEnum)) {
             const definition = getBlockByNodeType(type);
             if (!definition) continue;
-            defaults[type as NodePresetNodeType] = structuredClone(
-                toRaw(definition.defaultData),
-            ) as unknown as Record<string, unknown>;
+            if (definition.defaultData && isNodePresetNodeType(type)) {
+                Object.assign(defaults, {
+                    [type]: structuredClone(toRaw(definition.defaultData)),
+                });
+            }
         }
         return defaults;
     };
 
-    const edgesAreCompatible = (nodes: GraphNode[], edges: Edge[]): boolean => {
-        const accepted: GraphEdge[] = [];
+    const edgesAreCompatible = (nodes: Node[], edges: Edge[]): boolean => {
+        const accepted: Edge[] = [];
         for (const edge of edges) {
             const connection: Connection = {
                 source: edge.source,
@@ -84,7 +87,7 @@ export function useNodePresets(graphId: Ref<string>) {
             ) {
                 return false;
             }
-            accepted.push(edge as GraphEdge);
+            accepted.push(edge);
         }
         return true;
     };
@@ -122,9 +125,9 @@ export function useNodePresets(graphId: Ref<string>) {
         }
 
         const placement = materialized.value;
-        const nodes = placement.nodes as Node[];
-        const edges = placement.edges as Edge[];
-        if (!edgesAreCompatible(nodes as GraphNode[], edges)) {
+        const nodes = placement.nodes;
+        const edges = placement.edges;
+        if (!edgesAreCompatible(nodes, edges)) {
             error('This preset contains incompatible connections.', {
                 title: 'Preset Unavailable',
             });

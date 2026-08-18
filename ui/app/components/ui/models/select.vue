@@ -6,6 +6,7 @@ import {
     MODEL_DROPDOWN_ALL_SECTION_ID,
     MODEL_DROPDOWN_PINNED_SECTION_ID,
     SUBSCRIPTION_PROVIDER_META,
+    isSubscriptionInferenceProvider,
     normalizeModelDropdownSectionOrder,
     parseSubscriptionSectionId,
     type SubscriptionInferenceProvider,
@@ -88,12 +89,15 @@ let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
 let panelResizeObserver: ResizeObserver | null = null;
 
-const compatibilityOptions = computed(() => ({
-    outputModality: (props.onlyImageModels
+type CompatibilityOptions = NonNullable<
+    Parameters<typeof modelStore.filterCompatibleModels>[1]
+>;
+const compatibilityOptions = computed<CompatibilityOptions>(() => ({
+    outputModality: props.onlyImageModels
         ? 'image'
         : props.onlyVideoModels
           ? 'video'
-          : 'text') as 'image' | 'text' | 'video',
+          : 'text',
     requireStructuredOutputs: props.requireStructuredOutputs,
     requireMeridianTools: props.requireMeridianTools,
     requiredToolNames: props.requiredToolNames,
@@ -200,7 +204,8 @@ const subscriptionModelsByProvider = computed(() => {
     }
 
     for (const model of filteredSubscriptionModels.value) {
-        const provider = model.provider as SubscriptionInferenceProvider;
+        const provider = model.provider;
+        if (!isSubscriptionInferenceProvider(provider)) continue;
         if (!groups.has(provider)) {
             continue;
         }
@@ -323,14 +328,14 @@ const getTransformationPaneZoom = () => {
     }
 };
 
-const setPanelRef = (panel: unknown) => {
+const setPanelRef = (panel: RuntimeValue) => {
     if (panel instanceof HTMLElement) {
         panelRef.value = panel;
         return;
     }
 
     panelRef.value =
-        panel && typeof panel === 'object' && '$el' in panel && panel.$el instanceof HTMLElement
+        panel && isRuntimeObject(panel) && '$el' in panel && panel.$el instanceof HTMLElement
             ? panel.$el
             : null;
 };
@@ -418,7 +423,7 @@ const handleTriggerClick = (event: MouseEvent) => {
         return;
     }
 
-    const target = event.target as HTMLElement | null;
+    const target = elementOrNull(event.target, HTMLElement);
     const chevronButton = triggerEl.querySelector('button');
     if (!chevronButton || !target) {
         return;
@@ -452,9 +457,14 @@ const jumpToSubscriptionSection = (sectionId: string) => {
     scrollerRef.value?.scrollToItem(targetIndex);
 };
 
-const getPinShortcutTargetModel = (activeOption: unknown) => {
-    if (activeOption && typeof activeOption === 'object' && 'id' in activeOption) {
-        return activeOption as ModelInfo;
+const getPinShortcutTargetModel = (activeOption: RuntimeValue) => {
+    if (
+        activeOption &&
+        isRuntimeObject(activeOption) &&
+        'id' in activeOption &&
+        isRuntimeString(activeOption.id)
+    ) {
+        return { id: activeOption.id };
     }
 
     return selected.value;
@@ -476,7 +486,7 @@ const togglePinnedModel = (modelId: string) => {
     pinnedModels.splice(existingIndex, 1);
 };
 
-const handlePinShortcut = (event: KeyboardEvent, activeOption: unknown) => {
+const handlePinShortcut = (event: KeyboardEvent, activeOption: RuntimeValue) => {
     if (
         props.disabled ||
         event.altKey ||
@@ -497,7 +507,7 @@ const handlePinShortcut = (event: KeyboardEvent, activeOption: unknown) => {
     togglePinnedModel(targetModel.id);
 };
 
-const getPinShortcutActionLabel = (activeOption: unknown) => {
+const getPinShortcutActionLabel = (activeOption: RuntimeValue) => {
     const targetModel = getPinShortcutTargetModel(activeOption);
 
     if (!targetModel) {

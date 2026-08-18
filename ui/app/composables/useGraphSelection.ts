@@ -56,7 +56,7 @@ export function useGraphSelection(
         panBy({ x: direction === 'left' ? -PAN_SPEED : PAN_SPEED, y: 0 });
         panOffset.value.x += direction === 'left' ? PAN_SPEED : -PAN_SPEED;
         if (lastMouseEvent.value) {
-            updateSelectionRect(lastMouseEvent.value as MouseEvent);
+            updateSelectionRect(lastMouseEvent.value);
         }
         panAnimationId.value = requestAnimationFrame(() => panStep(direction));
     };
@@ -89,7 +89,7 @@ export function useGraphSelection(
         isSelecting.value = false;
 
         window.removeEventListener('mousemove', onSelectionMove);
-        window.removeEventListener('mouseup', onSelectionEnd as EventListener);
+        window.removeEventListener('mouseup', onSelectionEnd);
 
         panOffset.value = { x: 0, y: 0 };
 
@@ -171,7 +171,7 @@ export function useGraphSelection(
         updateSelectionRect(event);
 
         window.addEventListener('mousemove', onSelectionMove);
-        window.addEventListener('mouseup', onSelectionEnd as EventListener);
+        window.addEventListener('mouseup', onSelectionEnd);
 
         if (currentMoveEvent) {
             onSelectionMove(currentMoveEvent);
@@ -180,7 +180,7 @@ export function useGraphSelection(
 
     onUnmounted(() => {
         window.removeEventListener('mousemove', onSelectionMove);
-        window.removeEventListener('mouseup', onSelectionEnd as EventListener);
+        window.removeEventListener('mouseup', onSelectionEnd);
     });
 
     return {

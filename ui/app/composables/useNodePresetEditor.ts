@@ -1,4 +1,4 @@
-import { useVueFlow, type Connection, type Edge, type GraphNode, type Node } from '@vue-flow/core';
+import { type Connection, type Edge, type GraphNode, type Node } from '@vue-flow/core';
 
 import { isDuplicateConnection } from '@/composables/useEdgeCompatibility';
 import {
@@ -17,17 +17,16 @@ interface UseNodePresetEditorOptions {
     flowId: string;
 }
 
-const cloneRecord = (value: object): Record<string, unknown> =>
-    structuredClone(toRaw(value)) as unknown as Record<string, unknown>;
+const cloneRecord = <Value extends object>(value: Value): Value => structuredClone(toRaw(value));
 
 const renderedDimension = (
     node: GraphNode,
     dimension: 'width' | 'height',
 ): number => {
     const rendered = node.dimensions[dimension];
-    if (typeof rendered === 'number' && Number.isFinite(rendered)) return rendered;
+    if (isRuntimeNumber(rendered) && Number.isFinite(rendered)) return rendered;
     const configured = node[dimension];
-    return typeof configured === 'number' && Number.isFinite(configured) ? configured : 0;
+    return isRuntimeNumber(configured) && Number.isFinite(configured) ? configured : 0;
 };
 
 const edgeCategory = (connection: Connection): NodePresetEdgeCategory | null => {
@@ -53,7 +52,7 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
         removeNodes,
         removeEdges,
         fitView,
-    } = useVueFlow(options.flowId);
+    } = useGraphFlow(options.flowId);
 
     const isHydrating = ref(true);
     const validationIssues = ref<NodePresetValidationIssue[]>([]);
@@ -61,25 +60,27 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
 
     const runtimeData = (
         type: NodePresetNodeType,
-        configured: Record<string, unknown>,
-    ): Record<string, unknown> => {
-        const definition = getBlockByNodeType(type as Parameters<typeof getBlockByNodeType>[0]);
-        const merged = { ...(definition?.defaultData ?? {}), ...cloneRecord(configured) };
+        configured: NodePreset['nodes'][number]['data'],
+    ) => {
+        const runtimeType = nodeTypeOrUndefined(type);
+        const definition = runtimeType ? getBlockByNodeType(runtimeType) : undefined;
+        const merged = { ...definition?.defaultData, ...cloneRecord(configured) };
         if (type === 'textToText') {
             return { ...merged, reply: '', usageData: null, activeGenerationHistoryId: undefined };
         }
-        if (type === 'parallelization') {
-            const models = Array.isArray(configured.models) ? configured.models : [];
-            const aggregator = configured.aggregator as Record<string, unknown> | undefined;
+        if (type === 'parallelization' && 'models' in configured && 'aggregator' in configured) {
+            const data = configured;
+            const models = data.models;
+            const aggregator = data.aggregator;
             return {
                 ...merged,
                 models: models.map((model) => ({
-                    ...(model as Record<string, unknown>),
+                    ...model,
                     id: generateId(),
                     reply: '',
                     usageData: null,
                 })),
-                aggregator: { ...(aggregator ?? {}), reply: '', usageData: null },
+                aggregator: { ...aggregator, reply: '', usageData: null },
                 activeGenerationHistoryId: undefined,
             };
         }
@@ -93,14 +94,14 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
                 activeGenerationHistoryId: undefined,
             };
         }
-        if (type === 'github') {
+        if (type === 'github' && 'files' in configured) {
+            const data = configured;
             return {
                 ...merged,
-                files: Array.isArray(configured.files)
-                    ? configured.files.map((file) => ({
-                          ...(file as Record<string, unknown>),
-                          children: [],
-                      }))
+                files: Array.isArray(data.files)
+                    ? data.files.map((file) =>
+                          isJsonObject(file) ? { ...file, children: [] } : { children: [] },
+                      )
                     : [],
             };
         }
@@ -112,21 +113,22 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
         isHydrating.value = true;
         const preset = options.preset.value;
         const nodes = preset.nodes
-            .map(
-                (node): Node => ({
+            .map((node): Node => {
+                const hydratedNode = {
                     id: node.id,
                     type: node.type,
                     position: { ...node.position },
                     width: node.width,
                     height: node.height,
                     style: { width: `${node.width}px`, height: `${node.height}px` },
-                    ...(node.parentId
-                        ? { parentNode: node.parentId, expandParent: true }
-                        : {}),
-                    ...(node.type === 'group' ? { zIndex: -1 } : {}),
-                    data: runtimeData(node.type, node.data as unknown as Record<string, unknown>),
-                }),
-            )
+                    data: runtimeData(node.type, node.data),
+                };
+                if (node.parentId) {
+                    Object.assign(hydratedNode, { parentNode: node.parentId, expandParent: true });
+                }
+                if (node.type === 'group') Object.assign(hydratedNode, { zIndex: -1 });
+                return hydratedNode;
+            })
             .sort((left, right) => Number(right.type === 'group') - Number(left.type === 'group'));
         const edges: Edge[] = preset.edges.map((edge) => ({
             id: edge.id,
@@ -149,8 +151,8 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
             id: options.preset.value.id,
             name: options.preset.value.name,
             accentColor: options.preset.value.accentColor,
-            nodes: getNodes.value as unknown as Record<string, unknown>[],
-            edges: getEdges.value as unknown as Record<string, unknown>[],
+            nodes: getNodes.value,
+            edges: getEdges.value,
         });
         validationIssues.value = result.issues;
         settingsStore.setNodePresetEditorIssues(result.issues);
@@ -206,8 +208,8 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
         if (!category || !source || !target || source.id === target.id) return false;
         const rules = NODE_PRESET_EDGE_TYPE_RULES[category];
         return (
-            rules.sources.includes(source.type as NodePresetNodeType) &&
-            rules.targets.includes(target.type as NodePresetNodeType) &&
+            rules.sources.some((type) => type === source.type) &&
+            rules.targets.some((type) => type === target.type) &&
             checkEdgeCompatibility(connection, getNodes.value, false) &&
             !isDuplicateConnection(getEdges.value, connection)
         );

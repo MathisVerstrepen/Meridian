@@ -63,15 +63,13 @@ const handleSubmit = async () => {
 
         successMessage.value = 'Password updated successfully!';
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { detail?: string } };
-
         isLoading.value = false;
-        console.error('Error resetting password:', err);
+        console.error('Error resetting password:', error);
 
-        if (err.response?.status === 401) {
+        if (runtimeErrorStatus(error) === 401) {
             errorMessage.value = 'Incorrect old password. Please try again.';
         } else {
-            errorMessage.value = err.data?.detail || 'An unexpected error occurred.';
+            errorMessage.value = runtimeErrorDetail(error) || 'An unexpected error occurred.';
         }
     }
 };

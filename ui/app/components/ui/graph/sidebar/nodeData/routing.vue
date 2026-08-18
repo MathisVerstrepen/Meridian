@@ -4,7 +4,7 @@ import type { DataRouting, SidebarNode } from '@/types/graph';
 
 defineProps<{
     node: SidebarNode<DataRouting>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
 }>();
 </script>
 

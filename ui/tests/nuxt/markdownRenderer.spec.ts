@@ -53,7 +53,7 @@ const mountRenderer = (message: Message) =>
     });
 
 const editZone = async (zone: Omit<DOMWrapper<Element>, 'exists'>, text: string) => {
-    (zone.element as HTMLElement).innerText = text;
+    requireElement(zone.element, HTMLElement).innerText = text;
     await zone.trigger('input');
     await zone.trigger('keydown', { key: 'Enter' });
 };

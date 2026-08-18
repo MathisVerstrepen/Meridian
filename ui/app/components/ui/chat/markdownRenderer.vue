@@ -133,7 +133,7 @@ type AutoToolSelectionDisplayTool = {
     icon: string;
 };
 
-const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTool> = {
+const AUTO_TOOL_SELECTION_TOOL_META = {
     [ToolEnum.WEB_SEARCH]: {
         tool: ToolEnum.WEB_SEARCH,
         label: 'Web Search',
@@ -164,7 +164,7 @@ const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTo
         label: 'Ask User',
         icon: 'LucideMessageCircleDashed',
     },
-};
+} satisfies Record<ToolEnum, AutoToolSelectionDisplayTool>;
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
@@ -404,7 +404,7 @@ const createPerfRecorder = (
     }) => void;
     finish: (status: MarkdownRendererPerfRun['status']) => void;
 } | null => {
-    if (!import.meta.dev || !import.meta.client || typeof performance === 'undefined') {
+    if (!import.meta.dev || !import.meta.client || isRuntimeUndefined(performance)) {
         return null;
     }
 
@@ -424,18 +424,14 @@ const createPerfRecorder = (
     };
 
     const getPerfStore = (): MarkdownRendererPerfStore => {
-        const perfWindow = window as typeof window & {
-            __markdownRendererPerf?: MarkdownRendererPerfStore;
-        };
-
-        if (!perfWindow.__markdownRendererPerf) {
-            perfWindow.__markdownRendererPerf = {
+        if (!window.__markdownRendererPerf) {
+            window.__markdownRendererPerf = {
                 runs: [],
                 lastRun: null,
             };
         }
 
-        return perfWindow.__markdownRendererPerf;
+        return window.__markdownRendererPerf;
     };
 
     const buildMarkName = (label: string) => `${prefix}:mark:${label}`;
@@ -610,7 +606,7 @@ const openToolCallDetail = async (
         isToolDetailOpen.value = false;
         toolDetail.value = null;
         fetchedPageSelection.value = null;
-        showError(`Failed to load tool call details: ${(error as Error).message}`);
+        showError(`Failed to load tool call details: ${runtimeErrorMessage(error)}`);
     } finally {
         isToolDetailLoading.value = false;
     }
@@ -626,7 +622,11 @@ const closeLightbox = () => {
 };
 
 // --- Logic for User Messages ---
-const extractedGithubFiles = ref<FileTreeNode[]>([]);
+interface ExtractedFileTreeNode extends FileTreeNode {
+    content: string;
+}
+
+const extractedGithubFiles = ref<ExtractedFileTreeNode[]>([]);
 const extractedGithubIssues = ref<ExtractedIssue[]>([]);
 
 const parseUserText = (content: string) => {
@@ -636,13 +636,13 @@ const parseUserText = (content: string) => {
     // 1. Extract Files
     const fileRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
     let cleaned = content.replace(fileRegex, (_match, filename: string, fileContent: string) => {
-        const file = {
+        const file: ExtractedFileTreeNode = {
             name: filename.trim().split('/').pop() || '',
             path: filename.trim(),
             type: 'file',
             content: fileContent.trim(),
             children: [],
-        } as FileTreeNode;
+        };
 
         extractedGithubFiles.value.push(file);
         return '';
@@ -655,7 +655,7 @@ const parseUserText = (content: string) => {
         issueRegex,
         (_match, type, number, title, author, state, url, body) => {
             extractedGithubIssues.value.push({
-                type: type as 'Issue' | 'Pull Request',
+                type: type === 'Issue' ? 'Issue' : 'Pull Request',
                 number,
                 title,
                 author,
@@ -674,7 +674,7 @@ const parseUserText = (content: string) => {
     return cleanedWithoutNodeIds.trim();
 };
 
-const getEditZones = (content: string): Record<string, string> => {
+const getEditZones = (content: string) => {
     const zones: Record<string, string> = {};
     const nodeIdRegex = /--- Node ID: ([a-f0-9-]+) ---/g;
     let lastIndex = 0;
@@ -707,7 +707,7 @@ const handlePaste = (event: ClipboardEvent) => {
     if (!text) return;
     document.execCommand('insertText', false, text);
 
-    const target = event.target as HTMLElement | null;
+    const target = elementOrNull(event.target, HTMLElement);
     if (activeEditNodeId.value && target) {
         editZoneDrafts.value[activeEditNodeId.value] = target.innerText;
     }
@@ -719,7 +719,7 @@ const resetEditDrafts = () => {
 };
 
 const handleEditInput = (nodeId: string, event: Event) => {
-    editZoneDrafts.value[nodeId] = (event.target as HTMLElement).innerText;
+    editZoneDrafts.value[nodeId] = (requireElement(event.target, HTMLElement)).innerText;
 };
 
 const submitEdit = (nodeId = activeEditNodeId.value) => {

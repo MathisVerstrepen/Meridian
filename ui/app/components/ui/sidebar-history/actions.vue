@@ -1,23 +1,15 @@
 <script lang="ts" setup>
 import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 
-const props = defineProps({
-    graph: {
-        type: Object as PropType<GraphSummary>,
-        required: true,
-    },
-    currentGraphId: {
-        type: String,
-        default: '',
-    },
-    folders: {
-        type: Array as PropType<Folder[]>,
-        default: () => [],
-    },
-    workspaces: {
-        type: Array as PropType<Workspace[]>,
-        default: () => [],
-    },
+const props = withDefaults(defineProps<{
+    graph: GraphSummary;
+    currentGraphId?: string;
+    folders?: Folder[];
+    workspaces?: Workspace[];
+}>(), {
+    currentGraphId: '',
+    folders: () => [],
+    workspaces: () => [],
 });
 
 const emit = defineEmits<{
@@ -99,7 +91,7 @@ const regenerateTitleItems = [
 const openUpwards = ref(false);
 
 const calculatePosition = (event: MouseEvent) => {
-    const button = event.currentTarget as HTMLElement;
+    const button = requireElement(event.currentTarget, HTMLElement);
     const rect = button.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     openUpwards.value = spaceBelow < 300;

@@ -6,16 +6,46 @@ import TextInput from '@/components/ui/chat/textInput.vue';
 import { NodeTypeEnum } from '@/types/enums';
 import type { RepoContent } from '@/types/github';
 
-const stubs = vi.hoisted(() => ({
-    uploadFile: vi.fn(),
-    getRootFolder: vi.fn(),
-    getFolderContents: vi.fn(),
-    createFolder: vi.fn(),
-    fetchUsage: vi.fn(),
-    error: vi.fn(),
-    graphEmit: vi.fn(),
-    graphOn: vi.fn(),
-}));
+const stubs = vi.hoisted(() => {
+    type AttachmentHandler = (payload: {
+        nodeId: string | null;
+        selectedFiles: FileSystemObject[];
+    }) => void;
+    type GithubHandler = (payload: {
+        target: { kind: 'chat-input' };
+        repoContent: RepoContent | null;
+    }) => void;
+    const attachmentHandlers = Array<AttachmentHandler>();
+    const githubHandlers = Array<GithubHandler>();
+    const isCallback = (value: RuntimeValue): value is CallableFunction =>
+        typeof value === 'function';
+    const graphOn = vi.fn((event: string, callback: RuntimeValue) => {
+        if (!isCallback(callback)) return () => undefined;
+        if (event === 'close-attachment-select') {
+            const handler: AttachmentHandler = (payload) => callback(payload);
+            attachmentHandlers.push(handler);
+            return () => attachmentHandlers.splice(attachmentHandlers.indexOf(handler), 1);
+        }
+        if (event === 'close-github-file-select') {
+            const handler: GithubHandler = (payload) => callback(payload);
+            githubHandlers.push(handler);
+            return () => githubHandlers.splice(githubHandlers.indexOf(handler), 1);
+        }
+        return () => undefined;
+    });
+    return {
+        uploadFile: vi.fn(),
+        getRootFolder: vi.fn(),
+        getFolderContents: vi.fn(),
+        createFolder: vi.fn(),
+        fetchUsage: vi.fn(),
+        error: vi.fn(),
+        graphEmit: vi.fn(),
+        graphOn,
+        attachmentHandlers,
+        githubHandlers,
+    };
+});
 
 mockNuxtImport('useAPI', () => () => ({
     uploadFile: stubs.uploadFile,
@@ -93,26 +123,18 @@ const dispatchDrop = (element: Element, files: File[]) => {
 };
 
 const selectCloudAttachments = (files: FileSystemObject[]) => {
-    const registration = stubs.graphOn.mock.calls.find(
-        (call) => call[0] === 'close-attachment-select',
-    );
-    const handler = registration?.[1] as
-        | ((payload: { selectedFiles: FileSystemObject[] }) => void)
-        | undefined;
-
+    const handler = stubs.attachmentHandlers.at(-1);
     if (!handler) throw new Error('Attachment selection handler was not registered');
-    handler({ selectedFiles: files });
+    handler({ nodeId: null, selectedFiles: files });
 };
 
 const closeGithubSelector = (repoContent: RepoContent | null) => {
-    const registration = stubs.graphOn.mock.calls.find(
-        (call) => call[0] === 'close-github-file-select',
-    );
-    const handler = registration?.[1] as
-        | ((payload: { target: { kind: 'chat-input' }; repoContent: RepoContent | null }) => void)
-        | undefined;
+    const handler = stubs.githubHandlers.at(-1);
     if (!handler) throw new Error('Git context selection handler was not registered');
-    handler({ target: { kind: 'chat-input' }, repoContent });
+    handler({
+        target: { kind: 'chat-input' },
+        repoContent,
+    });
 };
 
 describe('chat text input clipboard paste', () => {
@@ -132,7 +154,9 @@ describe('chat text input clipboard paste', () => {
         stubs.fetchUsage.mockReset();
         stubs.error.mockReset();
         stubs.graphEmit.mockReset();
-        stubs.graphOn.mockReset().mockReturnValue(() => undefined);
+        stubs.graphOn.mockClear();
+        stubs.attachmentHandlers.length = 0;
+        stubs.githubHandlers.length = 0;
         Object.defineProperty(document, 'execCommand', {
             value: vi.fn(() => true),
             configurable: true,
@@ -408,7 +432,9 @@ describe('chat Git context', () => {
         stubs.fetchUsage.mockReset();
         stubs.error.mockReset();
         stubs.graphEmit.mockReset();
-        stubs.graphOn.mockReset().mockReturnValue(() => undefined);
+        stubs.graphOn.mockClear();
+        stubs.attachmentHandlers.length = 0;
+        stubs.githubHandlers.length = 0;
     });
 
     it('opens targeted tabs, shows removable context, and submits then clears it', async () => {

@@ -200,7 +200,7 @@ export const useFileOperations = (
     };
 
     const handleFileUploadFromEvent = async (event: Event) => {
-        const target = event.target as HTMLInputElement;
+        const target = requireElement(event.target, HTMLInputElement);
         if (!target.files || target.files.length === 0 || !currentFolder.value) return;
 
         if (isStorageFull.value) {
@@ -235,11 +235,11 @@ export const useFileOperations = (
         }
 
         const sortedPaths = Array.from(pathsToCreate).sort((a, b) => a.length - b.length);
-        const folderIdMap: Record<string, string> = { '': currentFolder.value.id };
-        const folderLabelMap: Record<string, string> = {
+        const folderIdMap = { '': currentFolder.value.id } satisfies Record<string, string>;
+        const folderLabelMap = {
             '': getFolderLabel(currentFolder.value),
             [currentFolder.value.id]: getFolderLabel(currentFolder.value),
-        };
+        } satisfies Record<string, string>;
         const skippedFolderPaths = new Set<string>();
         const contentsCache = new Map<string, FileSystemObject[]>();
         let conflictPolicy: FileConflictPolicy | null = null;
@@ -407,10 +407,7 @@ export const useFileOperations = (
                 uploadCompletedFiles.value++;
             } catch (err) {
                 uploadFailedFiles.value++;
-                const detail =
-                    (err as { data?: { detail?: string } })?.data?.detail ||
-                    (err as { message?: string })?.message ||
-                    'Upload failed';
+                const detail = runtimeErrorDetail(err) || 'Upload failed';
                 uploadErrors.value.push({ name: file.name, message: detail });
                 console.error(`Failed to upload file ${file.name}:`, err);
                 // If storage filled up mid-batch, stop trying the remaining files.

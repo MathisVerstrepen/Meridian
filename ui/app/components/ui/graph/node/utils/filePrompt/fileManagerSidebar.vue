@@ -25,7 +25,7 @@ type StorageBreakdownMeta = {
     barClass: string;
 };
 
-const STORAGE_BREAKDOWN_META: Record<string, StorageBreakdownMeta> = {
+const STORAGE_BREAKDOWN_META = {
     generated_images: {
         label: 'Generated images',
         description: 'Images created by generation tools.',
@@ -66,7 +66,7 @@ const STORAGE_BREAKDOWN_META: Record<string, StorageBreakdownMeta> = {
         description: 'Storage that could not be classified.',
         barClass: 'bg-stone-gray/70',
     },
-};
+} satisfies Record<string, StorageBreakdownMeta>;
 
 const storageUsed = computed(() => formatFileSize(storageUsage.value.used_bytes));
 const storageTotal = computed(() => formatFileSize(storageUsage.value.limit_bytes));

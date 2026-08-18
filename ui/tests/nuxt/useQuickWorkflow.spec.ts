@@ -6,24 +6,23 @@ import type { GraphNode } from '@vue-flow/core';
 import { useQuickWorkflow } from '@/composables/useQuickWorkflow';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
+import { graphNode } from './support/graphNode';
 
-const stubs = vi.hoisted(() => ({
-    nodes: { value: [] as GraphNode[] },
+const stubs = vi.hoisted(() => {
+    const nodes: GraphNode[] = [];
+    const edges: Array<{ source: string; target: string; targetHandle?: string }> = [];
+    return {
+    nodes: { value: nodes },
     edges: {
-        value: [] as Array<{
-            source: string;
-            target: string;
-            targetHandle?: string;
-        }>,
+        value: edges,
     },
     placeBlock: vi.fn(),
     placeEdge: vi.fn(),
     resolveOverlaps: vi.fn(),
-}));
+    };
+});
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({ getNodes: stubs.nodes, getEdges: stubs.edges }),
-}));
+mockNuxtImport('useGraphFlow', () => () => ({ getNodes: stubs.nodes, getEdges: stubs.edges }));
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'graph-id' } }));
 mockNuxtImport('useGraphActions', () => () => ({
@@ -35,29 +34,28 @@ mockNuxtImport('useEdgeCompatibility', () => () => ({
 }));
 mockNuxtImport('useGraphOverlaps', () => () => ({ resolveOverlaps: stubs.resolveOverlaps }));
 mockNuxtImport('useBlocks', () => () => ({
-    getBlockByNodeType: (nodeType: NodeTypeEnum) =>
-        ({
+    getBlockByNodeType: (nodeType: NodeTypeEnum) => ({
             id: `block-${nodeType}`,
             nodeType,
             name: nodeType,
             icon: 'test',
             desc: '',
-            defaultData: {},
+            defaultData: { prompt: '', templateId: null, templateVariables: {} },
             minSize: { width: 100, height: 100 },
             color: '',
-        }) as unknown as BlockDefinition,
+        } satisfies BlockDefinition),
 }));
 
 describe('useQuickWorkflow availability', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         stubs.nodes.value = [
-            {
+            graphNode({
                 id: 'anchor',
                 type: NodeTypeEnum.TEXT_TO_TEXT,
                 position: { x: 0, y: 0 },
                 dimensions: { width: 320, height: 180 },
-            } as GraphNode,
+            }),
         ];
         stubs.edges.value = [];
         stubs.placeBlock.mockImplementation(
@@ -123,18 +121,18 @@ describe('useQuickWorkflow availability', () => {
 
     it('places a context source generator right of the rightmost direct generator child', () => {
         stubs.nodes.value.push(
-            {
+            graphNode({
                 id: 'direct-child',
                 type: NodeTypeEnum.ROUTING,
                 position: { x: 500, y: 600 },
                 dimensions: { width: 350, height: 100 },
-            } as GraphNode,
-            {
+            }),
+            graphNode({
                 id: 'descendant',
                 type: NodeTypeEnum.PARALLELIZATION,
                 position: { x: 1200, y: 1000 },
                 width: 300,
-            } as GraphNode,
+            }),
         );
         stubs.edges.value = [
             { source: 'anchor', target: 'direct-child' },

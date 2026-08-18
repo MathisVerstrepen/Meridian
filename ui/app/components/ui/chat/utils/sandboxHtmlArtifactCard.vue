@@ -66,12 +66,12 @@ const postThemeConfig = (frame: HTMLIFrameElement | null) => {
 
 const handlePreviewLoad = (event: Event) => {
     isPreviewLoading.value = false;
-    postThemeConfig((event.currentTarget as HTMLIFrameElement | null) || previewFrameRef.value);
+    postThemeConfig(elementOrNull(event.currentTarget, HTMLIFrameElement) || previewFrameRef.value);
 };
 
 const handleModalLoad = (event: Event) => {
     isModalLoading.value = false;
-    postThemeConfig((event.currentTarget as HTMLIFrameElement | null) || modalFrameRef.value);
+    postThemeConfig(elementOrNull(event.currentTarget, HTMLIFrameElement) || modalFrameRef.value);
 };
 
 const openExpandedPreview = () => {
@@ -91,7 +91,7 @@ const handleWindowMessage = (event: MessageEvent) => {
     }
 
     const payload = event.data;
-    if (!payload || payload.type !== HTML_ARTIFACT_PROMPT_TYPE || typeof payload.text !== 'string') {
+    if (!payload || payload.type !== HTML_ARTIFACT_PROMPT_TYPE || !isRuntimeString(payload.text)) {
         return;
     }
 

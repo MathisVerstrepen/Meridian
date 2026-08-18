@@ -2,12 +2,7 @@ import { ref, shallowRef } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode, Project } from '@vue-flow/core';
 import { useGraphSelection } from '@/composables/useGraphSelection';
-
-const graphNode = (node: Partial<GraphNode> & Pick<GraphNode, 'id'>): GraphNode =>
-    ({
-        position: { x: 0, y: 0 },
-        ...node,
-    }) as GraphNode;
+import { graphNode } from './support/graphNode';
 
 const dragSelection = (
     selection: ReturnType<typeof useGraphSelection>,
@@ -54,7 +49,7 @@ describe('useGraphSelection', () => {
         ]);
         const selectedCalls: GraphNode[][] = [];
         const addSelectedNodes = (selectedNodes: GraphNode[]) => selectedCalls.push(selectedNodes);
-        const project = vi.fn((point: { x: number; y: number }) => point) as Project;
+        const project: Project = vi.fn((point: { x: number; y: number }) => point);
         const selection = useGraphSelection(
             nodes,
             project,
@@ -82,10 +77,10 @@ describe('useGraphSelection', () => {
         ]);
         const selectedCalls: GraphNode[][] = [];
         const addSelectedNodes = (selectedNodes: GraphNode[]) => selectedCalls.push(selectedNodes);
-        const project = vi.fn((point: { x: number; y: number }) => ({
+        const project: Project = vi.fn((point: { x: number; y: number }) => ({
             x: point.x - 100,
             y: point.y - 100,
-        })) as Project;
+        }));
         const selection = useGraphSelection(
             nodes,
             project,
@@ -110,7 +105,7 @@ describe('useGraphSelection', () => {
         const nodes = shallowRef<GraphNode[]>([]);
         const selection = useGraphSelection(
             nodes,
-            ((point: { x: number; y: number }) => point) as Project,
+            (point: { x: number; y: number }) => point,
             vi.fn(),
             vi.fn(() => true),
             ref(false),

@@ -81,12 +81,13 @@ export const startBrowserDiagnostics = (page: Page): BrowserDiagnosticsCapture =
     const onPageError = (error: Error) => {
         try {
             const pageUrl = sanitizeUrl(page.url());
-            report.pageErrors.push({
+            const pageError = {
                 name: error.name,
                 message: error.message,
-                ...(error.stack ? { stack: error.stack } : {}),
-                ...(pageUrl ? { pageUrl } : {}),
-            });
+            };
+            if (error.stack) Object.assign(pageError, { stack: error.stack });
+            if (pageUrl) Object.assign(pageError, { pageUrl });
+            report.pageErrors.push(pageError);
         } catch {
             warnBestEffort();
         }
@@ -96,12 +97,15 @@ export const startBrowserDiagnostics = (page: Page): BrowserDiagnosticsCapture =
             if (message.type() !== 'error') return;
             const location = message.location();
             const url = sanitizeUrl(location.url);
-            report.consoleErrors.push({
-                text: message.text(),
-                ...(url ? { url } : {}),
-                ...(location.lineNumber === undefined ? {} : { lineNumber: location.lineNumber }),
-                ...(location.columnNumber === undefined ? {} : { columnNumber: location.columnNumber }),
-            });
+            const consoleError = { text: message.text() };
+            if (url) Object.assign(consoleError, { url });
+            if (location.lineNumber !== undefined) {
+                Object.assign(consoleError, { lineNumber: location.lineNumber });
+            }
+            if (location.columnNumber !== undefined) {
+                Object.assign(consoleError, { columnNumber: location.columnNumber });
+            }
+            report.consoleErrors.push(consoleError);
         } catch {
             warnBestEffort();
         }

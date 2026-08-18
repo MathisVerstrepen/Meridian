@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { ReasoningEffortEnum } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
-import type { ModelsSettings, Settings } from '@/types/settings';
+import type { ModelsSettings } from '@/types/settings';
 import { getKnownReasoningEffortsUnion } from '@/utils/reasoningEffort';
 import {
     REASONING_EFFORT_FIXTURE_MASKS,
     REASONING_EFFORT_FIXTURE_SELECTED,
 } from '~~/e2e/fixtures/reasoningEffortFixture';
+import { createNodePresetFixtureSettings } from '~~/e2e/fixtures/nodePresetsFixture';
 
 definePageMeta({
     layout: 'blank',
@@ -71,7 +72,9 @@ const fixtureModels: ModelInfo[] = [
     createFixtureModel('fixture-unknown', -1),
 ];
 
-settingsStore.setUserSettings({ models: fixtureModelsSettings } as Settings);
+const fixtureSettings = createNodePresetFixtureSettings();
+fixtureSettings.models = fixtureModelsSettings;
+settingsStore.setUserSettings(fixtureSettings);
 modelStore.setModels(fixtureModels);
 
 const { modelsSettings } = storeToRefs(settingsStore);

@@ -13,7 +13,7 @@ if (!import.meta.dev) {
     });
 }
 
-const summary = shallowRef<Record<string, unknown> | null>(null);
+const summary = shallowRef<Record<string, JsonValue> | null>(null);
 
 onMounted(() => {
     for (let index = 0; index < 10; index += 1) {

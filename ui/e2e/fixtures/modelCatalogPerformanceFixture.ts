@@ -11,7 +11,7 @@ const generatedModels: CompactModelInfo[] = Array.from(
     },
     (_, offset) => {
         const index = offset + MODEL_CATALOG_FIXTURE_RESPONSE.data.length;
-        return {
+        const model = {
             id: `fixture-generated-${index}`,
             name: `Generated Model ${String(index).padStart(3, '0')}`,
             pricing: {
@@ -19,8 +19,9 @@ const generatedModels: CompactModelInfo[] = Array.from(
                 completion: index % 5 === 0 ? '0' : '0.000002',
             },
             capabilities: 1 | (index % 4 === 0 ? 8 : 0) | (index % 6 === 0 ? 16 : 0),
-            ...(index % 7 === 0 ? { reasoningEfforts: 28 } : {}),
         };
+        if (index % 7 === 0) Object.assign(model, { reasoningEfforts: 28 });
+        return model;
     },
 );
 

@@ -4,6 +4,7 @@ import type {
     PromptImproverClarificationRound,
     PromptImproverRun,
 } from '@/types/promptImprover';
+import type { ToolQuestionAnswerMap } from '@/types/toolCall';
 
 defineProps<{
     isBootstrapping: boolean;
@@ -34,7 +35,7 @@ defineProps<{
 
 const emit = defineEmits<{
     launchAnalysis: [];
-    submitClarificationAnswer: [answer: Record<string, unknown>];
+    submitClarificationAnswer: [answer: ToolQuestionAnswerMap];
     runImprove: [];
     updateFeedbackText: [value: string];
     submitFeedback: [];

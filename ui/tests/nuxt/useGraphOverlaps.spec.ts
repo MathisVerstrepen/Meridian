@@ -1,38 +1,39 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Node } from '@vue-flow/core';
+import type { GraphNode } from '@vue-flow/core';
 import { useGraphOverlaps } from '@/composables/useGraphOverlaps';
+import { graphNode } from './support/graphNode';
 
-const stubs = vi.hoisted(() => ({
-    nodes: { value: [] as Node[] },
+const stubs = vi.hoisted(() => {
+    const nodes: GraphNode[] = [];
+    return {
+    nodes: { value: nodes },
     findNode: vi.fn(),
     updateNode: vi.fn(),
     isNodeIntersecting: vi.fn(),
     toastError: vi.fn(),
     getBlockByNodeType: vi.fn(() => ({ minSize: { width: 20, height: 20 } })),
-}));
+    };
+});
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({
+mockNuxtImport('useGraphFlow', () => () => ({
         findNode: stubs.findNode,
         updateNode: stubs.updateNode,
         getNodes: stubs.nodes,
         isNodeIntersecting: stubs.isNodeIntersecting,
-    }),
-}));
+    }));
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'graph-id' } }));
 mockNuxtImport('useToast', () => () => ({ error: stubs.toastError }));
 mockNuxtImport('useBlocks', () => () => ({ getBlockByNodeType: stubs.getBlockByNodeType }));
 
-const node = (id: string, x: number, y: number, width = 20, height = 20): Node =>
-    ({
+const node = (id: string, x: number, y: number, width = 20, height = 20): GraphNode =>
+    graphNode({
         id,
-        type: 'test-node',
         position: { x, y },
         dimensions: { width, height },
-    }) as Node;
+    });
 
 describe('useGraphOverlaps', () => {
     beforeEach(() => {

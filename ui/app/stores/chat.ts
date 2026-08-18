@@ -1,4 +1,5 @@
-import { MessageContentTypeEnum, NodeTypeEnum } from '@/types/enums';
+import { MessageContentTypeEnum, NodeTypeEnum, type ToolEnum } from '@/types/enums';
+import { normalizeToolSelection } from '@/utils/toolSelection';
 import type { Message, UsageData } from '@/types/graph';
 import type { ChatSession } from '@/types/chat';
 
@@ -12,13 +13,13 @@ import type { ChatSession } from '@/types/chat';
  */
 const updateObjectInPlace = (target: Message, source: Message): void => {
     // Update or add keys from the source
-    for (const key of Object.keys(source) as (keyof Message)[]) {
+    for (const key in source) {
         const targetValue = target[key];
         const sourceValue = source[key];
         const areObjects =
-            typeof targetValue === 'object' &&
+            isRuntimeObject(targetValue) &&
             targetValue !== null &&
-            typeof sourceValue === 'object' &&
+            isRuntimeObject(sourceValue) &&
             sourceValue !== null;
 
         if (areObjects) {
@@ -42,9 +43,9 @@ const updateObjectInPlace = (target: Message, source: Message): void => {
     }
 
     // Remove keys that exist in the target but not in the source
-    for (const key of Object.keys(target)) {
+    for (const key in target) {
         if (!(key in source)) {
-            target[key as keyof Message] = undefined;
+            target[key] = undefined;
         }
     }
 };
@@ -61,9 +62,9 @@ const updateArrayInPlace = (target: Message[], source: Message[]): void => {
         const targetValue = target[i];
         const sourceValue = source[i];
         const areObjects =
-            typeof targetValue === 'object' &&
+            isRuntimeObject(targetValue) &&
             targetValue !== null &&
-            typeof sourceValue === 'object' &&
+            isRuntimeObject(sourceValue) &&
             sourceValue !== null;
 
         if (areObjects) {
@@ -88,7 +89,14 @@ const updateArrayInPlace = (target: Message[], source: Message[]): void => {
 
 interface UpcomingNode {
     type: NodeTypeEnum;
-    data: Record<string, unknown>;
+    data: UpcomingModelData;
+}
+
+interface UpcomingModelData {
+    model: string;
+    reply: string;
+    selectedTools: ToolEnum[];
+    autoSelectTools: boolean;
 }
 
 export const useChatStore = defineStore('Chat', () => {
@@ -103,7 +111,7 @@ export const useChatStore = defineStore('Chat', () => {
     const getDefaultUpcomingData = () => ({
         model: modelsSettings.value.defaultModel || '',
         reply: '',
-        selectedTools: [...(toolsSettings.value.defaultSelectedTools || [])],
+        selectedTools: normalizeToolSelection(toolsSettings.value.defaultSelectedTools || []),
         autoSelectTools: toolsSettings.value.defaultAutoSelectTools ?? false,
     });
 
@@ -121,7 +129,7 @@ export const useChatStore = defineStore('Chat', () => {
         selectedTools: [...data.selectedTools],
     });
 
-    const areDefaultValuesEqual = (a: unknown, b: unknown): boolean => {
+    const areDefaultValuesEqual = (a: RuntimeValue, b: RuntimeValue): boolean => {
         if (Array.isArray(a) && Array.isArray(b)) {
             return a.length === b.length && a.every((value, index) => value === b[index]);
         }
@@ -166,7 +174,7 @@ export const useChatStore = defineStore('Chat', () => {
                 currentValue === undefined ||
                 areDefaultValuesEqual(currentValue, appliedUpcomingDefaults[key])
             ) {
-                nextData[key] = nextDefaults[key];
+                Object.assign(nextData, { [key]: nextDefaults[key] });
             }
         }
 
@@ -191,11 +199,26 @@ export const useChatStore = defineStore('Chat', () => {
      * @param type - The type of the node.
      * @param data - The data associated with the node.
      */
-    const updateUpcomingModelData = (type: NodeTypeEnum, data: Record<string, unknown>): void => {
+    const updateUpcomingModelData = <Data extends object>(
+        type: NodeTypeEnum,
+        data: Data,
+    ): void => {
         canSyncUpcomingDefaults = false;
         upcomingModelData.value = {
             type,
-            data: { ...data }
+            data: {
+                ...data,
+                model: 'model' in data && isRuntimeString(data.model) ? data.model : '',
+                reply: 'reply' in data && isRuntimeString(data.reply) ? data.reply : '',
+                selectedTools:
+                    'selectedTools' in data && Array.isArray(data.selectedTools)
+                        ? normalizeToolSelection(data.selectedTools.filter(isRuntimeString))
+                        : [],
+                autoSelectTools:
+                    'autoSelectTools' in data && isRuntimeBoolean(data.autoSelectTools)
+                        ? data.autoSelectTools
+                        : false,
+            },
         };
     };
 
@@ -471,13 +494,12 @@ export const useChatStore = defineStore('Chat', () => {
      * @returns The chat session object for the specified node ID.
      */
     const getSession = (nodeId: string): ChatSession => {
-        if (!sessions.value.has(nodeId)) {
-            sessions.value.set(nodeId, {
-                fromNodeId: nodeId,
-                messages: [],
-            });
-        }
-        return sessions.value.get(nodeId) as ChatSession;
+        const existing = sessions.value.get(nodeId);
+        if (existing) return existing;
+
+        const created: ChatSession = { fromNodeId: nodeId, messages: [] };
+        sessions.value.set(nodeId, created);
+        return created;
     };
 
     /**

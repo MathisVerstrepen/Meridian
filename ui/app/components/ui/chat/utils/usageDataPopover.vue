@@ -46,7 +46,7 @@ const emptyUsageData = (): UsageData => ({
 const mergeUsageDetails = (
     left: Record<string, number>,
     right: Record<string, number>,
-): Record<string, number> => {
+) => {
     const merged = { ...left };
     for (const [key, value] of Object.entries(right)) {
         merged[key] = (merged[key] ?? 0) + value;
@@ -83,18 +83,74 @@ const formatRequestSubtitle = (request: UsageDataRequest) => {
     return parts.join(' · ');
 };
 
+const numberDetails = <Value>(value: Value): Record<string, number> => {
+    if (!isJsonObject(value)) return {};
+    return Object.fromEntries(
+        Object.entries(value).filter((entry): entry is [string, number] =>
+            isRuntimeNumber(entry[1]),
+        ),
+    );
+};
+
+const usageData = <Value>(value: Value): UsageData | null => {
+    if (
+        !isJsonObject(value) ||
+        !isRuntimeNumber(value.prompt_tokens) ||
+        !isRuntimeNumber(value.completion_tokens) ||
+        !isRuntimeNumber(value.total_tokens) ||
+        !isRuntimeNumber(value.cost) ||
+        !isRuntimeBoolean(value.is_byok)
+    ) {
+        return null;
+    }
+    return {
+        prompt_tokens: value.prompt_tokens,
+        completion_tokens: value.completion_tokens,
+        total_tokens: value.total_tokens,
+        cost: value.cost,
+        is_byok: value.is_byok,
+        prompt_tokens_details: numberDetails(value.prompt_tokens_details),
+        cost_details: numberDetails(value.cost_details),
+        completion_tokens_details: numberDetails(value.completion_tokens_details),
+    };
+};
+
+const parallelizationModel = <Value>(value: Value): DataParallelizationModel | null => {
+    if (
+        !isJsonObject(value) ||
+        !isRuntimeString(value.model) ||
+        !isRuntimeString(value.reply) ||
+        !isRuntimeString(value.id)
+    ) {
+        return null;
+    }
+    return {
+        model: value.model,
+        reply: value.reply,
+        id: value.id,
+        usageData: usageData(value.usageData),
+    };
+};
+
+const parsedParallelizationModels = computed(() => {
+    if (props.message.type !== NodeTypeEnum.PARALLELIZATION || !Array.isArray(props.message.data)) {
+        return [];
+    }
+    return props.message.data.flatMap((model) => {
+        const parsed = parallelizationModel(model);
+        return parsed ? [parsed] : [];
+    });
+});
+
 const requestBreakdown = computed(() => props.message?.usageData?.requests ?? []);
 
 const parallelizationModels = computed<DataParallelizationModel[]>(() => {
-    if (props.message.type !== NodeTypeEnum.PARALLELIZATION || !props.message.data) return [];
-    return (props.message.data as DataParallelizationModel[]).filter((m) => m.usageData);
+    return parsedParallelizationModels.value.filter((model) => model.usageData);
 });
 
 const usageDataTotal = computed(() => {
-    if (props.message.type === NodeTypeEnum.PARALLELIZATION && props.message.data) {
-        const modelsUsageData = (props.message.data as DataParallelizationModel[]).map(
-            (data) => data.usageData,
-        );
+    if (props.message.type === NodeTypeEnum.PARALLELIZATION) {
+        const modelsUsageData = parsedParallelizationModels.value.map((data) => data.usageData);
         const aggregatorUsageData = props.message.usageData;
         const allUsageData = [...modelsUsageData, aggregatorUsageData];
 

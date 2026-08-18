@@ -80,6 +80,18 @@ const handleTokenRefresh = (): Promise<void> => {
 };
 
 export const useAPI = () => {
+    type ApiMethod =
+        | 'GET'
+        | 'HEAD'
+        | 'PATCH'
+        | 'POST'
+        | 'PUT'
+        | 'DELETE'
+        | 'CONNECT'
+        | 'OPTIONS'
+        | 'TRACE';
+    type ApiRequestInit = Omit<RequestInit, 'method'> & { method?: ApiMethod };
+
     /**
      * Creates a configured fetch request using Nuxt's useFetch. It automatically
      * handles token refreshing on 401 errors.
@@ -91,64 +103,43 @@ export const useAPI = () => {
      */
     const apiFetch = async <T>(
         url: string,
-        options: RequestInit = {},
+        options: ApiRequestInit = {},
         bypass401: boolean = false,
         displayErrorToast: boolean = true,
     ): Promise<T> => {
         try {
-            const data = await $fetch(url, {
+            return await $fetch<T>(url, {
                 ...options,
-                method: options.method as
-                    | 'GET'
-                    | 'HEAD'
-                    | 'PATCH'
-                    | 'POST'
-                    | 'PUT'
-                    | 'DELETE'
-                    | 'CONNECT'
-                    | 'OPTIONS'
-                    | 'TRACE'
-                    | undefined,
+                method: options.method,
             });
-            return data as T;
         } catch (error: unknown) {
-            const err = error as { response?: { status?: number }; data?: { detail?: string } };
+            const status = runtimeErrorStatus(error);
+            const detail = runtimeErrorDetail(error) ?? '';
 
-            if (err?.response?.status === 403) {
+            if (status === 403) {
                 const { user, clear } = useUserSession();
-                const msg = err.data?.detail || '';
-                if (msg === 'Email required' || msg === 'Email not verified') {
-                    const reason = msg === 'Email required' ? 'missing' : 'unverified';
-                    const username = (user.value as User)?.name || '';
+                if (detail === 'Email required' || detail === 'Email not verified') {
+                    const reason = detail === 'Email required' ? 'missing' : 'unverified';
+                    const username = (user.value)?.name || '';
                     await clear(); // Force logout
                     navigateTo({
                         path: '/auth/update-email',
                         query: { username, reason },
                     });
-                    throw err; // Stop execution
+                    throw error; // Stop execution
                 }
             }
 
             // If the error is a 401 and not bypassed, attempt a token refresh and retry.
-            if (err?.response?.status === 401 && !bypass401) {
+            if (status === 401 && !bypass401) {
                 try {
                     await handleTokenRefresh();
                     // Retry the request after a successful refresh.
                     // The new token is automatically included in the cookies.
-                    return (await $fetch(url, {
+                    return await $fetch<T>(url, {
                         ...options,
-                        method: options.method as
-                            | 'GET'
-                            | 'HEAD'
-                            | 'PATCH'
-                            | 'POST'
-                            | 'PUT'
-                            | 'DELETE'
-                            | 'CONNECT'
-                            | 'OPTIONS'
-                            | 'TRACE'
-                            | undefined,
-                    })) as unknown as T;
+                        method: options.method,
+                    });
                 } catch (refreshOrRetryError) {
                     // If refresh failed, handleTokenRefresh would have redirected.
                     // If retry failed, throw the new error to be handled by the generic handler.
@@ -166,11 +157,11 @@ export const useAPI = () => {
 
             // For non-401 errors, bypassed 401s, or errors on retry, handle them here.
             const { error: toastError } = useToast();
-            console.error(`Error fetching ${url}:`, err);
+            console.error(`Error fetching ${url}:`, error);
             if (displayErrorToast) {
                 toastError(`Failed to fetch ${url}`, { title: 'API Error' });
             }
-            throw err;
+            throw error;
         }
     };
 
@@ -188,10 +179,8 @@ export const useAPI = () => {
         try {
             return await requestFn();
         } catch (error: unknown) {
-            const err = error as { response?: { status?: number } };
-
             // If it's a 401, attempt refresh and retry.
-            if (err?.response?.status === 401) {
+            if (runtimeErrorStatus(error) === 401) {
                 try {
                     await handleTokenRefresh();
                     return await requestFn(); // Retry after successful refresh.
@@ -315,9 +304,9 @@ export const useAPI = () => {
     /**
      * Updates the configuration of a graph with the given ID
      */
-    const updateGraphConfig = async (
+    const updateGraphConfig = async <Config extends object>(
         graphId: string,
-        config: Record<string, unknown>,
+        config: Config,
     ): Promise<Graph> => {
         if (!graphId) throw new Error('graphId is required');
         return apiFetch<Graph>(`/api/graph/${graphId}/update-config`, {
@@ -533,16 +522,17 @@ export const useAPI = () => {
         nodeId: string,
         targetId?: string | null,
         optimizerModelId?: string | null,
-    ) =>
+    ) => {
+        const body = { graphId, nodeId };
+        if (targetId) Object.assign(body, { targetId });
+        if (optimizerModelId) Object.assign(body, { optimizerModelId });
+        return (
         apiFetch<PromptImproverDraftResponse>('/api/prompt-improver/draft', {
             method: 'POST',
-            body: JSON.stringify({
-                graphId,
-                nodeId,
-                ...(targetId ? { targetId } : {}),
-                ...(optimizerModelId ? { optimizerModelId } : {}),
-            }),
-        });
+            body: JSON.stringify(body),
+        })
+        );
+    };
 
     const getPromptImproverHistory = (graphId: string, nodeId: string) =>
         apiFetch<PromptImproverNodeHistoryResponse>(
@@ -554,14 +544,16 @@ export const useAPI = () => {
         runId: string,
         selectedDimensionIds: string[],
         optimizerModelId?: string | null,
-    ) =>
+    ) => {
+        const body = { selectedDimensionIds };
+        if (optimizerModelId) Object.assign(body, { optimizerModelId });
+        return (
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/improve`, {
             method: 'POST',
-            body: JSON.stringify({
-                selectedDimensionIds,
-                ...(optimizerModelId ? { optimizerModelId } : {}),
-            }),
-        });
+            body: JSON.stringify(body),
+        })
+        );
+    };
 
     const reviewPromptImproverRun = (
         runId: string,
@@ -578,30 +570,32 @@ export const useAPI = () => {
         feedback: string,
         selectedDimensionIds: string[],
         optimizerModelId?: string | null,
-    ) =>
+    ) => {
+        const body = { feedback, selectedDimensionIds };
+        if (optimizerModelId) Object.assign(body, { optimizerModelId });
+        return (
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/feedback`, {
             method: 'POST',
-            body: JSON.stringify({
-                feedback,
-                selectedDimensionIds,
-                ...(optimizerModelId ? { optimizerModelId } : {}),
-            }),
-        });
+            body: JSON.stringify(body),
+        })
+        );
+    };
 
-    const answerPromptImproverQuestion = (
+    const answerPromptImproverQuestion = <Answer extends object>(
         runId: string,
         toolCallId: string,
-        answer: Record<string, unknown>,
+        answer: Answer,
         optimizerModelId?: string | null,
-    ) =>
+    ) => {
+        const body = { toolCallId, answer };
+        if (optimizerModelId) Object.assign(body, { optimizerModelId });
+        return (
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/answer-question`, {
             method: 'POST',
-            body: JSON.stringify({
-                toolCallId,
-                answer,
-                ...(optimizerModelId ? { optimizerModelId } : {}),
-            }),
-        });
+            body: JSON.stringify(body),
+        })
+        );
+    };
 
     /**
      * Get user settings.
@@ -695,16 +689,21 @@ export const useAPI = () => {
                     }
                     if (xhr.status >= 200 && xhr.status < 300) {
                         try {
-                            resolve(JSON.parse(xhr.responseText) as FileSystemObject);
+                            const payload: JsonValue = JSON.parse(xhr.responseText);
+                            if (!isFileSystemObject(payload)) {
+                                throw new TypeError('Upload response is not a file object');
+                            }
+                            resolve(payload);
                         } catch (parseErr) {
                             reject(parseErr);
                         }
                     } else {
                         let detail = '';
                         try {
-                            detail =
-                                (JSON.parse(xhr.responseText) as { detail?: string })?.detail ??
-                                '';
+                            const payload: JsonValue = JSON.parse(xhr.responseText);
+                            detail = isJsonObject(payload) && isRuntimeString(payload.detail)
+                                ? payload.detail
+                                : '';
                         } catch {
                             detail = xhr.statusText;
                         }
@@ -869,13 +868,11 @@ export const useAPI = () => {
         parentId: string | null,
         conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
+        const body = { name, parent_id: parentId };
+        if (conflictPolicy) Object.assign(body, { conflict_policy: conflictPolicy });
         return apiFetch<FileSystemObject>('/api/files/folder', {
             method: 'POST',
-            body: JSON.stringify({
-                name,
-                parent_id: parentId,
-                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
-            }),
+            body: JSON.stringify(body),
         });
     };
 
@@ -919,12 +916,11 @@ export const useAPI = () => {
         destinationFolderId: string,
         conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
+        const body = { destination_folder_id: destinationFolderId };
+        if (conflictPolicy) Object.assign(body, { conflict_policy: conflictPolicy });
         return apiFetch<FileSystemObject>(`/api/files/${itemId}/move`, {
             method: 'POST',
-            body: JSON.stringify({
-                destination_folder_id: destinationFolderId,
-                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
-            }),
+            body: JSON.stringify(body),
         });
     };
 
@@ -936,13 +932,11 @@ export const useAPI = () => {
         destinationFolderId: string,
         conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject[]> => {
+        const body = { item_ids: itemIds, destination_folder_id: destinationFolderId };
+        if (conflictPolicy) Object.assign(body, { conflict_policy: conflictPolicy });
         return apiFetch<FileSystemObject[]>('/api/files/bulk-move', {
             method: 'POST',
-            body: JSON.stringify({
-                item_ids: itemIds,
-                destination_folder_id: destinationFolderId,
-                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
-            }),
+            body: JSON.stringify(body),
         });
     };
 
@@ -954,12 +948,11 @@ export const useAPI = () => {
         destinationFolderId: string,
         conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
+        const body = { destination_folder_id: destinationFolderId };
+        if (conflictPolicy) Object.assign(body, { conflict_policy: conflictPolicy });
         return apiFetch<FileSystemObject>(`/api/files/${itemId}/copy`, {
             method: 'POST',
-            body: JSON.stringify({
-                destination_folder_id: destinationFolderId,
-                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
-            }),
+            body: JSON.stringify(body),
         });
     };
 
@@ -971,13 +964,11 @@ export const useAPI = () => {
         destinationFolderId: string,
         conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject[]> => {
+        const body = { item_ids: itemIds, destination_folder_id: destinationFolderId };
+        if (conflictPolicy) Object.assign(body, { conflict_policy: conflictPolicy });
         return apiFetch<FileSystemObject[]>('/api/files/bulk-copy', {
             method: 'POST',
-            body: JSON.stringify({
-                item_ids: itemIds,
-                destination_folder_id: destinationFolderId,
-                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
-            }),
+            body: JSON.stringify(body),
         });
     };
 
@@ -993,8 +984,9 @@ export const useAPI = () => {
             });
 
             if (response.status === 401) {
-                const error = new Error('Unauthorized');
-                (error as { response?: { status?: number } }).response = { status: 401 };
+                const error = Object.assign(new Error('Unauthorized'), {
+                    response: { status: 401 },
+                });
                 throw error;
             }
 

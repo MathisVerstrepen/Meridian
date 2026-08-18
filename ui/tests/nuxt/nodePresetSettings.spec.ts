@@ -1,4 +1,4 @@
-import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { mockComponent, mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { defineComponent, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode, NodeProps } from '@vue-flow/core';
@@ -9,6 +9,7 @@ import PromptHandle from '@/components/ui/graph/node/utils/handlePrompt.vue';
 import GroupNode from '@/components/ui/graph/node/nodeGroup.vue';
 import { useGraphActions } from '@/composables/useGraphActions';
 import { ContextMergerModeEnum } from '@/types/enums';
+import { graphNode } from './support/graphNode';
 
 const stubs = vi.hoisted(() => {
     const flowCalls: Array<string | undefined> = [];
@@ -31,10 +32,11 @@ const stubs = vi.hoisted(() => {
     };
 });
 
-vi.mock('@vue-flow/core', () => ({
-    Position: { Top: 'top', Bottom: 'bottom', Left: 'left', Right: 'right' },
-    Handle: { template: '<div data-vue-flow-handle />' },
-    useVueFlow: (id?: string) => {
+mockComponent('UiGraphNodeUtilsHandleCore', () => ({
+    template: '<div data-vue-flow-handle />',
+}));
+
+mockNuxtImport('useGraphFlow', () => (id?: string) => {
         stubs.flowCalls.push(id);
         return {
             viewport: ref({ zoom: 1 }),
@@ -45,8 +47,7 @@ vi.mock('@vue-flow/core', () => ({
             setNodes: stubs.setNodes,
             removeEdges: stubs.removeEdges,
         };
-    },
-}));
+    });
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'route-graph' } }));
 mockNuxtImport('useBlocks', () => () => ({
@@ -66,7 +67,7 @@ mockNuxtImport('useToast', () => () => ({
 }));
 mockNuxtImport('useDragStore', () => () => reactive({ isGlobalDragging: false }));
 mockNuxtImport('useSettingsStore', () => () => reactive({ blockSettings: {} }));
-mockNuxtImport('storeToRefs', () => (store: Record<string, unknown>) =>
+mockNuxtImport('storeToRefs', () => <Store extends object>(store: Store) =>
     Object.fromEntries(Object.entries(store).map(([key, value]) => [key, ref(value)])),
 );
 mockNuxtImport('useEdgeCompatibility', () => () => ({
@@ -175,12 +176,12 @@ describe('preset editor graph primitives', () => {
         actions.placeEdge('graph-a', 'source', 'target', null, null, 'preset-flow');
 
         stubs.flowNodes.set('preset-flow', [
-            {
+            graphNode({
                 id: 'child',
                 type: 'prompt',
                 position: { x: 10, y: 10 },
                 dimensions: { width: 100, height: 100 },
-            } as GraphNode,
+            }),
         ]);
         await actions.createCommentGroup('graph-a', stubs.flowNodes.get('preset-flow')!, undefined, 'preset-flow');
         actions.deleteCommentGroup('graph-a', 'missing-group', 'preset-flow');

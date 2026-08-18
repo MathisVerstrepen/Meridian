@@ -18,7 +18,7 @@ if (!import.meta.dev) {
     });
 }
 
-const summary = shallowRef<Record<string, unknown> | null>(null);
+const summary = shallowRef<Record<string, JsonValue> | null>(null);
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
 const percentile = (durations: number[], ratio: number): number =>

@@ -59,7 +59,11 @@ describe('MarkdownResponse', () => {
 
         try {
             expect(wrapper.find('[data-testid="fullscreen"]').exists()).toBe(false);
-            await wrapper.vm.finalizePendingMermaid();
+            const finalizePendingMermaid = wrapper.vm.$.exposed?.finalizePendingMermaid;
+            if (!isRuntimeFunction(finalizePendingMermaid)) {
+                throw new Error('Markdown response did not expose Mermaid finalization');
+            }
+            await finalizePendingMermaid();
             expect(renderMermaidCharts).toHaveBeenCalledOnce();
             expect(wrapper.find('[data-testid="fullscreen"]').exists()).toBe(true);
         } finally {

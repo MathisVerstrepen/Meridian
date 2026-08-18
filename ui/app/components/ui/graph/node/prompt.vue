@@ -21,7 +21,7 @@ const promptTemplateStore = usePromptTemplateStore();
 
 // --- Routing ---
 const route = useRoute();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Props ---
 const props = withDefaults(defineProps<NodeProps<DataPrompt> & { presetEditor?: boolean }>(), {

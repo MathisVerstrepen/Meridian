@@ -4,7 +4,7 @@ import type { FetchedPageDetailSelection, ToolCallDetail } from '@/types/toolCal
 const props = withDefaults(
     defineProps<{
         detail: ToolCallDetail;
-        fetchedPageSelection?: FetchedPageDetailSelection | null;
+        fetchedPageSelection?: RuntimeValue;
     }>(),
     {
         fetchedPageSelection: null,
@@ -16,18 +16,14 @@ const { $markedWorker } = useNuxtApp();
 const contentHtml = ref('');
 let lastRenderId = 0;
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return !!value && typeof value === 'object' && !Array.isArray(value);
-};
-
-const asNonEmptyString = (value: unknown): string | null => {
-    if (typeof value !== 'string' || !value.trim()) return null;
+const asNonEmptyString = <Value>(value: Value): string | null => {
+    if (!isRuntimeString(value) || !value.trim()) return null;
     return value;
 };
 
 const normalized = computed(() => {
-    const args = isRecord(props.detail.arguments) ? props.detail.arguments : {};
-    const result = isRecord(props.detail.result) ? props.detail.result : {};
+    const args = isJsonObject(props.detail.arguments) ? props.detail.arguments : {};
+    const result = isJsonObject(props.detail.result) ? props.detail.result : {};
     const isCanonical =
         Object.prototype.hasOwnProperty.call(result, 'pages') || Array.isArray(args.urls);
     const rootError = asNonEmptyString(result.error);
@@ -47,12 +43,13 @@ const normalized = computed(() => {
 
     const selection: unknown = props.fetchedPageSelection;
     if (
-        !isRecord(selection) ||
+        !isJsonObject(selection) ||
         selection.kind !== 'fetched-page' ||
+        !isRuntimeNumber(selection.index) ||
         !Number.isInteger(selection.index) ||
-        (selection.index as number) < 0 ||
+        selection.index < 0 ||
         !Array.isArray(result.pages) ||
-        (selection.index as number) >= result.pages.length
+        selection.index >= result.pages.length
     ) {
         return {
             url: '',
@@ -62,9 +59,9 @@ const normalized = computed(() => {
         };
     }
 
-    const index = selection.index as number;
+    const index = selection.index;
     const page = result.pages[index];
-    if (!isRecord(page)) {
+    if (!isJsonObject(page)) {
         return {
             url: '',
             content: null,

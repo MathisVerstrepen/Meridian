@@ -1,4 +1,4 @@
-import { useVueFlow, type GraphNode } from '@vue-flow/core';
+import { type GraphNode } from '@vue-flow/core';
 import type { ComputedRef, Ref } from 'vue';
 
 import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
@@ -19,11 +19,11 @@ import {
 
 type GraphIdRef = Ref<string> | ComputedRef<string>;
 
-const LINKED_NODE_OFFSETS: Partial<Record<NodeTypeEnum, { x: number; y: number }>> = {
+const LINKED_NODE_OFFSETS = {
     [NodeTypeEnum.PROMPT]: { x: -200, y: -300 },
     [NodeTypeEnum.FILE_PROMPT]: { x: -650, y: 0 },
     [NodeTypeEnum.GITHUB]: { x: -600, y: 0 },
-};
+} satisfies Partial<Record<NodeTypeEnum, { x: number; y: number }>>;
 
 const GENERATOR_NODE_TYPES = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -33,29 +33,31 @@ const GENERATOR_NODE_TYPES = [
 
 export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
     const route = useRoute();
-    const graphId = computed(() => graphIdOverride?.value ?? (route.params.id as string) ?? '');
-    const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId.value);
+    const graphId = computed(() => graphIdOverride?.value ?? firstRouteString(route.params.id) ?? '');
+    const { getNodes, getEdges } = useGraphFlow('main-graph-' + graphId.value);
     const { placeBlock, placeEdge } = useGraphActions();
     const { getBlockByNodeType } = useBlocks();
     const { acceptsMultipleInputEdges } = useEdgeCompatibility();
     const { resolveOverlaps } = useGraphOverlaps(graphId);
 
     const getNodeWidth = (node: GraphNode): number => {
-        const dimensionsWidth = (node as NodeWithDimensions).dimensions?.width;
+        const dimensionsWidth = node.dimensions.width;
         if (dimensionsWidth && dimensionsWidth > 0) return dimensionsWidth;
-        if (typeof node.width === 'number' && node.width > 0) return node.width;
-        return getBlockByNodeType(node.type as NodeTypeEnum)?.minSize.width ?? 0;
+        if (isRuntimeNumber(node.width) && node.width > 0) return node.width;
+        return getBlockByNodeType(nodeTypeOrUndefined(node.type))?.minSize.width ?? 0;
     };
 
     const targetIsAvailable = (payload: QuickWorkflowCreatePayload, anchor: GraphNode): boolean => {
         if (payload.direction !== 'target') return true;
+        const anchorType = nodeTypeOrUndefined(anchor.type);
         const explicitMultiple =
             payload.category === NodeCategoryEnum.CONTEXT &&
+            anchorType !== undefined &&
             [
                 NodeTypeEnum.TEXT_TO_TEXT,
                 NodeTypeEnum.PARALLELIZATION,
                 NodeTypeEnum.ROUTING,
-            ].includes(anchor.type as NodeTypeEnum);
+            ].includes(anchorType);
         if (acceptsMultipleInputEdges(payload.category, anchor.type, explicitMultiple)) return true;
         const handleId = getQuickWorkflowHandleId(payload.category, anchor.id);
         return !getEdges.value.some(
@@ -111,21 +113,19 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
         if (!definitions) return;
 
         const anchorHeight =
-            (anchor as NodeWithDimensions).dimensions?.height ??
-            (typeof anchor.height === 'number' ? anchor.height : 0);
+            anchor.dimensions.height ??
+            (isRuntimeNumber(anchor.height) ? anchor.height : 0);
         const anchorWidth =
-            (anchor as NodeWithDimensions).dimensions?.width ??
-            (typeof anchor.width === 'number'
+            anchor.dimensions.width ??
+            (isRuntimeNumber(anchor.width)
                 ? anchor.width
-                : (getBlockByNodeType(anchor.type as NodeTypeEnum)?.minSize.width ?? 0));
+                : (getBlockByNodeType(nodeTypeOrUndefined(anchor.type))?.minSize.width ?? 0));
         const mainHeight = definitions.main.minSize.height ?? 0;
         const mainWidth = definitions.main.minSize.width ?? 0;
         const usesGeneratorChildPlacement =
             payload.category === NodeCategoryEnum.CONTEXT &&
             payload.direction === 'source' &&
-            GENERATOR_NODE_TYPES.includes(
-                definitions.main.nodeType as (typeof GENERATOR_NODE_TYPES)[number],
-            );
+            GENERATOR_NODE_TYPES.some((type) => type === definitions.main.nodeType);
         const positionFrom = usesGeneratorChildPlacement
             ? calculateGeneratorChildPosition({
                   parent: {
@@ -142,8 +142,8 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
                           position: node.position,
                           width: getNodeWidth(node),
                           height:
-                              (node as NodeWithDimensions).dimensions?.height ??
-                              (typeof node.height === 'number' ? node.height : 0),
+                              node.dimensions.height ??
+                              (isRuntimeNumber(node.height) ? node.height : 0),
                       }),
                   ),
                   edges: getEdges.value.map((edge) => ({

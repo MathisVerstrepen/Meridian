@@ -1,11 +1,11 @@
 import { afterAll, vi } from 'vitest';
 
 class WorkerStub extends EventTarget {
-    onerror: ((this: Worker, event: ErrorEvent) => unknown) | null = null;
-    onmessage: ((this: Worker, event: MessageEvent) => unknown) | null = null;
-    onmessageerror: ((this: Worker, event: MessageEvent) => unknown) | null = null;
+    onerror: ((this: Worker, event: ErrorEvent) => void) | null = null;
+    onmessage: ((this: Worker, event: MessageEvent) => void) | null = null;
+    onmessageerror: ((this: Worker, event: MessageEvent) => void) | null = null;
 
-    postMessage(_message: unknown, _optionsOrTransfer?: StructuredSerializeOptions | Transferable[]) {}
+    postMessage(_message: RuntimeValue, _optionsOrTransfer?: StructuredSerializeOptions | Transferable[]) {}
 
     terminate() {}
 }

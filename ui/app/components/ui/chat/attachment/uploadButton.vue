@@ -50,7 +50,7 @@ const closeMenu = () => {
 };
 
 const handleFileChange = (e: Event) => {
-    const target = e.target as HTMLInputElement;
+    const target = requireElement(e.target, HTMLInputElement);
     if (target.files) {
         emit('add-files', target.files);
     }

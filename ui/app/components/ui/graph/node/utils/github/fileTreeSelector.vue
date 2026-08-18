@@ -425,7 +425,7 @@ watch(searchQuery, (newQuery) => {
 
 watch([isRegexEnabled, isCaseSensitive, isShowSelectedOnly], () => {
     // Save to local storage
-    if (typeof window !== 'undefined') {
+    if (!isRuntimeUndefined(window)) {
         localStorage.setItem('fileTreeSelector_isRegexEnabled', String(isRegexEnabled.value));
         localStorage.setItem('fileTreeSelector_isCaseSensitive', String(isCaseSensitive.value));
     }
@@ -435,7 +435,7 @@ watch([isRegexEnabled, isCaseSensitive, isShowSelectedOnly], () => {
 });
 
 onMounted(async () => {
-    if (typeof window !== 'undefined') {
+    if (!isRuntimeUndefined(window)) {
         const savedRegex = localStorage.getItem('fileTreeSelector_isRegexEnabled');
         if (savedRegex !== null) isRegexEnabled.value = savedRegex === 'true';
 

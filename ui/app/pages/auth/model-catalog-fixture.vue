@@ -34,7 +34,7 @@ const fixtureModels = decoded.data.filter((model) => fixtureIds.includes(model.i
 const allCapabilitiesModel = modelStore.getModel('fixture-all-capabilities');
 const defaultedModel = modelStore.getModel('fixture-text');
 
-const rejectionResult = (value: unknown) => {
+const rejectionResult = (value: RuntimeValue) => {
     const countBefore = modelStore.models.length;
     let error = '';
     try {

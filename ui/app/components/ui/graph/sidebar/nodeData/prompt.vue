@@ -6,7 +6,7 @@ import type { PromptTemplate } from '@/types/settings';
 const props = defineProps<{
     node: SidebarNode<DataPrompt>;
     graphId: string;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
 }>();
 
 // --- Composables ---

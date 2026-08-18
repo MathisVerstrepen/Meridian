@@ -7,7 +7,7 @@ interface DragData {
 
 export function useGraphDragAndDrop() {
     const route = useRoute();
-    const graphId = computed(() => route.params.id as string);
+    const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
     const { getBlockById } = useBlocks();
     const { error, warning } = useToast();
@@ -119,7 +119,7 @@ export function useGraphDragAndDrop() {
 
         event.preventDefault();
 
-        if ((event.target as HTMLElement).className.includes('drop-zone')) {
+        if ((requireElement(event.target, HTMLElement)).className.includes('drop-zone')) {
             return; // Ignore drops on the drag area
         }
 
@@ -204,7 +204,7 @@ export function useGraphDragAndDrop() {
             }
 
             // Get the source rectangle and calculate the position for the new node
-            const sourceRect = (event.target as HTMLElement).getBoundingClientRect();
+            const sourceRect = (requireElement(event.target, HTMLElement)).getBoundingClientRect();
             const position = project({
                 x: sourceRect.left + sourceRect.width / 2,
                 y: sourceRect.top + sourceRect.height / 2,
@@ -283,12 +283,12 @@ export function useGraphDragAndDrop() {
         }
     };
 
-    const offsetTable: Record<string, { x: number; y: number }> = {
+    const offsetTable = {
         source_horizontal: { x: 0, y: 300 },
         source_vertical: { x: 200, y: 0 },
         target_horizontal: { x: 0, y: -300 },
         target_vertical: { x: -200, y: 0 },
-    };
+    } satisfies Record<string, { x: number; y: number }>;
 
     const onDragStopOnDragZone = (
         currentHoveredZone: DragZoneHoverEvent | null,

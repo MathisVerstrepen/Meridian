@@ -114,8 +114,7 @@ describe('validateNodePresetSettings', () => {
     });
 
     it('defaults legacy accent colors and rejects invalid CSS colors', () => {
-        const legacy = structuredClone(canonicalPreset()) as Partial<NodePreset>;
-        delete legacy.accentColor;
+        const { accentColor: _accentColor, ...legacy } = structuredClone(canonicalPreset());
         const normalized = validateNodePresetSettings({ schemaVersion: 1, presets: [legacy] });
         expect(normalized.value?.presets[0]?.accentColor).toBe(DEFAULT_NODE_PRESET_ACCENT_COLOR);
 

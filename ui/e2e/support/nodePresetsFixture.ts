@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { isJsonObject, isRuntimeString } from '../../app/utils/runtimeTypes';
 
 import type { Settings } from '../../app/types/settings';
 import {
@@ -47,7 +48,11 @@ const installApiMock = async (page: Page): Promise<NodePresetsApiState> => {
     apiStates.set(page, state);
     await page.route('**/api/user/settings', async (route) => {
         if (route.request().method() === 'POST') {
-            state.settings = structuredClone(route.request().postDataJSON() as Settings);
+            const postedSettings = route.request().postDataJSON();
+            if (!isJsonObject(postedSettings)) {
+                throw new TypeError('Settings fixture received a non-object request body');
+            }
+            state.settings = structuredClone({ ...state.settings, ...postedSettings });
             state.postCount += 1;
             await route.fulfill({ json: state.settings });
             return;
@@ -99,7 +104,7 @@ export const test = diagnosticsTest.extend<Record<string, never>, WorkerFixtures
             try {
                 await installApiMock(page);
                 const baseURL = workerInfo.project.use.baseURL;
-                if (typeof baseURL !== 'string') throw new Error('Fixture requires configured baseURL');
+                if (!isRuntimeString(baseURL)) throw new Error('Fixture requires configured baseURL');
                 await page.goto(new URL(NODE_PRESETS_FIXTURE_ROUTE, baseURL).toString(), {
                     timeout: NAVIGATION_TIMEOUT,
                 });
@@ -132,6 +137,6 @@ export const mountNodePresetsFixture = async (page: Page) => {
 };
 
 export const readNodePresetsFixtureState = async (page: Page): Promise<NodePresetsFixtureState> =>
-    JSON.parse(
-        (await page.getByTestId('node-presets-fixture-state').textContent()) ?? '{}',
-    ) as NodePresetsFixtureState;
+    page.getByTestId('node-presets-fixture-state').evaluate<NodePresetsFixtureState>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );

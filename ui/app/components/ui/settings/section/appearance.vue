@@ -13,20 +13,20 @@ const { appearanceSettings } = storeToRefs(settingsStore);
 const accentColorEntry = SETTINGS_ENTRY.appearanceAccentColor;
 const themeEntry = SETTINGS_ENTRY.appearanceTheme;
 
-const THEME_PALETTES: Record<Exclude<ThemeId, 'custom'>, CustomThemeColors> = {
+const THEME_PALETTES = {
     light: { softSilk: '#212121', stoneGray: '#757575', anthracite: '#f5f5f5', obsidian: '#ffffff' },
     standard: { softSilk: '#fffcf2', stoneGray: '#ccc5b9', anthracite: '#403d39', obsidian: '#252422' },
     dark: { softSilk: '#ecf2f8', stoneGray: '#c9d1d9', anthracite: '#21262d', obsidian: '#0d1117' },
     oled: { softSilk: '#e5e5e5', stoneGray: '#a9a9a9', anthracite: '#1a1a1a', obsidian: '#000000' },
-};
+} satisfies Record<Exclude<ThemeId, 'custom'>, CustomThemeColors>;
 
-const THEME_LABELS: Record<ThemeId, string> = {
+const THEME_LABELS = {
     light: 'Light',
     standard: 'Standard',
     dark: 'GitHub Dark',
     oled: 'OLED',
     custom: 'Custom',
-};
+} satisfies Record<ThemeId, string>;
 
 const themeCards: { id: ThemeId; colors: CustomThemeColors }[] = [
     { id: 'light', colors: THEME_PALETTES.light },
@@ -65,12 +65,12 @@ const customEditorOpen = ref(appearanceSettings.value.theme === 'custom');
 
 type ColorKey = keyof CustomThemeColors;
 
-const CUSTOM_COLOR_LABELS: Record<ColorKey, { label: string; description: string }> = {
+const CUSTOM_COLOR_LABELS = {
     obsidian: { label: 'Background', description: 'Main app background' },
     anthracite: { label: 'Surface', description: 'Cards, panels, sidebar' },
     softSilk: { label: 'Primary Text', description: 'Headings, main content' },
     stoneGray: { label: 'Secondary Text', description: 'Muted text, borders' },
-};
+} satisfies Record<ColorKey, { label: string; description: string }>;
 
 const customColorKeys: ColorKey[] = ['obsidian', 'anthracite', 'softSilk', 'stoneGray'];
 const activeColorPicker = ref<ColorKey | null>(null);
@@ -105,7 +105,7 @@ let closePickerListener: ((event: MouseEvent) => void) | null = null;
 onMounted(() => {
     closePickerListener = (event: MouseEvent) => {
         if (!rootRef.value) return;
-        if (rootRef.value.contains(event.target as Node)) return;
+        if (event.target instanceof Node && rootRef.value.contains(event.target)) return;
         closeAllPickers();
     };
     document.addEventListener('click', closePickerListener);

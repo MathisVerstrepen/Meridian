@@ -13,7 +13,7 @@ const blockDefinition = getBlockById('primary-context-merger');
 
 // --- Routing ---
 const route = useRoute();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Props ---
 const props = withDefaults(
@@ -47,7 +47,7 @@ const changeMode = (mode: ContextMergerModeEnum) => {
 
 // --- Computed ---
 const activeContextIndex = computed(() => {
-    return Object.keys(modeConfig).indexOf(props.data.mode as ContextMergerModeEnum);
+    return Object.keys(modeConfig).indexOf(props.data.mode);
 });
 </script>
 

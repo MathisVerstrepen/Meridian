@@ -55,7 +55,7 @@ const { user: currentUser } = useUserSession();
 const { apiFetch } = useAPI();
 const { formatFileSize } = useFormatters();
 let usageRequestId = 0;
-const currentUserId = computed(() => (currentUser.value as User | null)?.id ?? '');
+const currentUserId = computed(() => (currentUser.value)?.id ?? '');
 const hasActiveFilters = computed(
     () =>
         searchQuery.value.trim() ||
@@ -372,7 +372,7 @@ const deleteUser = async (userId: string, username: string) => {
 
         await fetchUsers();
     } catch (err: unknown) {
-        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to delete user';
+        const msg = runtimeErrorDetail(err) || 'Failed to delete user';
         showToastError(msg);
         console.error(err);
     }
@@ -393,7 +393,7 @@ const updateUserPlan = async (targetUser: AdminUser, planType: PlanType) => {
         showToastSuccess(`${targetUser.username} moved to ${planType} plan`);
         await fetchUsers();
     } catch (err: unknown) {
-        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to update user plan';
+        const msg = runtimeErrorDetail(err) || 'Failed to update user plan';
         showToastError(msg);
         console.error(err);
     } finally {
@@ -402,7 +402,8 @@ const updateUserPlan = async (targetUser: AdminUser, planType: PlanType) => {
 };
 
 const onPlanChange = (targetUser: AdminUser, event: Event) => {
-    const planType = (event.target as HTMLSelectElement).value as PlanType;
+    const value = requireElement(event.target, HTMLSelectElement).value;
+    const planType: PlanType = value === 'premium' ? 'premium' : 'free';
     void updateUserPlan(targetUser, planType);
 };
 
@@ -427,7 +428,7 @@ const resetUserQueryUsage = async (
         };
         showToastSuccess(`${label} usage reset for ${targetUser.username}`);
     } catch (err: unknown) {
-        const msg = (err as { data?: { detail?: string } }).data?.detail || `Failed to reset ${label} usage`;
+        const msg = runtimeErrorDetail(err) || `Failed to reset ${label} usage`;
         showToastError(msg);
         console.error(err);
     } finally {
@@ -466,7 +467,7 @@ const updateUserAdminStatus = async (targetUser: AdminUser, isAdmin: boolean) =>
         );
         await fetchUsers();
     } catch (err: unknown) {
-        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to update admin role';
+        const msg = runtimeErrorDetail(err) || 'Failed to update admin role';
         showToastError(msg);
         console.error(err);
     } finally {
@@ -509,7 +510,7 @@ const updateUserSuspension = async (
         await fetchUsers();
         return true;
     } catch (err: unknown) {
-        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to update suspension';
+        const msg = runtimeErrorDetail(err) || 'Failed to update suspension';
         showToastError(msg);
         console.error(err);
         return false;
@@ -564,7 +565,7 @@ const showingFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * l
 const showingTo = computed(() => Math.min(page.value * limit.value, total.value));
 
 const onLimitChange = (event: Event) => {
-    limit.value = Number((event.target as HTMLSelectElement).value);
+    limit.value = Number((requireElement(event.target, HTMLSelectElement)).value);
     page.value = 1;
     fetchUsers();
 };

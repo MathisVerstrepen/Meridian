@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Marked } from 'marked';
+import { isRuntimeString } from '../app/utils/runtimeTypes';
 import {
     compareReleaseVersions,
     parseReleaseVersion,
@@ -79,7 +80,7 @@ export const loadReleaseChangelogs = async (directory: string): Promise<ReleaseC
         } catch (error) {
             throw new Error(`Unable to parse release changelog "${filePath}"`, { cause: error });
         }
-        if (typeof html !== 'string') {
+        if (!isRuntimeString(html)) {
             throw new Error(`Release changelog parser unexpectedly became asynchronous for "${filePath}"`);
         }
 

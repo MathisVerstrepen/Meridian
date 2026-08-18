@@ -4,7 +4,7 @@ import type { DataParallelization, DataParallelizationModel, SidebarNode } from 
 
 const props = defineProps<{
     node: SidebarNode<DataParallelization>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
     setCurrentModel: (model: string) => void;
 }>();
 

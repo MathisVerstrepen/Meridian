@@ -119,17 +119,17 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
         await rootSegments.evaluateAll((segments) =>
             segments.every(
                 (segment) =>
-                    (segment as HTMLElement).style.clipPath.startsWith('url(') &&
+                    getComputedStyle(segment).clipPath.startsWith('url(') &&
                     segment.classList.contains('backdrop-blur-xl'),
             ),
         ),
     ).toBe(true);
     await expect(page.getByTestId('quick-action-root-rim')).toBeAttached();
     const fanGeometry = await page.getByTestId('quick-action-wheel').evaluate((element) => ({
-        mainOuter: Number((element as HTMLElement).dataset.mainOuterRadius),
-        fanInner: Number((element as HTMLElement).dataset.outerInnerRadius),
-        fanOuter: Number((element as HTMLElement).dataset.wheelOuterRadius),
-        label: Number((element as HTMLElement).dataset.outerLabelRadius),
+        mainOuter: Number(element.getAttribute('data-main-outer-radius')),
+        fanInner: Number(element.getAttribute('data-outer-inner-radius')),
+        fanOuter: Number(element.getAttribute('data-wheel-outer-radius')),
+        label: Number(element.getAttribute('data-outer-label-radius')),
     }));
     expect(fanGeometry.mainOuter - fanGeometry.fanInner).toBeLessThanOrEqual(2);
     expect(fanGeometry.label).toBeGreaterThan((fanGeometry.mainOuter + fanGeometry.fanOuter) / 2);
@@ -142,7 +142,7 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     await expect(page.locator('[data-external-quick-action]')).toHaveCount(7);
     const outerSegmentStyles = await page.locator('[data-external-quick-action]').evaluateAll((segments) =>
         segments.map((segment) => ({
-            accent: (segment as HTMLElement).style.getPropertyValue('--quick-action-accent'),
+            accent: getComputedStyle(segment).getPropertyValue('--quick-action-accent'),
             zIndex: getComputedStyle(segment).zIndex,
             background: getComputedStyle(segment).backgroundColor,
         })),
@@ -200,7 +200,7 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     await expect(page.locator('[data-external-quick-action]')).toHaveCount(9);
     expect(
         await page.locator('[data-external-quick-action]').evaluateAll((actions) =>
-            actions.map((action) => (action as HTMLElement).dataset.actionId),
+            actions.map((action) => action.getAttribute('data-action-id')),
         ),
     ).toEqual([
         'workflow-attachment-target-0',
@@ -220,12 +220,12 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     const handleIndicator = workflow.locator('[data-workflow-handle-indicator]');
     await expect(handleIndicator).toHaveAttribute('data-handle-category', 'context');
     await expect(handleIndicator).toHaveAttribute('data-handle-direction', 'target');
-    expect(await handleIndicator.evaluate((element) => (element as HTMLElement).style.backgroundColor)).toBe(
+    expect(await handleIndicator.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
         'var(--color-node-cat-context)',
     );
     expect(
         await workflow.evaluate((element) =>
-            (element as HTMLElement).style.getPropertyValue('--quick-action-accent'),
+            getComputedStyle(element).getPropertyValue('--quick-action-accent'),
         ),
     ).toBe('var(--color-olive-grove)');
     await workflow.locator('[data-external-action-label]').click();
@@ -284,9 +284,9 @@ test('bypasses editable content and edges while clamping corner placement', asyn
         }
     }
     const menuPosition = await page.getByTestId('quick-action-wheel').evaluate((element) => ({
-        x: Number.parseFloat((element as HTMLElement).style.left),
-        y: Number.parseFloat((element as HTMLElement).style.top),
-        radius: Number.parseFloat((element as HTMLElement).dataset.wheelOuterRadius ?? '0'),
+        x: Number.parseFloat(getComputedStyle(element).left),
+        y: Number.parseFloat(getComputedStyle(element).top),
+        radius: Number.parseFloat(element.getAttribute('data-wheel-outer-radius') ?? '0'),
     }));
     expect(menuPosition.x - menuPosition.radius).toBeGreaterThanOrEqual(0);
     expect(menuPosition.y - menuPosition.radius).toBeGreaterThanOrEqual(0);

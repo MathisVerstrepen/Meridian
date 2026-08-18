@@ -1,4 +1,5 @@
 import { parseMermaidSource } from './runtime.mjs';
+import { isRuntimeString } from '../runtimeTypes.mjs';
 
 const readStdin = async () => {
     const chunks = [];
@@ -17,7 +18,7 @@ const writeJson = (payload) => {
 try {
     const rawInput = await readStdin();
     const payload = rawInput.trim() ? JSON.parse(rawInput) : {};
-    const content = typeof payload.content === 'string' ? payload.content : '';
+    const content = isRuntimeString(payload.content) ? payload.content : '';
 
     if (!content.trim()) {
         writeJson({

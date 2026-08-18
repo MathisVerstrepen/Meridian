@@ -25,7 +25,7 @@ const mainThreadMarked = new Marked({
  */
 export const useMarkedWorker = () => {
     // Initialize worker only once
-    if (!worker && !isInitializing && typeof window !== 'undefined') {
+    if (!worker && !isInitializing && !isRuntimeUndefined(window)) {
         isInitializing = true;
 
         // The `new URL(...)` is crucial for Vite/Nuxt to correctly bundle and locate the worker script.
@@ -40,7 +40,7 @@ export const useMarkedWorker = () => {
             if (promise) {
                 if (error) {
                     promise.reject(new Error(error));
-                } else if (typeof html === 'string') {
+                } else if (isRuntimeString(html)) {
                     promise.resolve(html);
                 }
                 pendingPromises.delete(id); // Clean up
@@ -67,7 +67,13 @@ export const useMarkedWorker = () => {
         const needsWorker = markdown.includes('```') || markdown.includes('$');
 
         if (!needsWorker) {
-            return Promise.resolve(mainThreadMarked.parse(markdown) as string);
+            const parsedHtml = mainThreadMarked.parse(markdown);
+            if (!isRuntimeString(parsedHtml)) {
+                return Promise.reject(
+                    new TypeError('Synchronous Markdown parser returned a non-string result'),
+                );
+            }
+            return Promise.resolve(parsedHtml);
         }
 
         if (!worker) {
@@ -76,10 +82,11 @@ export const useMarkedWorker = () => {
             );
         }
 
+        const activeWorker = worker;
         return new Promise((resolve, reject) => {
             const id = crypto.randomUUID();
             pendingPromises.set(id, { resolve, reject });
-            worker!.postMessage({ id, markdown });
+            activeWorker.postMessage({ id, markdown });
         });
     };
 

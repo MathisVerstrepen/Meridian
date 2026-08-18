@@ -1,5 +1,6 @@
 import type { ContextMergerModeEnum, ToolEnum } from '@/types/enums';
 import type { GithubIssue, RepositoryInfo } from '@/types/github';
+import { isRuntimeString } from '@/utils/runtimeTypes';
 
 export const NODE_PRESET_SCHEMA_VERSION = 1 as const;
 export const MAX_NODE_PRESETS = 8;
@@ -10,7 +11,7 @@ export const MAX_PRESET_COORDINATE = 1_000_000;
 export const MAX_PRESET_DIMENSION = 4_000;
 export const DEFAULT_NODE_PRESET_ACCENT_COLOR = '#eb5e28';
 export const NODE_PRESET_ACCENT_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
-export const isNodePresetAccentColor = (value: unknown): value is string =>
+export const isNodePresetAccentColor = (value: RuntimeValue): value is string =>
     typeof value === 'string' && value.length === 7 && NODE_PRESET_ACCENT_COLOR_PATTERN.test(value);
 
 export const NODE_PRESET_NODE_TYPES = [
@@ -26,13 +27,20 @@ export const NODE_PRESET_NODE_TYPES = [
 
 export type NodePresetNodeType = (typeof NODE_PRESET_NODE_TYPES)[number];
 
+export const isNodePresetNodeType = <Value>(
+    value: Value,
+): value is Value & NodePresetNodeType =>
+    isRuntimeString(value) && NODE_PRESET_NODE_TYPES.some((nodeType) => nodeType === value);
+
 export const NODE_PRESET_EDGE_CATEGORIES = ['prompt', 'context', 'attachment'] as const;
 export type NodePresetEdgeCategory = (typeof NODE_PRESET_EDGE_CATEGORIES)[number];
 
-export const NODE_PRESET_MINIMUM_DIMENSIONS: Record<
-    NodePresetNodeType,
-    Readonly<{ width: number; height: number }>
-> = {
+export const isNodePresetEdgeCategory = <Value>(
+    value: Value,
+): value is Value & NodePresetEdgeCategory =>
+    isRuntimeString(value) && NODE_PRESET_EDGE_CATEGORIES.some((category) => category === value);
+
+export const NODE_PRESET_MINIMUM_DIMENSIONS = {
     prompt: { width: 500, height: 200 },
     filePrompt: { width: 500, height: 275 },
     textToText: { width: 600, height: 300 },
@@ -41,12 +49,12 @@ export const NODE_PRESET_MINIMUM_DIMENSIONS: Record<
     github: { width: 500, height: 250 },
     contextMerger: { width: 285, height: 135 },
     group: { width: 40, height: 40 },
-};
+} satisfies Record<
+    NodePresetNodeType,
+    Readonly<{ width: number; height: number }>
+>;
 
-export const NODE_PRESET_EDGE_TYPE_RULES: Record<
-    NodePresetEdgeCategory,
-    Readonly<{ sources: readonly NodePresetNodeType[]; targets: readonly NodePresetNodeType[] }>
-> = {
+export const NODE_PRESET_EDGE_TYPE_RULES = {
     prompt: {
         sources: ['prompt'],
         targets: ['prompt', 'textToText', 'parallelization', 'routing'],
@@ -59,7 +67,10 @@ export const NODE_PRESET_EDGE_TYPE_RULES: Record<
         sources: ['filePrompt', 'github'],
         targets: ['textToText', 'parallelization', 'routing'],
     },
-};
+} satisfies Record<
+    NodePresetEdgeCategory,
+    Readonly<{ sources: readonly NodePresetNodeType[]; targets: readonly NodePresetNodeType[] }>
+>;
 
 export interface NodePresetPosition {
     x: number;

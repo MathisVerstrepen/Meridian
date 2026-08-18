@@ -215,13 +215,14 @@ describe('calculateGraphAutoLayout', () => {
         }
 
         const typedSource = typedNode('source', NodeTypeEnum.FILE_PROMPT);
-        for (const [sourceHandle, targetHandle] of [
+        const unsupportedHandlePairs = [
             ['', 'attachment_target'],
             ['attachment_', 'attachment_target'],
             ['prompt_source', 'attachment_target'],
             [null, 'attachment_'],
             [null, 'unknown_target'],
-        ] as Array<[string | null, string]>) {
+        ] satisfies Array<[string | null, string]>;
+        for (const [sourceHandle, targetHandle] of unsupportedHandlePairs) {
             const positions = calculateGraphAutoLayout([typedSource, node('target')], [
                 edge('edge', 'source', 'target', sourceHandle, targetHandle),
             ]);

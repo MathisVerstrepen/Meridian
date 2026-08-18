@@ -17,7 +17,7 @@ onConnect((connection: Connection) => editor.connect(connection));
 
 const onKeydown = (event: KeyboardEvent) => {
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-    const target = event.target as HTMLElement | null;
+    const target = elementOrNull(event.target, HTMLElement);
     if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
     const selected = editor.getNodes.value.filter((node) => node.selected);
     if (selected.length === 0) return;

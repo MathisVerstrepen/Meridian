@@ -21,7 +21,7 @@ const emit = defineEmits<{
 const showPassword = ref(false);
 
 const onInput = (event: Event) => {
-    const target = event.target as HTMLInputElement;
+    const target = requireElement(event.target, HTMLInputElement);
     emit('update:modelValue', target.value);
 };
 </script>

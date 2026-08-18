@@ -141,7 +141,7 @@ const canSaveTone = computed(
     () => newToneName.value.trim().length > 0 && newTonePrompt.value.trim().length > 0,
 );
 const isCustomTonePreset = (presetId: string | number) =>
-    typeof presetId === 'string' && Boolean(customStylePresets.value[presetId]);
+    isRuntimeString(presetId) && Boolean(customStylePresets.value[presetId]);
 
 const resetFields = () => {
     prompt.value = '';
@@ -212,22 +212,21 @@ const onPromptKeydown = (event: KeyboardEvent) => {
 };
 
 const onFileInputChange = (event: Event) => {
-    const input = event.target as HTMLInputElement;
+    const input = requireElement(event.target, HTMLInputElement);
     void handleFiles(input.files);
     input.value = '';
 };
 
-const isString = (value: unknown): value is string => typeof value === 'string';
+const isString = <Value>(value: Value): value is Value & string => typeof value === 'string';
 
-const isGeneratedImageDragPayload = (value: unknown): value is GeneratedImageGalleryItem => {
-    if (!value || typeof value !== 'object') return false;
-    const payload = value as Partial<GeneratedImageGalleryItem>;
-    return isString(payload.id)
-        && isString(payload.name)
-        && isString(payload.path)
-        && isString(payload.created_at)
-        && isString(payload.updated_at)
-        && Array.isArray(payload.source_image_ids);
+const isGeneratedImageDragPayload = <Value>(value: Value): value is Value & GeneratedImageGalleryItem => {
+    if (!isJsonObject(value)) return false;
+    return isString(value.id)
+        && isString(value.name)
+        && isString(value.path)
+        && isString(value.created_at)
+        && isString(value.updated_at)
+        && Array.isArray(value.source_image_ids);
 };
 
 const isGeneratedImageReferenceDrag = (event: DragEvent) =>
@@ -239,7 +238,7 @@ const draggedGeneratedImage = (event: DragEvent) => {
     const rawPayload = event.dataTransfer?.getData(IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE);
     if (!rawPayload) return null;
     try {
-        const payload = JSON.parse(rawPayload) as unknown;
+        const payload: RuntimeValue = JSON.parse(rawPayload);
         return isGeneratedImageDragPayload(payload) ? payload : null;
     } catch (error) {
         console.warn('Failed to parse dragged generated image:', error);
@@ -269,14 +268,14 @@ const addDraggedGeneratedImageReference = (event: DragEvent) => {
 };
 
 const updateIterationFromPointer = (event: PointerEvent) => {
-    const input = event.currentTarget as HTMLInputElement;
+    const input = requireElement(event.currentTarget, HTMLInputElement);
     const rect = input.getBoundingClientRect();
     const progress = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
     variationCount.value = Math.round(progress * 15) + 1;
 };
 
 const onIterationPointerDown = (event: PointerEvent) => {
-    const input = event.currentTarget as HTMLInputElement;
+    const input = requireElement(event.currentTarget, HTMLInputElement);
     isDraggingIteration.value = true;
     input.setPointerCapture(event.pointerId);
     updateIterationFromPointer(event);
@@ -288,7 +287,7 @@ const onIterationPointerMove = (event: PointerEvent) => {
 };
 
 const onIterationPointerEnd = (event: PointerEvent) => {
-    const input = event.currentTarget as HTMLInputElement;
+    const input = requireElement(event.currentTarget, HTMLInputElement);
     isDraggingIteration.value = false;
     if (input.hasPointerCapture(event.pointerId)) {
         input.releasePointerCapture(event.pointerId);
@@ -501,14 +500,16 @@ const saveTonePreset = async () => {
     if (!canSaveTone.value) return;
     isSavingTone.value = true;
     try {
-        const id = await addCustomStylePreset({
+        const preset = {
             label: newToneName.value.trim(),
             suffix: newTonePrompt.value.trim(),
-            ...(newToneDescription.value.trim()
-                ? { description: newToneDescription.value.trim() }
-                : {}),
-            ...(newTonePreviewImageId.value ? { imageId: newTonePreviewImageId.value } : {}),
-        });
+        };
+        const description = newToneDescription.value.trim();
+        if (description) Object.assign(preset, { description });
+        if (newTonePreviewImageId.value) {
+            Object.assign(preset, { imageId: newTonePreviewImageId.value });
+        }
+        const id = await addCustomStylePreset(preset);
         stylePreset.value = id;
         success('Custom tone saved.', { title: 'Tone added' });
         isToneModalOpen.value = false;
@@ -524,7 +525,7 @@ const saveTonePreset = async () => {
 };
 
 const deleteTonePreset = async (presetId: string | number, label: string) => {
-    if (typeof presetId !== 'string' || !isCustomTonePreset(presetId)) return;
+    if (!isRuntimeString(presetId) || !isCustomTonePreset(presetId)) return;
     if (!window.confirm(`Delete custom tone "${label}"? This cannot be undone.`)) return;
 
     try {

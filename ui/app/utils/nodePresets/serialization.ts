@@ -21,24 +21,23 @@ import { isRecord } from '@/utils/nodePresets/validationHelpers';
 import { validateNodePresetSettings } from '@/utils/nodePresets/validation';
 
 const TOOLS = new Set<string>(Object.values(ToolEnum));
-const CONTEXT_MODES = new Set<string>(Object.values(ContextMergerModeEnum));
 
-function stringValue(value: unknown, fallback = ''): string {
-    return typeof value === 'string' ? value : fallback;
+function stringValue(value: RuntimeValue, fallback = ''): string {
+    return isRuntimeString(value) ? value : fallback;
 }
 
 function optionalValue<T>(
     source: NodePresetUnknownRecord,
     key: string,
-    convert: (value: unknown) => T,
+    convert: (value: RuntimeValue) => T,
 ): Partial<Record<string, T>> {
     return key in source ? { [key]: convert(source[key]) } : {};
 }
 
-function flattenGithubFiles(value: unknown): NodePresetGithubFile[] {
+function flattenGithubFiles(value: RuntimeValue): NodePresetGithubFile[] {
     if (!Array.isArray(value)) return [];
     const flattened: NodePresetGithubFile[] = [];
-    const visit = (entry: unknown): void => {
+    const visit = (entry: RuntimeValue): void => {
         if (!isRecord(entry)) return;
         if (entry.type === 'file' || entry.type === 'directory') {
             flattened.push({
@@ -128,7 +127,7 @@ function sanitizeGithubData(data: NodePresetUnknownRecord): NodePresetData {
     };
 }
 
-function sanitizeData(type: NodePresetNodeType, value: unknown): NodePresetData {
+function sanitizeData(type: NodePresetNodeType, value: RuntimeValue): NodePresetData {
     const data = isRecord(value) ? value : {};
     if (type === 'prompt') {
         return {
@@ -188,10 +187,12 @@ function sanitizeData(type: NodePresetNodeType, value: unknown): NodePresetData 
     }
     if (type === 'github') return sanitizeGithubData(data);
     if (type === 'contextMerger') {
+        const mode = data.mode;
         return {
-            mode: CONTEXT_MODES.has(stringValue(data.mode))
-                ? (data.mode as ContextMergerModeEnum)
-                : ContextMergerModeEnum.FULL,
+            mode:
+                mode === ContextMergerModeEnum.SUMMARY || mode === ContextMergerModeEnum.LAST_N
+                    ? mode
+                    : ContextMergerModeEnum.FULL,
             ...optionalValue(data, 'last_n', (entry) =>
                 entry === null ? null : Number(entry),
             ),
@@ -211,8 +212,8 @@ function readDimension(
     node: NodePresetUnknownRecord,
     dimension: 'width' | 'height',
 ): number {
-    if (typeof node[dimension] === 'number') return node[dimension];
-    if (isRecord(node.dimensions) && typeof node.dimensions[dimension] === 'number') {
+    if (isRuntimeNumber(node[dimension])) return node[dimension];
+    if (isRecord(node.dimensions) && isRuntimeNumber(node.dimensions[dimension])) {
         return node.dimensions[dimension];
     }
     if (isRecord(node.style)) {
@@ -239,36 +240,39 @@ export function normalizeNodePresetGeometry(preset: NodePreset): NodePreset {
 
 export function serializeNodePreset(input: NodePresetDraftInput): NodePresetResult<NodePreset> {
     const nodes: NodePresetNode[] = input.nodes.map((node) => {
-        const type = stringValue(node.type) as NodePresetNodeType;
-        const position = isRecord(node.position) ? node.position : {};
+        const record = isRecord(node) ? node : {};
+        const type = /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that node-type check. */ stringValue(record.type) as NodePresetNodeType;
+        const position = isRecord(record.position) ? record.position : {};
         const parentId =
-            typeof node.parentId === 'string'
-                ? node.parentId
-                : typeof node.parentNode === 'string'
-                  ? node.parentNode
+            isRuntimeString(record.parentId)
+                ? record.parentId
+                : isRuntimeString(record.parentNode)
+                  ? record.parentNode
                   : undefined;
-        return {
-            id: stringValue(node.id),
+        const serializedNode = {
+            id: stringValue(record.id),
             type,
             position: { x: Number(position.x), y: Number(position.y) },
-            width: readDimension(node, 'width'),
-            height: readDimension(node, 'height'),
-            ...(parentId ? { parentId } : {}),
-            data: sanitizeData(type, node.data),
+            width: readDimension(record, 'width'),
+            height: readDimension(record, 'height'),
+            data: sanitizeData(type, record.data),
         };
+        if (parentId) Object.assign(serializedNode, { parentId });
+        return serializedNode;
     });
     const edges: NodePresetEdge[] = input.edges.map((edge) => {
+        const record = isRecord(edge) ? edge : {};
         const categoryValue =
-            typeof edge.category === 'string'
-                ? edge.category
-                : typeof edge.sourceHandle === 'string'
-                  ? edge.sourceHandle.split('_')[0]
+            isRuntimeString(record.category)
+                ? record.category
+                : isRuntimeString(record.sourceHandle)
+                  ? record.sourceHandle.split('_')[0]
                   : '';
         return {
-            id: stringValue(edge.id),
-            source: stringValue(edge.source),
-            target: stringValue(edge.target),
-            category: categoryValue as NodePresetEdgeCategory,
+            id: stringValue(record.id),
+            source: stringValue(record.source),
+            target: stringValue(record.target),
+            category: /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that edge-category check. */ categoryValue as NodePresetEdgeCategory,
         };
     });
     const normalized = normalizeNodePresetGeometry({
@@ -286,3 +290,4 @@ export function serializeNodePreset(input: NodePresetDraftInput): NodePresetResu
         ? { valid: true, issues: [], value: result.value.presets[0] }
         : { valid: false, issues: result.issues };
 }
+import { isRuntimeNumber, isRuntimeString } from '@/utils/runtimeTypes';

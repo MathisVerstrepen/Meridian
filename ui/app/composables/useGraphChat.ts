@@ -1,11 +1,10 @@
-import { useVueFlow, type GraphNode } from '@vue-flow/core';
+import { type GraphNode } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeTypeEnum } from '@/types/enums';
 import type { ChatInputSubmission } from '@/types/chat';
 import type { RepoContent } from '@/types/github';
-import type { NodeWithDimensions } from '@/types/graph';
 import {
     calculateGeneratorChildPosition,
     type GeneratorPlacementNode,
@@ -18,7 +17,7 @@ type CreatedChatNodes = {
 
 export const useGraphChat = () => {
     const route = useRoute();
-    const graphId = computed(() => route.params.id as string);
+    const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
     const chatStore = useChatStore();
     const { error } = useToast();
@@ -41,7 +40,7 @@ export const useGraphChat = () => {
     };
 
     const getNodeRect = (nodeId: string) => {
-        const { findNode } = useVueFlow('main-graph-' + graphId.value);
+        const { findNode } = useGraphFlow('main-graph-' + graphId.value);
 
         const node = findNode(nodeId);
 
@@ -67,15 +66,15 @@ export const useGraphChat = () => {
     };
 
     const getNodeWidth = (node: GraphNode): number => {
-        const dimensionsWidth = (node as NodeWithDimensions).dimensions?.width;
+        const dimensionsWidth = node.dimensions.width;
         if (dimensionsWidth && dimensionsWidth > 0) return dimensionsWidth;
-        if (typeof node.width === 'number' && node.width > 0) return node.width;
-        return getBlockByNodeType(node.type as NodeTypeEnum)?.minSize.width ?? 0;
+        if (isRuntimeNumber(node.width) && node.width > 0) return node.width;
+        return getBlockByNodeType(nodeTypeOrUndefined(node.type))?.minSize.width ?? 0;
     };
 
     const getGeneratorPlacement = (fromNodeId: string) => {
         const parentRect = getNodeRect(fromNodeId);
-        const { findNode, getNodes, getEdges } = useVueFlow('main-graph-' + graphId.value);
+        const { findNode, getNodes, getEdges } = useGraphFlow('main-graph-' + graphId.value);
         const parentNode = findNode(fromNodeId);
         const normalizedNodes: GeneratorPlacementNode[] = getNodes.value.map((node) => ({
             id: node.id,
@@ -83,8 +82,8 @@ export const useGraphChat = () => {
             position: node.position,
             width: getNodeWidth(node),
             height:
-                (node as NodeWithDimensions).dimensions?.height ??
-                (typeof node.height === 'number' ? node.height : 0),
+                node.dimensions.height ??
+                (isRuntimeNumber(node.height) ? node.height : 0),
         }));
         const normalizedParent: GeneratorPlacementNode = {
             id: fromNodeId,
@@ -316,7 +315,7 @@ export const useGraphChat = () => {
     };
 
     const updatePromptNodeText = (nodeId: string, text: string) => {
-        const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
+        const { updateNode, findNode } = useGraphFlow('main-graph-' + graphId.value);
         const node = findNode(nodeId);
         if (node) {
             node.data.prompt = text;
@@ -333,7 +332,7 @@ export const useGraphChat = () => {
     };
 
     const isCanvasEmpty = () => {
-        const { nodes } = useVueFlow('main-graph-' + graphId.value);
+        const { nodes } = useGraphFlow('main-graph-' + graphId.value);
         return nodes.value.length === 0;
     };
 
@@ -398,7 +397,7 @@ export const useGraphChat = () => {
      * @returns A promise that resolves when the graph is rendered.
      */
     const waitForRender = async () => {
-        const { onNodesInitialized } = useVueFlow('main-graph-' + graphId.value);
+        const { onNodesInitialized } = useGraphFlow('main-graph-' + graphId.value);
 
         return new Promise<void>((resolve) => {
             const unsubscribe = onNodesInitialized(async () => {

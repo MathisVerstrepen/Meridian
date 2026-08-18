@@ -1,4 +1,4 @@
-type NodeExecutor = () => Promise<unknown>;
+type NodeExecutor = () => Promise<void>;
 type NodeStopper = () => Promise<void>;
 
 interface NodeControls {
@@ -23,7 +23,7 @@ class NodeRegistry {
         this.controls.delete(nodeId);
     }
 
-    async execute(nodeId: string): Promise<unknown> {
+    async execute(nodeId: string): Promise<void> {
         const controls = this.controls.get(nodeId);
         if (controls) {
             await controls.execute();
