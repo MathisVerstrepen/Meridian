@@ -1,13 +1,18 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import type { GraphNode } from '@vue-flow/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeTypeEnum } from '@/types/enums';
 import { useGraphChat } from '@/composables/useGraphChat';
 
 const stubs = vi.hoisted(() => ({
-    findNode: vi.fn((nodeId: string) => ({
-        id: nodeId,
-        position: { x: 100, y: 200 },
-    })),
+    nodes: { value: [] as GraphNode[] },
+    edges: { value: [] as Array<{ source: string; target: string }> },
+    findNode: vi.fn((nodeId: string) =>
+        stubs.nodes.value.find((node) => node.id === nodeId) ?? {
+            id: nodeId,
+            position: { x: 100, y: 200 },
+        },
+    ),
     placeBlock: vi.fn((options: { blocId: string }) => ({
         id:
             options.blocId === 'primary-prompt-text'
@@ -23,7 +28,11 @@ const stubs = vi.hoisted(() => ({
 }));
 
 vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({ findNode: stubs.findNode }),
+    useVueFlow: () => ({
+        findNode: stubs.findNode,
+        getNodes: stubs.nodes,
+        getEdges: stubs.edges,
+    }),
 }));
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'graph-id' } }));
@@ -39,15 +48,79 @@ mockNuxtImport('useGraphActions', () => () => ({
 mockNuxtImport('useGraphOverlaps', () => () => ({
     resolveOverlaps: stubs.resolveOverlaps,
 }));
+mockNuxtImport('useBlocks', () => () => ({
+    getBlockByNodeType: () => ({ minSize: { width: 100, height: 100 } }),
+}));
 
 describe('useGraphChat createNodeFromVariant', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
+        stubs.nodes.value = [
+            {
+                id: 'source-node-id',
+                type: NodeTypeEnum.TEXT_TO_TEXT,
+                position: { x: 100, y: 200 },
+            } as GraphNode,
+        ];
+        stubs.edges.value = [];
+        const parentElement = document.createElement('div');
+        parentElement.dataset.id = 'source-node-id';
+        parentElement.style.height = '180px';
+        document.body.append(parentElement);
     });
 
     afterEach(() => {
         vi.useRealTimers();
+        document.body.replaceChildren();
+    });
+
+    it('places a generator below a generator parent without direct generator children', () => {
+        const { createNodeFromVariant } = useGraphChat();
+
+        createNodeFromVariant(NodeTypeEnum.TEXT_TO_TEXT, 'source-node-id', {
+            submission: { message: 'Prompt text', files: [], githubContext: null },
+        });
+
+        expect(stubs.placeBlock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                blocId: 'primary-model-text-to-text',
+                positionFrom: { x: 100, y: 530 },
+            }),
+        );
+    });
+
+    it('places a generator right of the rightmost direct generator child', () => {
+        stubs.nodes.value.push(
+            {
+                id: 'direct-child',
+                type: NodeTypeEnum.ROUTING,
+                position: { x: 500, y: 600 },
+                dimensions: { width: 350, height: 100 },
+            } as GraphNode,
+            {
+                id: 'descendant',
+                type: NodeTypeEnum.PARALLELIZATION,
+                position: { x: 1200, y: 1000 },
+                width: 300,
+            } as GraphNode,
+        );
+        stubs.edges.value = [
+            { source: 'source-node-id', target: 'direct-child' },
+            { source: 'direct-child', target: 'descendant' },
+        ];
+        const { createNodeFromVariant } = useGraphChat();
+
+        createNodeFromVariant(NodeTypeEnum.ROUTING, 'source-node-id', {
+            submission: { message: 'Prompt text', files: [], githubContext: null },
+        });
+
+        expect(stubs.placeBlock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                blocId: 'primary-model-routing',
+                positionFrom: { x: 1000, y: 600 },
+            }),
+        );
     });
 
     it('resolves the main node and attached prompt below collisions after the placement delay', async () => {

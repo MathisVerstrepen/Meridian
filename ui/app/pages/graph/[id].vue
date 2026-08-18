@@ -86,6 +86,8 @@ const {
     getViewport,
     onMoveEnd,
 } = useVueFlow('main-graph-' + graphId.value);
+const fitGraph = () => fitView({ maxZoom: 1, minZoom: 0.4, padding: 0.2 });
+const { autoLayoutGraph } = useGraphAutoLayout({ graphId, fitGraph });
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
@@ -241,7 +243,8 @@ const {
     deleteNode,
     unlinkNode: unlinkNodeFromGroup,
     deleteGroup: deleteCommentGroup,
-    fitGraph: () => fitView({ maxZoom: 1, minZoom: 0.4, padding: 0.2 }),
+    fitGraph,
+    autoLayoutGraph,
 });
 
 const fetchGraph = async (id: string) => {
@@ -303,11 +306,7 @@ const setupLoadedGraphView = async () => {
 
     if (!isViewportRestored) {
         setTimeout(() => {
-            fitView({
-                maxZoom: 1,
-                minZoom: 0.4,
-                padding: 0.2,
-            }).then(() => {
+            fitGraph().then(() => {
                 graphReady.value = true;
             });
         }, 0);
@@ -680,7 +679,7 @@ onUnmounted(() => {
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
-                <UiGraphCanvasControls :graph-id="graphId" />
+                <UiGraphCanvasControls :graph-id="graphId" @auto-layout="autoLayoutGraph" />
 
                 <template #connection-line="connectionProps">
                     <UiGraphEdgesCustomConnectionLine v-bind="connectionProps" />

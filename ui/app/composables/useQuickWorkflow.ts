@@ -5,7 +5,11 @@ import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition, NodeWithDimensions } from '@/types/graph';
-import { calculateQuickWorkflowPositionOffset } from '@/utils/graphGeometry';
+import {
+    calculateGeneratorChildPosition,
+    calculateQuickWorkflowPositionOffset,
+    type GeneratorPlacementNode,
+} from '@/utils/graphGeometry';
 import {
     getQuickWorkflowBlockId,
     getQuickWorkflowHandleId,
@@ -21,6 +25,12 @@ const LINKED_NODE_OFFSETS: Partial<Record<NodeTypeEnum, { x: number; y: number }
     [NodeTypeEnum.GITHUB]: { x: -600, y: 0 },
 };
 
+const GENERATOR_NODE_TYPES = [
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+] as const;
+
 export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
     const route = useRoute();
     const graphId = computed(() => graphIdOverride?.value ?? (route.params.id as string) ?? '');
@@ -29,6 +39,13 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
     const { getBlockByNodeType } = useBlocks();
     const { acceptsMultipleInputEdges } = useEdgeCompatibility();
     const { resolveOverlaps } = useGraphOverlaps(graphId);
+
+    const getNodeWidth = (node: GraphNode): number => {
+        const dimensionsWidth = (node as NodeWithDimensions).dimensions?.width;
+        if (dimensionsWidth && dimensionsWidth > 0) return dimensionsWidth;
+        if (typeof node.width === 'number' && node.width > 0) return node.width;
+        return getBlockByNodeType(node.type as NodeTypeEnum)?.minSize.width ?? 0;
+    };
 
     const targetIsAvailable = (payload: QuickWorkflowCreatePayload, anchor: GraphNode): boolean => {
         if (payload.direction !== 'target') return true;
@@ -103,20 +120,55 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
                 : (getBlockByNodeType(anchor.type as NodeTypeEnum)?.minSize.width ?? 0));
         const mainHeight = definitions.main.minSize.height ?? 0;
         const mainWidth = definitions.main.minSize.width ?? 0;
-        const positionOffset = calculateQuickWorkflowPositionOffset({
-            category: payload.category,
-            direction: payload.direction,
-            anchorWidth,
-            anchorHeight,
-            mainWidth,
-            mainHeight,
-            gap: AUTO_PLACEMENT_GAP,
-        });
+        const usesGeneratorChildPlacement =
+            payload.category === NodeCategoryEnum.CONTEXT &&
+            payload.direction === 'source' &&
+            GENERATOR_NODE_TYPES.includes(
+                definitions.main.nodeType as (typeof GENERATOR_NODE_TYPES)[number],
+            );
+        const positionFrom = usesGeneratorChildPlacement
+            ? calculateGeneratorChildPosition({
+                  parent: {
+                      id: anchor.id,
+                      type: anchor.type,
+                      position: anchor.position,
+                      width: anchorWidth,
+                      height: anchorHeight,
+                  },
+                  nodes: getNodes.value.map(
+                      (node): GeneratorPlacementNode => ({
+                          id: node.id,
+                          type: node.type,
+                          position: node.position,
+                          width: getNodeWidth(node),
+                          height:
+                              (node as NodeWithDimensions).dimensions?.height ??
+                              (typeof node.height === 'number' ? node.height : 0),
+                      }),
+                  ),
+                  edges: getEdges.value.map((edge) => ({
+                      source: edge.source,
+                      target: edge.target,
+                  })),
+                  gap: AUTO_PLACEMENT_GAP,
+              })
+            : anchor.position;
+        const positionOffset = usesGeneratorChildPlacement
+            ? undefined
+            : calculateQuickWorkflowPositionOffset({
+                  category: payload.category,
+                  direction: payload.direction,
+                  anchorWidth,
+                  anchorHeight,
+                  mainWidth,
+                  mainHeight,
+                  gap: AUTO_PLACEMENT_GAP,
+              });
         const mainNode = placeBlock({
             graphId: graphId.value,
             blocId: definitions.main.id,
             fromNodeId: anchor.id,
-            positionFrom: anchor.position,
+            positionFrom,
             positionOffset,
         });
         if (!mainNode) return;

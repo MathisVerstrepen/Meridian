@@ -37,3 +37,5 @@ api/app/data/cloned_repos/4c0a28f1-d50c-4825-bbd0-b8ff89ae7b8a/
 .codebase-memory/
 sandbox_manager/.mypy_cache/
 .opencode/
+
+/paseo.json

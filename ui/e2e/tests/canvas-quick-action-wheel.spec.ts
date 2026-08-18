@@ -9,6 +9,98 @@ test.beforeEach(async ({ page }) => {
     await mountCanvasQuickActionFixture(page);
 });
 
+test('auto layout is stable from controls and canvas wheel', async ({ page }) => {
+    await page.getByTestId('seed-mixed-workflow').click();
+    await expect.poll(async () => (await readCanvasQuickActionState(page)).nodeIds.length).toBe(6);
+    const edgeBefore = (await readCanvasQuickActionState(page)).edges;
+    await page.getByTitle('Auto layout').click();
+    await expect
+        .poll(async () => (await readCanvasQuickActionState(page)).actions)
+        .toContain('controls-auto-layout');
+    const controlsState = await readCanvasQuickActionState(page);
+    const controlsPositions = controlsState.nodes.map(({ id, position }) => ({ id, position }));
+    const node = (id: string) => controlsState.nodes.find((candidate) => candidate.id === id)!;
+    const centerX = (id: string) => node(id).position.x + node(id).width / 2;
+    const centerY = (id: string) => node(id).position.y + node(id).height / 2;
+    for (const id of [
+        'prompt1',
+        'attachment-file',
+        'attachment-github',
+        'generator1',
+        'prompt2',
+        'generator2',
+    ]) {
+        expect(node(id)).toBeDefined();
+        expect(node(id).width).toBeGreaterThan(0);
+        expect(node(id).height).toBeGreaterThan(0);
+    }
+    expect(node('generator1').position.y - (node('prompt1').position.y + node('prompt1').height)).toBe(
+        100,
+    );
+    expect(node('attachment-file').position.y + node('attachment-file').height + 40).toBe(
+        node('attachment-github').position.y,
+    );
+    const attachmentRight = node('attachment-file').position.x + node('attachment-file').width;
+    expect(attachmentRight).toBe(
+        node('attachment-github').position.x + node('attachment-github').width,
+    );
+    expect(
+        (node('attachment-file').position.y +
+            node('attachment-github').position.y +
+            node('attachment-github').height) /
+            2,
+    ).toBe(centerY('generator1'));
+    expect(
+        Math.min(node('prompt1').position.x, node('generator1').position.x) - attachmentRight,
+    ).toBeGreaterThanOrEqual(160);
+    expect(node('prompt2').position.y - (node('generator1').position.y + node('generator1').height)).toBe(
+        100,
+    );
+    expect(centerX('generator1')).toBe(centerX('generator2'));
+    expect(node('generator2').position.y - (node('prompt2').position.y + node('prompt2').height)).toBe(
+        100,
+    );
+    for (let leftIndex = 0; leftIndex < controlsState.nodes.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < controlsState.nodes.length; rightIndex += 1) {
+            const left = controlsState.nodes[leftIndex]!;
+            const right = controlsState.nodes[rightIndex]!;
+            const overlaps =
+                left.position.x < right.position.x + right.width &&
+                left.position.x + left.width > right.position.x &&
+                left.position.y < right.position.y + right.height &&
+                left.position.y + left.height > right.position.y;
+            expect(overlaps).toBe(false);
+        }
+    }
+    expect(controlsState.edges).toEqual(edgeBefore);
+    expect(Object.values(controlsState.viewport).every(Number.isFinite)).toBe(true);
+
+    await page.getByTestId('seed-mixed-workflow').click();
+    await expect.poll(async () => (await readCanvasQuickActionState(page)).actions).toEqual([]);
+    const wheelEdgesBefore = (await readCanvasQuickActionState(page)).edges;
+    const graph = page.getByTestId('canvas-quick-action-graph');
+    const box = await graph.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    await page.mouse.click(box.x + box.width - 30, box.y + box.height - 30, {
+        button: 'right',
+    });
+    const autoLayoutAction = page.locator('[data-action-id="auto-layout"]');
+    await expect(autoLayoutAction).toBeVisible();
+    await autoLayoutAction.locator('[data-root-action-label]').click();
+    await expect
+        .poll(async () => (await readCanvasQuickActionState(page)).actions)
+        .toContain('auto-layout');
+
+    const wheelState = await readCanvasQuickActionState(page);
+    expect(wheelState.nodes.map(({ id, position }) => ({ id, position }))).toEqual(
+        controlsPositions,
+    );
+    expect(wheelState.edges).toEqual(wheelEdgesBefore);
+    expect(wheelState.edges).toEqual(edgeBefore);
+    expect(Object.values(wheelState.viewport).every(Number.isFinite)).toBe(true);
+});
+
 test('@smoke opens target-aware wheels and dispatches an add action', async ({ page }) => {
     const graph = page.getByTestId('canvas-quick-action-graph');
     const graphBox = await graph.boundingBox();

@@ -1,4 +1,4 @@
-import { NodeCategoryEnum } from '@/types/enums';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
 
 export interface GeometryPoint {
@@ -23,6 +23,26 @@ export interface QuickWorkflowPlacementInput {
     gap: number;
 }
 
+export interface GeneratorPlacementNode {
+    id: string;
+    type?: string;
+    position: GeometryPoint;
+    width: number;
+    height: number;
+}
+
+export interface GeneratorPlacementEdge {
+    source: string;
+    target: string;
+}
+
+export interface GeneratorChildPlacementInput {
+    parent: GeneratorPlacementNode;
+    nodes: readonly GeneratorPlacementNode[];
+    edges: readonly GeneratorPlacementEdge[];
+    gap: number;
+}
+
 export interface WheelGeometryConfig {
     radius: number;
     innerRadius: number;
@@ -35,6 +55,48 @@ export interface WheelSectorGeometry {
     iconX: number;
     iconY: number;
 }
+
+const GENERATOR_NODE_TYPES = new Set<string>([
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+]);
+
+export const calculateGeneratorChildPosition = (
+    input: GeneratorChildPlacementInput,
+): GeometryPoint => {
+    const belowParent = {
+        x: input.parent.position.x,
+        y: input.parent.position.y + input.parent.height + input.gap,
+    };
+    if (!input.parent.type || !GENERATOR_NODE_TYPES.has(input.parent.type)) return belowParent;
+
+    const directChildIds = new Set(
+        input.edges
+            .filter((edge) => edge.source === input.parent.id)
+            .map((edge) => edge.target),
+    );
+    const directGeneratorChildren = input.nodes.filter(
+        (node) =>
+            directChildIds.has(node.id) &&
+            !!node.type &&
+            GENERATOR_NODE_TYPES.has(node.type),
+    );
+    const rightmostChild = directGeneratorChildren.reduce<GeneratorPlacementNode | undefined>(
+        (rightmost, child) =>
+            !rightmost || child.position.x + child.width > rightmost.position.x + rightmost.width
+                ? child
+                : rightmost,
+        undefined,
+    );
+
+    return rightmostChild
+        ? {
+              x: rightmostChild.position.x + rightmostChild.width + input.gap,
+              y: rightmostChild.position.y,
+          }
+        : belowParent;
+};
 
 export const calculateQuickWorkflowPositionOffset = (
     input: QuickWorkflowPlacementInput,

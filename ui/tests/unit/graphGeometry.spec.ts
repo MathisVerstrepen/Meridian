@@ -1,10 +1,123 @@
 import { describe, expect, it } from 'vitest';
-import { NodeCategoryEnum } from '@/types/enums';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import {
+    calculateGeneratorChildPosition,
     calculateOverlapTranslation,
     calculateQuickWorkflowPositionOffset,
     calculateWheelSectorGeometry,
 } from '@/utils/graphGeometry';
+
+describe('calculateGeneratorChildPosition', () => {
+    const parent = {
+        id: 'parent',
+        type: NodeTypeEnum.TEXT_TO_TEXT,
+        position: { x: 100, y: 200 },
+        width: 320,
+        height: 180,
+    };
+
+    it('keeps below-parent placement when no direct generator child exists', () => {
+        expect(
+            calculateGeneratorChildPosition({ parent, nodes: [parent], edges: [], gap: 150 }),
+        ).toEqual({ x: 100, y: 530 });
+    });
+
+    it('uses right edge of rightmost direct generator child and ignores other topology', () => {
+        const nodes = [
+            parent,
+            {
+                id: 'wide-child',
+                type: NodeTypeEnum.TEXT_TO_TEXT,
+                position: { x: 450, y: 600 },
+                width: 400,
+                height: 100,
+            },
+            {
+                id: 'higher-x-child',
+                type: NodeTypeEnum.ROUTING,
+                position: { x: 700, y: 650 },
+                width: 100,
+                height: 100,
+            },
+            {
+                id: 'descendant',
+                type: NodeTypeEnum.PARALLELIZATION,
+                position: { x: 1200, y: 1000 },
+                width: 300,
+                height: 100,
+            },
+            {
+                id: 'non-generator',
+                type: NodeTypeEnum.PROMPT,
+                position: { x: 1600, y: 1200 },
+                width: 200,
+                height: 100,
+            },
+            {
+                id: 'incoming-generator',
+                type: NodeTypeEnum.ROUTING,
+                position: { x: 2000, y: 1400 },
+                width: 200,
+                height: 100,
+            },
+        ];
+        const edges = [
+            { source: parent.id, target: 'wide-child' },
+            { source: parent.id, target: 'higher-x-child' },
+            { source: 'wide-child', target: 'descendant' },
+            { source: parent.id, target: 'non-generator' },
+            { source: 'incoming-generator', target: parent.id },
+        ];
+
+        expect(calculateGeneratorChildPosition({ parent, nodes, edges, gap: 150 })).toEqual({
+            x: 1000,
+            y: 600,
+        });
+    });
+
+    it.each([
+        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+    ])('accepts direct %s children', (type) => {
+        const child = {
+            id: 'child',
+            type,
+            position: { x: 500, y: 700 },
+            width: 250,
+            height: 100,
+        };
+
+        expect(
+            calculateGeneratorChildPosition({
+                parent,
+                nodes: [parent, child],
+                edges: [{ source: parent.id, target: child.id }],
+                gap: 150,
+            }),
+        ).toEqual({ x: 900, y: 700 });
+    });
+
+    it('keeps below-parent placement for a non-generator parent', () => {
+        const promptParent = { ...parent, type: NodeTypeEnum.PROMPT };
+        const child = {
+            id: 'child',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            position: { x: 500, y: 700 },
+            width: 250,
+            height: 100,
+        };
+
+        expect(
+            calculateGeneratorChildPosition({
+                parent: promptParent,
+                nodes: [promptParent, child],
+                edges: [{ source: promptParent.id, target: child.id }],
+                gap: 150,
+            }),
+        ).toEqual({ x: 100, y: 530 });
+    });
+});
 
 describe('calculateQuickWorkflowPositionOffset', () => {
     it.each([
