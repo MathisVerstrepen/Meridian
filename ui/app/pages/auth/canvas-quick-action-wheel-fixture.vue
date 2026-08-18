@@ -103,6 +103,68 @@ const seedEdges = () => [
         type: 'default',
     },
 ];
+const mixedWorkflowNodeSpecs: Array<[string, NodeTypeEnum, number, number]> = [
+    ['prompt1', NodeTypeEnum.PROMPT, 260, 100],
+    ['attachment-file', NodeTypeEnum.FILE_PROMPT, 180, 80],
+    ['attachment-github', NodeTypeEnum.GITHUB, 220, 120],
+    ['generator1', NodeTypeEnum.TEXT_TO_TEXT, 240, 140],
+    ['prompt2', NodeTypeEnum.PROMPT, 200, 90],
+    ['generator2', NodeTypeEnum.TEXT_TO_TEXT, 260, 160],
+];
+const mixedWorkflowNodes = (): GraphNode[] =>
+    mixedWorkflowNodeSpecs.map(
+        ([id, type, width, height], index) =>
+            ({
+                id,
+                type,
+                position: { x: 180 + index * 80, y: 180 },
+                width,
+                height,
+                data: { label: id },
+            }) as GraphNode,
+    );
+const mixedWorkflowEdges = () => [
+    {
+        id: 'prompt1-generator1',
+        source: 'prompt1',
+        target: 'generator1',
+        sourceHandle: null,
+        targetHandle: 'prompt_generator1',
+        type: 'default',
+    },
+    {
+        id: 'attachment-file-generator1',
+        source: 'attachment-file',
+        target: 'generator1',
+        sourceHandle: null,
+        targetHandle: 'attachment_generator1',
+        type: 'default',
+    },
+    {
+        id: 'attachment-github-generator1',
+        source: 'attachment-github',
+        target: 'generator1',
+        sourceHandle: null,
+        targetHandle: 'attachment_generator1',
+        type: 'default',
+    },
+    {
+        id: 'generator1-generator2',
+        source: 'generator1',
+        target: 'generator2',
+        sourceHandle: null,
+        targetHandle: 'context_generator2',
+        type: 'default',
+    },
+    {
+        id: 'prompt2-generator2',
+        source: 'prompt2',
+        target: 'generator2',
+        sourceHandle: null,
+        targetHandle: 'prompt_generator2',
+        type: 'default',
+    },
+];
 const edges = ref(seedEdges());
 const {
     getNodes,
@@ -114,6 +176,7 @@ const {
     addSelectedNodes,
     panBy,
     fitView,
+    getViewport,
 } = useVueFlow('main-graph-' + graphId.value);
 const isOverSidebar = ref(false);
 const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
@@ -133,13 +196,16 @@ const unlinkNode = (nodeId: string) => {
     if (node) node.parentNode = undefined;
 };
 const deleteGroup = (_graphId: string, groupId: string) => deleteNode(groupId);
+const fitGraph = () => fitView({ maxZoom: 1, minZoom: 0.4, padding: 0.2 });
+const { autoLayoutGraph } = useGraphAutoLayout({ graphId, fitGraph });
 const quickActions = useGraphQuickActions({
     graphId,
     onSelectionStart,
     deleteNode,
     unlinkNode,
     deleteGroup,
-    fitGraph: () => fitView({ padding: 0.2 }),
+    fitGraph,
+    autoLayoutGraph,
 });
 const graphContainer = ref<HTMLElement | null>(null);
 const fixtureReady = ref(false);
@@ -149,6 +215,10 @@ const activate = (action: GraphQuickAction) => {
     actionLog.value.push(action.id);
     quickActions.activate(action);
 };
+const autoLayoutFromControls = async () => {
+    actionLog.value.push('controls-auto-layout');
+    await autoLayoutGraph();
+};
 const onKeyDown = (event: KeyboardEvent) => {
     if (graphContainer.value) quickActions.onKeyboardContextMenu(event, graphContainer.value);
 };
@@ -157,6 +227,12 @@ const reset = () => {
     setEdges(seedEdges());
     settingsStore.nodePresetSettings.presets.splice(0);
     setPlan('premium');
+    actionLog.value = [];
+    quickActions.close(false);
+};
+const seedMixedWorkflow = () => {
+    setNodes(mixedWorkflowNodes());
+    setEdges(mixedWorkflowEdges());
     actionLog.value = [];
     quickActions.close(false);
 };
@@ -178,6 +254,8 @@ const state = computed(() => ({
         id: node.id,
         type: node.type,
         position: node.position,
+        width: node.dimensions.width || node.width || 0,
+        height: node.dimensions.height || node.height || 0,
         parentNode: node.parentNode,
         data: node.data,
     })),
@@ -187,11 +265,13 @@ const state = computed(() => ({
         target: edge.target,
         sourceHandle: edge.sourceHandle,
         targetHandle: edge.targetHandle,
+        type: edge.type,
     })),
     presetNames: settingsStore.nodePresetSettings.presets.map((preset) => preset.name),
     plan: (user.value as User | null)?.plan_type ?? null,
     actions: actionLog.value,
     selecting: isSelecting.value,
+    viewport: getViewport(),
 }));
 
 onMounted(async () => {
@@ -213,6 +293,9 @@ onMounted(async () => {
             <button data-testid="seed-valid-preset" @click="seedPresets('valid')">Seed valid preset</button>
             <button data-testid="seed-invalid-preset" @click="seedPresets('invalid')">Seed invalid preset</button>
             <button data-testid="seed-github-preset" @click="seedPresets('github')">Seed GitHub preset</button>
+            <button data-testid="seed-mixed-workflow" @click="seedMixedWorkflow">
+                Seed mixed workflow
+            </button>
         </div>
         <pre data-testid="canvas-quick-action-state" class="absolute top-2 left-20 z-30 text-xs">{{
             JSON.stringify(state)
@@ -235,6 +318,11 @@ onMounted(async () => {
                 :fit-view-on-init="false"
                 :delete-key-code="null"
             >
+                <UiGraphCanvasControls
+                    :graph-id="graphId"
+                    @auto-layout="autoLayoutFromControls"
+                />
+
                 <template #node-textToText="nodeProps">
                     <div class="bg-olive-grove h-full w-full rounded-xl p-4 text-black">
                         {{ nodeProps.data.label ?? nodeProps.id }}
@@ -247,6 +335,16 @@ onMounted(async () => {
                     </div>
                 </template>
                 <template #node-prompt="nodeProps">
+                    <div class="bg-slate-blue h-full w-full rounded-xl p-4">
+                        {{ nodeProps.data.label ?? nodeProps.id }}
+                    </div>
+                </template>
+                <template #node-filePrompt="nodeProps">
+                    <div class="bg-slate-blue h-full w-full rounded-xl p-4">
+                        {{ nodeProps.data.label ?? nodeProps.id }}
+                    </div>
+                </template>
+                <template #node-github="nodeProps">
                     <div class="bg-slate-blue h-full w-full rounded-xl p-4">
                         {{ nodeProps.data.label ?? nodeProps.id }}
                     </div>

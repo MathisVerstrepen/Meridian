@@ -7,6 +7,9 @@ import { ExecutionPlanDirectionEnum } from '@/types/enums';
 const props = defineProps<{
     graphId: string;
 }>();
+const emit = defineEmits<{
+    'auto-layout': [];
+}>();
 
 // --- Stores ---
 const sidebarSelectorStore = useSidebarCanvasStore();
@@ -62,6 +65,17 @@ const deleteAllNodes = () => {
             "
         >
             <UiIcon name="CodiconRunAll" class="text-stone-gray absolute shrink-0 scale-125" />
+        </ControlButton>
+
+        <ControlButton
+            :disabled="getNodes.length === 0"
+            title="Auto layout"
+            @click="emit('auto-layout')"
+        >
+            <UiIcon
+                name="MaterialSymbolsAccountTreeOutlineRounded"
+                class="text-stone-gray absolute shrink-0 scale-125"
+            />
         </ControlButton>
     </Controls>
 </template>

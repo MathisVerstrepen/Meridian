@@ -19,6 +19,8 @@ export interface CanvasQuickActionState {
         id: string;
         type?: string;
         position: { x: number; y: number };
+        width: number;
+        height: number;
         parentNode?: string;
         data: Record<string, unknown>;
     }>;
@@ -28,11 +30,13 @@ export interface CanvasQuickActionState {
         target: string;
         sourceHandle?: string | null;
         targetHandle?: string | null;
+        type?: string;
     }>;
     presetNames: string[];
     plan: 'free' | 'premium' | null;
     actions: string[];
     selecting: boolean;
+    viewport: { x: number; y: number; zoom: number };
 }
 
 const COLD_BOOTSTRAP_TIMEOUT = 120_000;

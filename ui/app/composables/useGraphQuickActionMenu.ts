@@ -18,6 +18,7 @@ interface UseGraphQuickActionMenuOptions {
     unlinkNode: (nodeId: string) => void;
     deleteGroup: (graphId: string, groupId: string) => void;
     fitGraph: () => unknown;
+    autoLayoutGraph: () => unknown;
 }
 
 const GENERATOR_TYPES = new Set<string>([
@@ -165,6 +166,12 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
                         ),
                 });
             }
+            result.push({
+                id: 'auto-layout',
+                label: 'Auto layout',
+                icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+                run: options.autoLayoutGraph,
+            });
             result.push({
                 id: 'fit-graph',
                 label: 'Fit graph',

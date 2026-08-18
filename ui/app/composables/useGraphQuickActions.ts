@@ -30,6 +30,7 @@ interface UseGraphQuickActionsOptions {
     unlinkNode: (nodeId: string) => void;
     deleteGroup: (graphId: string, groupId: string) => void;
     fitGraph: () => unknown;
+    autoLayoutGraph: () => unknown;
 }
 
 interface PendingGesture {

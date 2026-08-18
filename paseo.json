@@ -1,0 +1,7 @@
+{
+  "metadataGeneration": {
+    "commitMessage": {
+      "instructions": "Use the Conventional Commits format. Valid types: feat, fix, test, docs, refactor, chore, style, perf. Example: feat(invoice): add amount validation. The first line should not exceed 72 characters. The second line should be blank. Starting with the third line, write a more detailed description in explaining the reason for the change and any additional context. Use bullet points if there are several important points."
+    }
+  }
+}
