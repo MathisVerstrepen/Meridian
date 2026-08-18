@@ -1,10 +1,15 @@
-import { useVueFlow } from '@vue-flow/core';
+import { useVueFlow, type GraphNode } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeTypeEnum } from '@/types/enums';
 import type { ChatInputSubmission } from '@/types/chat';
 import type { RepoContent } from '@/types/github';
+import type { NodeWithDimensions } from '@/types/graph';
+import {
+    calculateGeneratorChildPosition,
+    type GeneratorPlacementNode,
+} from '@/utils/graphGeometry';
 
 type CreatedChatNodes = {
     generatorNodeId: string | undefined;
@@ -18,6 +23,7 @@ export const useGraphChat = () => {
     const chatStore = useChatStore();
     const { error } = useToast();
     const { placeBlock, placeEdge } = useGraphActions();
+    const { getBlockByNodeType } = useBlocks();
 
     const { upcomingModelData } = storeToRefs(chatStore);
 
@@ -60,19 +66,50 @@ export const useGraphChat = () => {
         };
     };
 
+    const getNodeWidth = (node: GraphNode): number => {
+        const dimensionsWidth = (node as NodeWithDimensions).dimensions?.width;
+        if (dimensionsWidth && dimensionsWidth > 0) return dimensionsWidth;
+        if (typeof node.width === 'number' && node.width > 0) return node.width;
+        return getBlockByNodeType(node.type as NodeTypeEnum)?.minSize.width ?? 0;
+    };
+
+    const getGeneratorPlacement = (fromNodeId: string) => {
+        const parentRect = getNodeRect(fromNodeId);
+        const { findNode, getNodes, getEdges } = useVueFlow('main-graph-' + graphId.value);
+        const parentNode = findNode(fromNodeId);
+        const normalizedNodes: GeneratorPlacementNode[] = getNodes.value.map((node) => ({
+            id: node.id,
+            type: node.type,
+            position: node.position,
+            width: getNodeWidth(node),
+            height:
+                (node as NodeWithDimensions).dimensions?.height ??
+                (typeof node.height === 'number' ? node.height : 0),
+        }));
+        const normalizedParent: GeneratorPlacementNode = {
+            id: fromNodeId,
+            type: parentNode?.type,
+            position: { x: parentRect.x, y: parentRect.y },
+            width: parentNode ? getNodeWidth(parentNode) : 0,
+            height: parentRect.height,
+        };
+
+        return calculateGeneratorChildPosition({
+            parent: normalizedParent,
+            nodes: normalizedNodes,
+            edges: getEdges.value.map((edge) => ({ source: edge.source, target: edge.target })),
+            gap: AUTO_PLACEMENT_GAP,
+        });
+    };
+
     const addTextToTextFromNodeId = (input: string, fromNodeId: string) => {
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: inputNodeHeight,
-        } = getNodeRect(fromNodeId);
+        const position = getGeneratorPlacement(fromNodeId);
 
         const newTextToTextNode = placeBlock({
             graphId: graphId.value,
             blocId: 'primary-model-text-to-text',
             fromNodeId: fromNodeId,
-            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
+            positionFrom: position,
             data: {
                 ...upcomingModelData.value.data,
                 reply: '',
@@ -223,18 +260,13 @@ export const useGraphChat = () => {
             return addParallelizationFromEmptyGraph(input, forcedParallelizationNodeId);
         }
 
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: inputNodeHeight,
-        } = getNodeRect(fromNodeId);
+        const position = getGeneratorPlacement(fromNodeId);
 
         const newParallelizationNode = placeBlock({
             graphId: graphId.value,
             blocId: 'primary-model-parallelization',
             fromNodeId: fromNodeId,
-            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
+            positionFrom: position,
             data: {
                 ...upcomingModelData.value.data,
             },
@@ -260,18 +292,13 @@ export const useGraphChat = () => {
             return addRoutingFromEmptyGraph(input, forcedRoutingNodeId);
         }
 
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: inputNodeHeight,
-        } = getNodeRect(fromNodeId);
+        const position = getGeneratorPlacement(fromNodeId);
 
         const newRoutingNode = placeBlock({
             graphId: graphId.value,
             blocId: 'primary-model-routing',
             fromNodeId: fromNodeId,
-            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
+            positionFrom: position,
             data: {
                 ...upcomingModelData.value.data,
             },
