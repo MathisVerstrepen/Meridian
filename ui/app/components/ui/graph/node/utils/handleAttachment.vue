@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
-import { Position, Handle, useVueFlow } from '@vue-flow/core';
+import { Position, useVueFlow } from '@vue-flow/core';
 
 // --- Props ---
 const props = withDefaults(
@@ -60,7 +60,7 @@ const wheelOptions = computed(() =>
         @mouseenter="isHovering = true"
         @mouseleave="isHovering = false"
     >
-        <Handle
+        <UiGraphNodeUtilsHandleCore
             :id="`attachment_${props.id}`"
             :type="props.type"
             :position="props.type === 'source' ? Position.Right : Position.Left"
