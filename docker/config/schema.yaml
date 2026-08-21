@@ -71,11 +71,15 @@ settings:
   - { path: integrations.github.client_id, env: GITHUB_CLIENT_ID, type: string, required: true }
   - { path: integrations.github.redirect_uri, env: GITHUB_REDIRECT_URI, type: string, required: true }
   - { path: observability.sentry.dsn, env: SENTRY_DSN, type: string, required: true }
+  - { path: email.provider, env: EMAIL_PROVIDER, type: string, required: true }
   - { path: email.smtp.server, env: SMTP_SERVER, type: string, required: true }
   - { path: email.smtp.port, env: SMTP_PORT, type: integer, required: true }
   - { path: email.smtp.username, env: SMTP_USERNAME, type: string, required: true }
   - { path: email.smtp.auth_protocol, env: SMTP_AUTH_PROTOCOL, type: string, required: true }
   - { path: email.smtp.from_email, env: SMTP_FROM_EMAIL, type: string, required: true }
+  - { path: email.ses.region, env: SES_REGION, type: string, required: true }
+  - { path: email.ses.from_email, env: SES_FROM_EMAIL, type: string, required: true }
+  - { path: email.ses.configuration_set_name, env: SES_CONFIGURATION_SET_NAME, type: string, required: true }
 
 secrets:
   - { env: NUXT_SESSION_PASSWORD, required: true }
@@ -93,3 +97,6 @@ secrets:
   - { env: LINK_EXTRACTION_BROWSER_PROXY_URL, required: false, default: "" }
   - { env: GITHUB_CLIENT_SECRET, required: false, default: "" }
   - { env: SMTP_PASSWORD, required: false, default: "" }
+  - { env: AWS_ACCESS_KEY_ID, required: false, default: "" }
+  - { env: AWS_SECRET_ACCESS_KEY, required: false, default: "" }
+  - { env: AWS_SESSION_TOKEN, required: false, default: "" }
