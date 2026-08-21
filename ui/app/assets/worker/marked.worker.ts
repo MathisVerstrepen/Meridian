@@ -2,6 +2,7 @@ import { Marked, type Tokens } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import type { BundledLanguage, Highlighter } from 'shiki';
 import type katexType from 'katex';
+import { isRuntimeString, runtimeString } from '@/utils/runtimeTypes';
 
 // --- Constants ---
 const SHIKI_THEME = 'vitesse-dark';
