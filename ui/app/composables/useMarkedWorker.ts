@@ -1,4 +1,5 @@
 import { Marked } from 'marked';
+import { isRuntimeString, isRuntimeUndefined } from '@/utils/runtimeTypes';
 
 // A map to store pending promises, keyed by a unique request ID.
 const pendingPromises = new Map<
