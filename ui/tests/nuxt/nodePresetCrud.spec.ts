@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PresetList from '@/components/ui/settings/nodePresets/presetList.vue';
 import { useSettingsStore } from '@/stores/settings';
 import { NODE_PRESET_SCHEMA_VERSION, type NodePreset } from '@/types/nodePresets';
-import type { Settings } from '@/types/settings';
+import { createNodePresetFixtureSettings } from '~~/e2e/fixtures/nodePresetsFixture';
 
 const mocks = vi.hoisted(() => ({
     updateUserSettings: vi.fn(),
@@ -45,21 +45,18 @@ describe('node preset Settings CRUD', () => {
 
     it('blocks aggregate Save before mutation or POST and preserves dirty state', async () => {
         const store = useSettingsStore();
-        const settings = {
-            models: {
-                systemPrompt: [
-                    {
-                        id: 'system',
-                        name: 'Referenced',
-                        prompt: 'keep until valid save',
-                        enabled: true,
-                        editable: false,
-                        reference: 'managed',
-                    },
-                ],
+        const settings = createNodePresetFixtureSettings();
+        settings.models.systemPrompt = [
+            {
+                id: 'system',
+                name: 'Referenced',
+                prompt: 'keep until valid save',
+                enabled: true,
+                editable: false,
+                reference: 'managed',
             },
-            nodePresets: { schemaVersion: NODE_PRESET_SCHEMA_VERSION, presets: [] },
-        } as unknown as Settings;
+        ];
+        settings.nodePresets = { schemaVersion: NODE_PRESET_SCHEMA_VERSION, presets: [] };
         store.setUserSettings(settings);
         store.markSettingsChanged();
         store.setNodePresetEditorIssues([

@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { isRuntimeString } from '../../app/utils/runtimeTypes';
 import {
     DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY,
     GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE,
@@ -98,7 +99,7 @@ export const test = diagnosticsTest.extend<Record<string, never>, MarkdownRender
 
             try {
                 const baseURL = workerInfo.project.use.baseURL;
-                if (typeof baseURL !== 'string') {
+                if (!isRuntimeString(baseURL)) {
                     throw new Error('Markdown renderer bootstrap requires a configured baseURL');
                 }
                 const fixtureCase = resolveMarkdownRendererFixtureCase(
@@ -199,25 +200,13 @@ export const getLatestMarkdownRendererPerfRun = async (
     page: Page,
 ): Promise<MarkdownRendererPerfRun> => {
     await page.waitForFunction(() => {
-        const perfStore = (window as typeof window & {
-            __markdownRendererPerf?: {
-                lastRun?: {
-                    measures?: {
-                        totalMs?: number;
-                    };
-                };
-            };
-        }).__markdownRendererPerf;
+        const perfStore = window.__markdownRendererPerf;
 
         return Boolean(perfStore?.lastRun?.measures?.totalMs);
     });
 
     const perfRun = await page.evaluate(() => {
-        const perfStore = (window as typeof window & {
-            __markdownRendererPerf?: {
-                lastRun?: MarkdownRendererPerfRun;
-            };
-        }).__markdownRendererPerf;
+        const perfStore = window.__markdownRendererPerf;
 
         return perfStore?.lastRun ?? null;
     });

@@ -1,3 +1,5 @@
+import { isRuntimeFunction, isRuntimeString } from '../../runtimeTypes.mjs';
+
 const hooks = new Map();
 
 const normalizeValue = (value) => {
@@ -5,7 +7,7 @@ const normalizeValue = (value) => {
         return '';
     }
 
-    if (typeof value === 'string') {
+    if (isRuntimeString(value)) {
         return value;
     }
 
@@ -17,7 +19,7 @@ const DOMPurifyShim = {
         return normalizeValue(value);
     },
     addHook(name, callback) {
-        if (typeof name !== 'string' || typeof callback !== 'function') {
+        if (!isRuntimeString(name) || !isRuntimeFunction(callback)) {
             return;
         }
 

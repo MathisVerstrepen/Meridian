@@ -52,10 +52,7 @@ const markdownPreprocessor = (text: string): string => {
  * replaces them with unique placeholders to prevent LaTeX extraction from
  * processing content inside code.
  */
-function protectCodeBlocks(markdown: string): {
-    processed: string;
-    codeBlocks: CodeBlock[];
-} {
+function protectCodeBlocks(markdown: string) {
     if (!markdown.includes('`')) {
         return {
             processed: markdown,
@@ -112,10 +109,7 @@ function restoreCodeBlocks(text: string, codeBlocks: CodeBlock[]): string {
  * Extracts all LaTeX math expressions from the markdown string and replaces
  * them with unique placeholders to prevent Marked from mangling them.
  */
-function extractMathExpressions(markdown: string): {
-    processed: string;
-    mathBlocks: MathBlock[];
-} {
+function extractMathExpressions(markdown: string) {
     if (!markdown.includes('$')) {
         return {
             processed: markdown,
@@ -233,7 +227,10 @@ async function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): Prom
 
 let highlighterInstance: Highlighter | null = null;
 let highlighterPromise: Promise<Highlighter> | null = null;
-let bundledLanguagesMap: Record<string, unknown> | null = null;
+let bundledLanguagesMap: typeof import('shiki').bundledLanguages | null = null;
+const isBundledLanguage = (language: string): language is BundledLanguage =>
+    bundledLanguagesMap !== null &&
+    Object.prototype.hasOwnProperty.call(bundledLanguagesMap, language);
 const loadedLangs = new Set<string>();
 
 function getHighlighterLazy(): Promise<Highlighter> {
@@ -310,15 +307,13 @@ function getMarkedAsync(): Marked {
                     language = 'markdown';
                 }
 
-                const shikiLang = language as BundledLanguage;
-
                 // Mermaid handling
-                if (shikiLang === 'mermaid') {
+                if (language === 'mermaid') {
                     return code;
                 }
 
                 // Caching Logic
-                const cacheKey = `${shikiLang}:${code}`;
+                const cacheKey = `${language}:${code}`;
                 if (highlightCache.has(cacheKey)) {
                     const cachedHtml = highlightCache.get(cacheKey)!;
                     highlightCache.delete(cacheKey); // LRU behavior
@@ -331,10 +326,7 @@ function getMarkedAsync(): Marked {
                     const highlighter = await getHighlighterLazy();
 
                     // Re-check language validity now that bundledLanguages is available
-                    if (bundledLanguagesMap && !Object.prototype.hasOwnProperty.call(bundledLanguagesMap, language)) {
-                        language = 'markdown';
-                    }
-                    const resolvedLang = language as BundledLanguage;
+                    const resolvedLang = isBundledLanguage(language) ? language : 'markdown';
 
                     if (!loadedLangs.has(resolvedLang)) {
                         await highlighter.loadLanguage(resolvedLang);
@@ -348,7 +340,7 @@ function getMarkedAsync(): Marked {
                         transformers: [
                             {
                                 pre(node) {
-                                    const existingClass = (node.properties?.class as string) || '';
+                                    const existingClass = runtimeString(node.properties?.class);
                                     node.properties.class = `not-prose ${existingClass} has-line-numbers replace-code-containers`;
                                 },
                                 line(node, line) {
@@ -384,7 +376,7 @@ function getMarkedAsync(): Marked {
 self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) => {
     const { id, markdown } = event.data;
 
-    if (!id || typeof markdown !== 'string') {
+    if (!id || !isRuntimeString(markdown)) {
         return;
     }
 
@@ -414,7 +406,11 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
         if (hasFencedCode) {
             rawHtml = await getMarkedAsync().parse(markdownForParse);
         } else {
-            rawHtml = getMarkedSync().parse(markdownForParse) as string;
+            const parsedHtml = getMarkedSync().parse(markdownForParse);
+            if (!isRuntimeString(parsedHtml)) {
+                throw new TypeError('Synchronous Markdown parser returned a non-string result');
+            }
+            rawHtml = parsedHtml;
         }
 
         // Restore Math in the final HTML

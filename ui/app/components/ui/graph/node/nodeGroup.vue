@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import { useVueFlow, type NodeProps } from '@vue-flow/core';
+import { type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import {
     NODE_GROUP_COLORS,
@@ -18,30 +18,35 @@ const props = withDefaults(defineProps<NodeProps & { presetEditor?: boolean }>()
 const dragStore = useDragStore();
 
 // --- Composables ---
-const { viewport } = useVueFlow();
+const { viewport } = useGraphFlow();
 
 // --- Local State ---
 const isDraggingOver = ref(false);
 const colorIndex = computed(() =>
-    typeof props.data?.colorIndex === 'number' ? props.data.colorIndex : 0,
+    isRuntimeNumber(props.data?.colorIndex) ? props.data.colorIndex : 0,
 );
 const activeColor = computed<NodeGroupColor>(() => {
     if (props.presetEditor) return nodeGroupColorFromIndex(colorIndex.value);
-    return (props.data?.color as NodeGroupColor | undefined) ?? nodeGroupColorFromIndex(0);
+    const configured = props.data?.color;
+    return (
+        NODE_GROUP_COLORS.find(
+            (color) => color[0] === configured?.[0] && color[1] === configured?.[1],
+        ) ?? nodeGroupColorFromIndex(0)
+    );
 });
 const usesPlainText = computed(
     () => props.presetEditor || props.data?.contentMode === 'plain',
 );
 
 const onTitleChange = (event: Event) => {
-    const target = event.target as HTMLElement;
+    const target = requireElement(event.target, HTMLElement);
     if (props.data) {
         props.data.title = target.innerText;
     }
 };
 
 const onCommentChange = (event: Event) => {
-    const target = event.target as HTMLElement;
+    const target = requireElement(event.target, HTMLElement);
     if (props.data) {
         props.data.comment = target.innerText;
     }
@@ -83,7 +88,7 @@ watch(
 );
 
 onMounted(async () => {
-    if (props.presetEditor && typeof props.data?.colorIndex !== 'number') {
+    if (props.presetEditor && !isRuntimeNumber(props.data?.colorIndex)) {
         props.data!.colorIndex = 0;
         emit('updateNodeInternals');
     } else if (!props.presetEditor && !props.data?.color) {

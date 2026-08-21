@@ -1,31 +1,16 @@
 <script lang="ts" setup>
 import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 
-const props = defineProps({
-    graph: {
-        type: Object as PropType<GraphSummary>,
-        required: true,
-    },
-    currentGraphId: {
-        type: String as PropType<string | undefined>,
-        required: true,
-    },
-    editingId: {
-        type: String as PropType<string | null>,
-        default: null,
-    },
-    editInputValue: {
-        type: String,
-        required: true,
-    },
-    folders: {
-        type: Array as PropType<Folder[]>,
-        required: true,
-    },
-    workspaces: {
-        type: Array as PropType<Workspace[]>,
-        default: () => [],
-    },
+const props = withDefaults(defineProps<{
+    graph: GraphSummary;
+    currentGraphId?: string;
+    editingId?: string | null;
+    editInputValue: string;
+    folders: Folder[];
+    workspaces?: Workspace[];
+}>(), {
+    editingId: null,
+    workspaces: () => [],
 });
 
 const emit = defineEmits<{
@@ -35,14 +20,14 @@ const emit = defineEmits<{
     (e: 'confirmRename' | 'cancelRename'): void;
     (e: 'move', graphId: string, folderId: string | null, workspaceId: string | null): void;
     (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
-    (e: 'setInputRef', graphId: string, el: unknown): void;
+    (e: 'setInputRef', graphId: string, el: RuntimeValue): void;
 }>();
 
 const isCurrent = computed(() => props.graph.id === props.currentGraphId);
 const isEditing = computed(() => props.graph.id === props.editingId);
 
 const onInput = (event: Event) => {
-    emit('update:editInputValue', (event.target as HTMLInputElement).value);
+    emit('update:editInputValue', (requireElement(event.target, HTMLInputElement)).value);
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {

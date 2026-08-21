@@ -38,7 +38,7 @@ const refreshAvailableModels = async () => {
     triggerFilter();
 };
 
-const safeErrorMessage = (caught: unknown, fallback: string) => {
+const safeErrorMessage = <Caught>(caught: Caught, fallback: string) => {
     const rawMessage = caught instanceof Error ? caught.message.trim() : '';
     const key = apiKey.value.trim();
     const message = rawMessage || fallback;

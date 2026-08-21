@@ -2,12 +2,10 @@
  * Deep equality check between two values.
  * Handles objects, arrays, primitives, and dates.
  */
-export function isDeepEqual(a: unknown, b: unknown): boolean {
+export function isDeepEqual<Value>(a: Value, b: Value): boolean {
     if (a === b) return true;
 
-    if (a === null || b === null || typeof a !== typeof b) return false;
-
-    if (typeof a !== 'object') return false;
+    if (a === null || b === null || !isRuntimeObject(a) || !isRuntimeObject(b)) return false;
 
     // Handle Date objects
     if (a instanceof Date && b instanceof Date) {
@@ -24,23 +22,17 @@ export function isDeepEqual(a: unknown, b: unknown): boolean {
     }
 
     // Handle plain objects
-    const keysA = Object.keys(a);
-    const keysB = b && typeof b === 'object' ? Object.keys(b) : [];
+    const entriesA = Object.entries(a);
+    const entriesB = new Map(Object.entries(b));
 
-    if (keysA.length !== keysB.length) return false;
+    if (entriesA.length !== entriesB.size) return false;
 
-    for (const key of keysA) {
-        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-        if (
-            typeof a === 'object' &&
-            a !== null &&
-            typeof b === 'object' &&
-            b !== null &&
-            !isDeepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
-        ) {
+    for (const [key, value] of entriesA) {
+        if (!entriesB.has(key) || !isDeepEqual(value, entriesB.get(key))) {
             return false;
         }
     }
 
     return true;
 }
+import { isRuntimeObject } from '@/utils/runtimeTypes';

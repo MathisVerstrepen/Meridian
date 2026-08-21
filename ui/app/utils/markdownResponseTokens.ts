@@ -42,13 +42,12 @@ export const prepareMarkdownResponse = (
         target: HTMLDivElement,
         token: MarkdownResponseTokenInput,
     ): void => {
-        tokens.push(
-            Object.freeze({
-                ...token,
-                key: `${targetScope}:${tokens.length}`,
-                targetId: target.id,
-            }) as MarkdownResponseRenderToken,
-        );
+        const renderToken = {
+            ...token,
+            key: `${targetScope}:${tokens.length}`,
+            targetId: target.id,
+        } satisfies MarkdownResponseRenderToken;
+        tokens.push(Object.freeze(renderToken));
     };
 
     for (const node of Array.from(root.querySelectorAll<HTMLElement>(SPECIAL_SELECTOR))) {

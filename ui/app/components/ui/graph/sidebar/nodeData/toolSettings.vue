@@ -4,7 +4,7 @@ import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
     node: SidebarNode<DataTextToText | DataRouting>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
 }>();
 
 const settingsStore = useSettingsStore();
@@ -13,7 +13,7 @@ const defaultVideoModel = 'google/veo-3.1';
 
 const setVisualiseMode = (mode: 'enableMermaid' | 'enableSvg' | 'enableHtml', value: boolean) => {
     props.setNodeDataKey('visualiseModes', {
-        ...(props.node.data.visualiseModes || {}),
+        ...props.node.data.visualiseModes,
         [mode]: value,
     });
 };

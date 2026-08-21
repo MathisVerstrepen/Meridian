@@ -42,9 +42,11 @@ export const useFileBrowser = () => {
         try {
             const stored = localStorage.getItem(key);
             if (!stored) return [];
-            const parsed = JSON.parse(stored) as FileManagerFolderShortcut[];
+            const parsed: JsonValue = JSON.parse(stored);
             return Array.isArray(parsed)
-                ? parsed.filter((shortcut) => shortcut.folder?.id && shortcut.breadcrumbs?.length)
+                ? parsed.filter(isFileManagerFolderShortcut).filter(
+                      (shortcut) => shortcut.folder.id && shortcut.breadcrumbs.length,
+                  )
                 : [];
         } catch {
             localStorage.removeItem(key);

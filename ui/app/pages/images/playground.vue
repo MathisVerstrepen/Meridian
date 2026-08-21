@@ -28,8 +28,8 @@ const videoPaneRef = ref<VideoPaneExpose | null>(null);
 const playgroundStore = useImagePlaygroundStore();
 const { isReorderingSourceImages } = storeToRefs(playgroundStore);
 const modeValues: MediaPlaygroundMode[] = ['image-generation', 'image-edit', 'video-generation'];
-const isMediaMode = (mode: unknown): mode is MediaPlaygroundMode =>
-    typeof mode === 'string' && modeValues.includes(mode as MediaPlaygroundMode);
+const isMediaMode = (mode: RuntimeValue): mode is MediaPlaygroundMode =>
+    isRuntimeString(mode) && modeValues.some((candidate) => candidate === mode);
 const modeFromRoute = () => {
     const mode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode;
     return isMediaMode(mode) ? mode : 'image-generation';

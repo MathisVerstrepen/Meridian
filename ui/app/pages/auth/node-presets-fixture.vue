@@ -33,7 +33,7 @@ const save = async () => {
 const state = computed(() => ({
     route: NODE_PRESETS_FIXTURE_ROUTE,
     ready: fixtureReady.value,
-    plan: (user.value as User | null)?.plan_type ?? null,
+    plan: (user.value)?.plan_type ?? null,
     hasChanged: settingsStore.hasChanged,
     saveBlocked: settingsStore.nodePresetSaveBlocked,
     lastSaveSucceeded: lastSaveSucceeded.value,

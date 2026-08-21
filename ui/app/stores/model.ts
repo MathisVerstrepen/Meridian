@@ -19,7 +19,7 @@ export const useModelStore = defineStore('Model', () => {
                     title: 'Model Not Found',
                 },
             );
-            return models.value.find((model) => model.id === DEFAULT_FALLBACK_MODEL) as ModelInfo;
+            return models.value.find((model) => model.id === DEFAULT_FALLBACK_MODEL);
         }
         return model;
     };

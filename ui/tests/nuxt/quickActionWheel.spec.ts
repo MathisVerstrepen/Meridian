@@ -149,13 +149,16 @@ describe('quickActionWheel', () => {
         await nextTick();
         expect(document.activeElement?.getAttribute('data-action-id')).toBe('submenu');
 
-        (document.activeElement as HTMLButtonElement).click();
+        requireElement(document.activeElement, HTMLButtonElement).click();
         await nextTick();
         expect(document.querySelector('[data-action-id="child"]')).not.toBeNull();
         expect(document.querySelectorAll('[data-root-quick-action-segment]')).toHaveLength(1);
         expect(document.querySelector('button[aria-label="Back to previous quick actions"]')).not.toBeNull();
 
-        (document.querySelector('[data-action-id="child"]') as HTMLButtonElement).click();
+        requireElement(
+            document.querySelector('[data-action-id="child"]'),
+            HTMLButtonElement,
+        ).click();
         expect(wrapper.emitted('activate')?.[0]?.[0]).toMatchObject({ id: 'child' });
 
         menu?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -170,7 +173,10 @@ describe('quickActionWheel', () => {
             global: { stubs: { UiIcon: true } },
         });
         const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
-        (document.querySelector('[data-action-id="submenu"]') as HTMLButtonElement).click();
+        requireElement(
+            document.querySelector('[data-action-id="submenu"]'),
+            HTMLButtonElement,
+        ).click();
         await nextTick();
         menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
         await nextTick();
@@ -270,7 +276,10 @@ describe('quickActionWheel', () => {
         addNode.click();
         await nextTick();
         await nextTick();
-        (document.querySelector('[data-action-id="add-prompt"]') as HTMLButtonElement).click();
+        requireElement(
+            document.querySelector('[data-action-id="add-prompt"]'),
+            HTMLButtonElement,
+        ).click();
         expect(wrapper.emitted('activate')?.[0]?.[0]).toMatchObject({ id: 'add-prompt' });
         expect(document.querySelector('button[aria-label="Back to previous quick actions"]')).toBeNull();
         wrapper.unmount();

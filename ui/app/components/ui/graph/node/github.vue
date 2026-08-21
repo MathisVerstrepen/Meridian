@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<NodeProps<DataGithub> & { presetEditor?: 
 
 // --- Routing ---
 const route = useRoute();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Stores ---
 const githubStore = useGithubStore();

@@ -14,7 +14,7 @@ export interface GraphQuickAction {
         direction: 'target' | 'source';
     };
     children?: readonly GraphQuickAction[];
-    run?: () => unknown;
+    run?: () => void;
 }
 
 type QuickActionTarget =
@@ -29,8 +29,8 @@ interface UseGraphQuickActionsOptions {
     deleteNode: (nodeId: string) => void;
     unlinkNode: (nodeId: string) => void;
     deleteGroup: (graphId: string, groupId: string) => void;
-    fitGraph: () => unknown;
-    autoLayoutGraph: () => unknown;
+    fitGraph: () => void;
+    autoLayoutGraph: () => void;
 }
 
 interface PendingGesture {

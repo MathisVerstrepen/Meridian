@@ -19,9 +19,9 @@ watch(
 );
 
 onMounted(() => {
-    if (!avatarSrc.value && (user.value as User)?.avatarUrl) {
+    if (!avatarSrc.value && (user.value)?.avatarUrl) {
         loadAvatar();
-    } else if (!(user.value as User)?.avatarUrl) {
+    } else if (!(user.value)?.avatarUrl) {
         avatarSrc.value = '';
     }
 });

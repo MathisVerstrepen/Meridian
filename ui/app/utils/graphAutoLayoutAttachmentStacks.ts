@@ -80,7 +80,7 @@ export const partitionAttachmentStackSubgraphs = (
     subgraphs: readonly AttachmentLateralSubgraph[],
     nodes: readonly AttachmentStackNode[],
     verticalParticipantIds: ReadonlySet<string>,
-): { stacks: AttachmentStack[]; fallback: AttachmentLateralSubgraph[] } => {
+) => {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
     const stacks: AttachmentStack[] = [];
     const fallback: AttachmentLateralSubgraph[] = [];

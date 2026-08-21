@@ -8,69 +8,70 @@ import {
     type GraphJsonContainer,
 } from '@/types/graphResponse';
 
-const REASONING_EFFORT_VALUES = new Set<string>(REASONING_EFFORTS);
+const isReasoningEffort = (value: string): value is ReasoningEffortEnum =>
+    REASONING_EFFORTS.some((effort) => effort === value);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+const isRecord = <Value>(value: Value): value is Value & Record<string, JsonValue> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const invalid = (path: string, expected: string): never => {
     throw new Error(`Invalid graph response value at ${path}: expected ${expected}`);
 };
 
-const requiredString = (value: unknown, path: string): string => {
-    if (typeof value !== 'string') return invalid(path, 'a string');
+const requiredString = (value: RuntimeValue, path: string): string => {
+    if (!isRuntimeString(value)) return invalid(path, 'a string');
     return value;
 };
 
-const requiredNumber = (value: unknown, path: string): number => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
+const requiredNumber = (value: RuntimeValue, path: string): number => {
+    if (!isRuntimeNumber(value) || !Number.isFinite(value)) {
         return invalid(path, 'a finite number');
     }
     return value;
 };
 
-const requiredInteger = (value: unknown, path: string): number => {
+const requiredInteger = (value: RuntimeValue, path: string): number => {
     const number = requiredNumber(value, path);
     if (!Number.isSafeInteger(number)) return invalid(path, 'a safe integer');
     return number;
 };
 
-const optionalNullableString = (value: unknown, path: string): string | null => {
+const optionalNullableString = (value: RuntimeValue, path: string): string | null => {
     if (value === undefined || value === null) return null;
     return requiredString(value, path);
 };
 
-const optionalNullableNumber = (value: unknown, path: string): number | null => {
+const optionalNullableNumber = (value: RuntimeValue, path: string): number | null => {
     if (value === undefined || value === null) return null;
     return requiredNumber(value, path);
 };
 
-const optionalNullableInteger = (value: unknown, path: string): number | null => {
+const optionalNullableInteger = (value: RuntimeValue, path: string): number | null => {
     if (value === undefined || value === null) return null;
     return requiredInteger(value, path);
 };
 
-const optionalBoolean = (value: unknown, path: string, fallback: boolean): boolean => {
+const optionalBoolean = (value: RuntimeValue, path: string, fallback: boolean): boolean => {
     if (value === undefined) return fallback;
-    if (typeof value !== 'boolean') return invalid(path, 'a boolean');
+    if (!isRuntimeBoolean(value)) return invalid(path, 'a boolean');
     return value;
 };
 
-const optionalJsonContainer = (value: unknown, path: string): GraphJsonContainer | null => {
+const optionalJsonContainer = (value: RuntimeValue, path: string): GraphJsonContainer | null => {
     if (value === undefined || value === null) return null;
     if (Array.isArray(value) || isRecord(value)) return value;
     return invalid(path, 'an object, array, or null');
 };
 
-const optionalReasoningEffort = (value: unknown, path: string): ReasoningEffortEnum | null => {
+const optionalReasoningEffort = (value: RuntimeValue, path: string): ReasoningEffortEnum | null => {
     if (value === undefined || value === null) return null;
-    if (typeof value !== 'string' || !REASONING_EFFORT_VALUES.has(value)) {
+    if (!isRuntimeString(value) || !isReasoningEffort(value)) {
         return invalid(path, 'a supported reasoning effort or null');
     }
-    return value as ReasoningEffortEnum;
+    return value;
 };
 
-const customInstructions = (value: unknown, path: string): string[] => {
+const customInstructions = (value: RuntimeValue, path: string): string[] => {
     if (value === undefined) return [];
     if (!Array.isArray(value)) return invalid(path, 'an array of strings');
     return value.map((instruction, index) =>
@@ -78,7 +79,7 @@ const customInstructions = (value: unknown, path: string): string[] => {
     );
 };
 
-const decodeNode = (value: unknown, index: number): DecodedGraphEditorNodeV1 => {
+const decodeNode = (value: RuntimeValue, index: number): DecodedGraphEditorNodeV1 => {
     const path = `nodes[${index}]`;
     if (!isRecord(value)) return invalid(path, 'an object');
 
@@ -100,7 +101,7 @@ const decodeNode = (value: unknown, index: number): DecodedGraphEditorNodeV1 => 
     };
 };
 
-const decodeEdge = (value: unknown, index: number): DecodedGraphEditorEdgeV1 => {
+const decodeEdge = (value: RuntimeValue, index: number): DecodedGraphEditorEdgeV1 => {
     const path = `edges[${index}]`;
     if (!isRecord(value)) return invalid(path, 'an object');
 
@@ -124,7 +125,7 @@ const decodeEdge = (value: unknown, index: number): DecodedGraphEditorEdgeV1 => 
     };
 };
 
-export const decodeGraphEditorResponse = (value: unknown): DecodedGraphEditorResponse => {
+export const decodeGraphEditorResponse = <Value>(value: Value): DecodedGraphEditorResponse => {
     if (!isRecord(value)) return invalid('response', 'an object');
     if (value.version !== GRAPH_EDITOR_RESPONSE_VERSION) {
         throw new Error(`Unsupported graph response version: ${String(value.version)}`);
@@ -176,3 +177,4 @@ export const decodeGraphEditorResponse = (value: unknown): DecodedGraphEditorRes
         edges: value.edges.map(decodeEdge),
     };
 };
+import { isRuntimeBoolean, isRuntimeNumber, isRuntimeString } from '@/utils/runtimeTypes';

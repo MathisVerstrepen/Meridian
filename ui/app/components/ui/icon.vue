@@ -51,7 +51,7 @@ const loadSvg = async (name: string) => {
                 return;
             }
 
-            if (typeof resolvedSvgContent === 'string') {
+            if (isRuntimeString(resolvedSvgContent)) {
                 svgContent.value = resolvedSvgContent;
             }
         } catch (error) {
@@ -71,7 +71,7 @@ const loadSvg = async (name: string) => {
 
     const importedSvg = svgImports[path];
 
-    if (typeof importedSvg === 'string') {
+    if (isRuntimeString(importedSvg)) {
         svgContent.value = importedSvg;
     } else {
         if (props.name) {

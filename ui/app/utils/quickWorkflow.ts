@@ -26,10 +26,7 @@ const GENERATORS = [
 const INPUT_OPTIONS = [NodeTypeEnum.PROMPT, NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB] as const;
 const ATTACHMENT_OPTIONS = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB] as const;
 
-const QUICK_WORKFLOW_CONFIG: Record<
-    NodeCategoryEnum,
-    Record<QuickWorkflowDirection, QuickWorkflowConfig>
-> = {
+const QUICK_WORKFLOW_CONFIG = {
     [NodeCategoryEnum.CONTEXT]: {
         target: {
             settingsKey: 'contextInputWheel',
@@ -66,16 +63,19 @@ const QUICK_WORKFLOW_CONFIG: Record<
             allowedOptions: INPUT_OPTIONS,
         },
     },
-};
+} satisfies Record<
+    NodeCategoryEnum,
+    Record<QuickWorkflowDirection, QuickWorkflowConfig>
+>;
 
-const BLOCK_IDS: Partial<Record<NodeTypeEnum, string>> = {
+const BLOCK_IDS = {
     [NodeTypeEnum.PROMPT]: 'primary-prompt-text',
     [NodeTypeEnum.FILE_PROMPT]: 'primary-prompt-file',
     [NodeTypeEnum.GITHUB]: 'primary-github-context',
     [NodeTypeEnum.TEXT_TO_TEXT]: 'primary-model-text-to-text',
     [NodeTypeEnum.PARALLELIZATION]: 'primary-model-parallelization',
     [NodeTypeEnum.ROUTING]: 'primary-model-routing',
-};
+} satisfies Partial<Record<NodeTypeEnum, string>>;
 
 export const getQuickWorkflowConfig = (
     category: NodeCategoryEnum,
@@ -83,7 +83,7 @@ export const getQuickWorkflowConfig = (
 ): QuickWorkflowConfig => QUICK_WORKFLOW_CONFIG[category][direction];
 
 export const getQuickWorkflowSlots = (
-    settings: BlockSettings | null | undefined,
+    settings: Partial<BlockSettings> | null | undefined,
     category: NodeCategoryEnum,
     direction: QuickWorkflowDirection,
 ): WheelSlot[] | undefined => settings?.[getQuickWorkflowConfig(category, direction).settingsKey];
@@ -113,7 +113,7 @@ export const nodeHasQuickWorkflowHandle = (
     direction: QuickWorkflowDirection,
 ): boolean => {
     if (!nodeType) return false;
-    if (GENERATORS.includes(nodeType as (typeof GENERATORS)[number])) {
+    if (GENERATORS.some((generator) => generator === nodeType)) {
         return direction === 'target' || category === NodeCategoryEnum.CONTEXT;
     }
     if (nodeType === NodeTypeEnum.PROMPT) return category === NodeCategoryEnum.PROMPT;

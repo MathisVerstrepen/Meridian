@@ -10,8 +10,7 @@ const stubs = vi.hoisted(() => ({
     fetchData: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('motion-v', () => ({
-    useSpring: (initial: number) => {
+mockNuxtImport('useMotionSpring', () => (initial: number) => {
         let value = initial;
         return {
             on: vi.fn(),
@@ -20,8 +19,7 @@ vi.mock('motion-v', () => ({
                 value = next;
             },
         };
-    },
-}));
+    });
 
 mockNuxtImport('useChatStore', () => () => ({
     storeKind: 'chat',

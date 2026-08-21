@@ -3,7 +3,7 @@ import type { Graph } from '@/types/graph';
 
 export const GRAPH_EDITOR_RESPONSE_VERSION = 1 as const;
 
-export type GraphJsonContainer = Record<string, unknown> | unknown[];
+export type GraphJsonContainer = Record<string, JsonValue> | unknown[];
 
 export interface GraphEditorGraphV1 {
     id: string;

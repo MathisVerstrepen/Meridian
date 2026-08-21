@@ -44,9 +44,9 @@ const buildTargetUrl = (apiBaseUrl: string, fileId: string, query: ReturnType<ty
 };
 
 const buildRequestHeaders = (event: H3Event, accessToken: string) => {
-    const headers: Record<string, string> = {
+    const headers = {
         Authorization: `Bearer ${accessToken}`,
-    };
+    } satisfies Record<string, string>;
 
     FORWARDED_REQUEST_HEADERS.forEach((headerName) => {
         const value = getHeader(event, headerName);

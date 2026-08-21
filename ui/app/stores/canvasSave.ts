@@ -49,7 +49,7 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
                 setNeedSave(SavingStatus.SAVED);
             } catch (err) {
                 console.error('Error saving graph:', err);
-                error('Failed to save graph: ' + (err as Error).message, {
+                error('Failed to save graph: ' + runtimeErrorMessage(err), {
                     title: 'Save Error',
                 });
                 setNeedSave(SavingStatus.ERROR);

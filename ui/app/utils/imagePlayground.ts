@@ -34,7 +34,7 @@ type StyleVisual = {
     description: string;
 };
 
-export const IMAGE_PLAYGROUND_STYLE_VISUALS: Record<string, StyleVisual> = {
+export const IMAGE_PLAYGROUND_STYLE_VISUALS = {
     none: {
         accent: '#ccc5b9',
         description: 'Raw prompt',
@@ -64,7 +64,7 @@ export const IMAGE_PLAYGROUND_STYLE_VISUALS: Record<string, StyleVisual> = {
         accent: '#eb5e28',
         description: 'Neon, high contrast',
     },
-};
+} satisfies Record<string, StyleVisual>;
 
 export const imagePlaygroundImageUrl = (id: string, previewSize?: ImagePreviewSize) =>
     previewSize
@@ -77,7 +77,7 @@ export const imagePlaygroundGallerySrcset = (id: string) =>
 export const imagePlaygroundDownloadUrl = (id: string) =>
     `/api/auth/refresh/files/view/${id}?download=1`;
 
-const imagePlaygroundExtensionByContentType: Record<string, string> = {
+const imagePlaygroundExtensionByContentType = {
     'image/jpeg': 'jpg',
     'image/png': 'png',
     'image/webp': 'webp',
@@ -90,7 +90,7 @@ const imagePlaygroundExtensionByContentType: Record<string, string> = {
     'video/quicktime': 'mov',
     'video/webm': 'webm',
     'video/x-m4v': 'm4v',
-};
+} satisfies Record<string, string>;
 
 export const imagePlaygroundDownloadName = (
     item: GeneratedImageGalleryItem,

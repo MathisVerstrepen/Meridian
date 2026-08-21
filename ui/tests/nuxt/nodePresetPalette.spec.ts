@@ -39,7 +39,7 @@ describe('node preset block palette', () => {
             global: { stubs: { UiIcon: defineComponent({ template: '<span />' }) } },
         });
         const scroller = wrapper.get('[data-testid="block-palette-scroller"]');
-        const element = scroller.element as HTMLElement;
+        const element = requireElement(scroller.element, HTMLElement);
         const scrollBy = vi.fn();
         Object.defineProperties(element, {
             clientWidth: { configurable: true, value: 200 },

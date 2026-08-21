@@ -4,7 +4,7 @@ import type { DataTextToText, SidebarNode } from '@/types/graph';
 
 defineProps<{
     node: SidebarNode<DataTextToText>;
-    setNodeDataKey: (key: string, value: unknown) => void;
+    setNodeDataKey: (key: string, value: RuntimeValue) => void;
     setCurrentModel: (model: string) => void;
 }>();
 </script>

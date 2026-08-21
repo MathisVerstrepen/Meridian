@@ -21,7 +21,7 @@ type ParsedContent = {
 };
 
 const parsedContent = computed<ParsedContent>(() => {
-    if (typeof window === 'undefined') {
+    if (isRuntimeUndefined(window)) {
         return { title: '', format: 'unknown', branches: [] };
     }
 

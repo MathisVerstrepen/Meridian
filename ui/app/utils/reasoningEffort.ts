@@ -4,7 +4,7 @@ import type { ModelInfo } from '@/types/model';
 export const UNKNOWN_REASONING_EFFORTS = -1;
 export const ALL_REASONING_EFFORTS = 127;
 
-export const REASONING_EFFORT_LABELS: Readonly<Record<ReasoningEffortEnum, string>> = {
+export const REASONING_EFFORT_LABELS = {
     [ReasoningEffortEnum.MAX]: 'Max',
     [ReasoningEffortEnum.XHIGH]: 'X-High',
     [ReasoningEffortEnum.HIGH]: 'High',
@@ -12,7 +12,7 @@ export const REASONING_EFFORT_LABELS: Readonly<Record<ReasoningEffortEnum, strin
     [ReasoningEffortEnum.LOW]: 'Low',
     [ReasoningEffortEnum.MINIMAL]: 'Minimal',
     [ReasoningEffortEnum.NONE]: 'None',
-};
+} satisfies Readonly<Record<ReasoningEffortEnum, string>>;
 
 export const isKnownReasoningEffortsMask = (
     value: number | null | undefined,
@@ -62,11 +62,11 @@ type CanvasNode = {
     data?: unknown;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+const isRecord = <Value>(value: Value): value is Value & Record<string, JsonValue> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const getModelId = (value: unknown): string | null => {
-    if (!isRecord(value) || typeof value.model !== 'string') return null;
+const getModelId = <Value>(value: Value): string | null => {
+    if (!isRecord(value) || !isRuntimeString(value.model)) return null;
     return value.model;
 };
 
@@ -96,3 +96,4 @@ export const getCanvasModelIds = (nodes: ReadonlyArray<CanvasNode>): string[] =>
 
     return [...modelIds];
 };
+import { isRuntimeString } from '@/utils/runtimeTypes';

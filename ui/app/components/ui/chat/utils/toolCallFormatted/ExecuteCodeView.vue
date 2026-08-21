@@ -11,7 +11,7 @@ const codeHtml = ref('');
 let lastRenderId = 0;
 
 const args = computed(() => {
-    const a = props.detail.arguments as Record<string, unknown>;
+    const a = jsonObjectOrEmpty(props.detail.arguments);
     return {
         title: String(a?.title || ''),
         code: String(a?.code || ''),
@@ -19,11 +19,11 @@ const args = computed(() => {
 });
 
 const result = computed(() => {
-    const r = props.detail.result as Record<string, unknown>;
+    const r = jsonObjectOrEmpty(props.detail.result);
     return {
         status: String(r?.status || ''),
-        exit_code: r?.exit_code as number | undefined,
-        duration_ms: r?.duration_ms as number | undefined,
+        exit_code: isRuntimeNumber(r.exit_code) ? r.exit_code : undefined,
+        duration_ms: isRuntimeNumber(r.duration_ms) ? r.duration_ms : undefined,
         stdout: String(r?.stdout ?? ''),
         stderr: String(r?.stderr ?? ''),
         output_truncated: Boolean(r?.output_truncated),
@@ -33,13 +33,13 @@ const result = computed(() => {
 
 const extractedArtifacts = computed<ToolCallArtifact[]>(() => {
     const r = props.detail.result;
-    if (!r || Array.isArray(r) || typeof r !== 'object') return [];
-    const rawArtifacts = (r as Record<string, unknown>).artifacts;
+    if (!isJsonObject(r)) return [];
+    const rawArtifacts = r.artifacts;
     if (!Array.isArray(rawArtifacts)) return [];
 
     return rawArtifacts.flatMap((artifact) => {
-        if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) return [];
-        const a = artifact as Record<string, unknown>;
+        if (!isJsonObject(artifact)) return [];
+        const a = artifact;
         const id = String(a.id || '').trim();
         const name = String(a.name || '').trim();
         const relativePath = String(a.relative_path || '').trim();

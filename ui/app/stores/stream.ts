@@ -118,7 +118,7 @@ export const useStreamStore = defineStore('Stream', () => {
             }
         }
 
-        if (keepLooping && typeof requestAnimationFrame !== 'undefined') {
+        if (keepLooping && !isRuntimeUndefined(requestAnimationFrame)) {
             flushHandle = requestAnimationFrame(flushSessions);
         }
     };
@@ -127,7 +127,7 @@ export const useStreamStore = defineStore('Stream', () => {
      * Triggers the flush loop if it's not already running.
      */
     const triggerFlush = () => {
-        if (flushHandle === null && typeof requestAnimationFrame !== 'undefined') {
+        if (flushHandle === null && !isRuntimeUndefined(requestAnimationFrame)) {
             flushHandle = requestAnimationFrame(flushSessions);
         }
     };
@@ -335,7 +335,7 @@ export const useStreamStore = defineStore('Stream', () => {
         if (!session || !session.isStreaming) return false;
 
         const route = useRoute();
-        const graphId = route.params.id as string;
+        const graphId = firstRouteString(route.params.id) ?? '';
 
         sendMessage({
             type: 'cancel_stream',
@@ -399,9 +399,13 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param payload - The data payload for the stream end event.
      * @returns void
      */
+    interface StreamEndPayload {
+        refresh_tool_usage?: boolean;
+    }
+
     const handleStreamEnd = (
         nodeId: string,
-        payload: object,
+        payload: StreamEndPayload,
         modelId: string | undefined = undefined,
     ) => {
         const session = streamSessions.value.get(nodeId);
@@ -491,7 +495,7 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param payload - The data payload for the routing response event.
      * @returns void
      */
-    const handleRoutingResponse = (nodeId: string, payload: unknown) => {
+    const handleRoutingResponse = (nodeId: string, payload: RuntimeValue) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 

@@ -6,7 +6,7 @@ const props = defineProps<{
 }>();
 
 const args = computed(() => {
-    const a = props.detail.arguments as Record<string, unknown>;
+    const a = jsonObjectOrEmpty(props.detail.arguments);
     return {
         prompt: String(a?.prompt || ''),
         aspect_ratio: a?.aspect_ratio ? String(a.aspect_ratio) : null,
@@ -15,7 +15,7 @@ const args = computed(() => {
 });
 
 const result = computed(() => {
-    const r = props.detail.result as Record<string, unknown>;
+    const r = jsonObjectOrEmpty(props.detail.result);
     return {
         success: Boolean(r?.success),
         id: r?.id ? String(r.id) : null,

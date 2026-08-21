@@ -6,15 +6,13 @@ import {
     MAX_PRESET_DIMENSION,
     MAX_PRESET_EDGES,
     MAX_PRESET_NODES,
+    isNodePresetEdgeCategory,
     isNodePresetAccentColor,
-    NODE_PRESET_EDGE_CATEGORIES,
+    isNodePresetNodeType,
     NODE_PRESET_EDGE_TYPE_RULES,
     NODE_PRESET_MINIMUM_DIMENSIONS,
-    NODE_PRESET_NODE_TYPES,
     NODE_PRESET_SCHEMA_VERSION,
     type NodePreset,
-    type NodePresetEdgeCategory,
-    type NodePresetNodeType,
     type NodePresetSettings,
 } from '@/types/nodePresets';
 import type {
@@ -33,10 +31,8 @@ import {
     validateUuid,
 } from '@/utils/nodePresets/validationHelpers';
 
-const NODE_TYPES = new Set<string>(NODE_PRESET_NODE_TYPES);
-const EDGE_CATEGORIES = new Set<string>(NODE_PRESET_EDGE_CATEGORIES);
 function validateNode(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
@@ -48,18 +44,18 @@ function validateNode(
         issues,
     );
     validateUuid(value.id, [...path, 'id'], issues);
-    if (typeof value.type !== 'string' || !NODE_TYPES.has(value.type)) {
+    if (!isNodePresetNodeType(value.type)) {
         addIssue(issues, [...path, 'type'], 'unsupported_node_type', 'Node type is not supported.');
         return;
     }
-    const type = value.type as NodePresetNodeType;
+    const type = value.type;
     const positionPath = [...path, 'position'];
     if (requireRecord(value.position, positionPath, issues)) {
         forbidExtraKeys(value.position, ['x', 'y'], positionPath, issues);
         for (const axis of ['x', 'y']) {
             const coordinate = value.position[axis];
             if (
-                typeof coordinate !== 'number' ||
+                !isRuntimeNumber(coordinate) ||
                 !Number.isFinite(coordinate) ||
                 Math.abs(coordinate) > MAX_PRESET_COORDINATE
             ) {
@@ -79,7 +75,7 @@ function validateNode(
     ] as const) {
         const dimension = value[field];
         if (
-            typeof dimension !== 'number' ||
+            !isRuntimeNumber(dimension) ||
             !Number.isFinite(dimension) ||
             dimension < min ||
             dimension > MAX_PRESET_DIMENSION
@@ -108,7 +104,7 @@ function validateTopology(
 ): void {
     const nodeMap = new Map<string, NodePresetUnknownRecord>();
     nodes.forEach((node, index) => {
-        if (!isRecord(node) || typeof node.id !== 'string') return;
+        if (!isRecord(node) || !isRuntimeString(node.id)) return;
         if (nodeMap.has(node.id)) {
             addIssue(
                 issues,
@@ -126,7 +122,7 @@ function validateTopology(
         if (!isRecord(node) || node.parentId === undefined || node.parentId === null) return;
         if (
             node.type === 'group' ||
-            typeof node.parentId !== 'string' ||
+            !isRuntimeString(node.parentId) ||
             !groupIds.has(node.parentId)
         ) {
             addIssue(
@@ -155,7 +151,7 @@ function validateTopology(
     const edgeTuples = new Set<string>();
     const promptTargets = new Set<string>();
     edges.forEach((edge, index) => {
-        if (!isRecord(edge) || typeof edge.id !== 'string') return;
+        if (!isRecord(edge) || !isRuntimeString(edge.id)) return;
         const edgePath = [...path, 'edges', index];
         if (edgeIds.has(edge.id)) {
             addIssue(
@@ -167,10 +163,9 @@ function validateTopology(
         }
         edgeIds.add(edge.id);
         if (
-            typeof edge.source !== 'string' ||
-            typeof edge.target !== 'string' ||
-            typeof edge.category !== 'string' ||
-            !EDGE_CATEGORIES.has(edge.category)
+            !isRuntimeString(edge.source) ||
+            !isRuntimeString(edge.target) ||
+            !isNodePresetEdgeCategory(edge.category)
         ) {
             return;
         }
@@ -191,11 +186,11 @@ function validateTopology(
         if (source.type === 'group' || target.type === 'group') {
             addIssue(issues, edgePath, 'group_edge', 'Edges cannot connect group nodes.');
         }
-        const category = edge.category as NodePresetEdgeCategory;
+        const category = edge.category;
         const rules = NODE_PRESET_EDGE_TYPE_RULES[category];
         if (
-            !rules.sources.includes(source.type as NodePresetNodeType) ||
-            !rules.targets.includes(target.type as NodePresetNodeType)
+            !rules.sources.some((type) => type === source.type) ||
+            !rules.targets.some((type) => type === target.type)
         ) {
             addIssue(
                 issues,
@@ -228,14 +223,14 @@ function validateTopology(
     });
 }
 function validatePreset(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
     if (!requireRecord(value, path, issues)) return;
     forbidExtraKeys(value, ['id', 'name', 'accentColor', 'nodes', 'edges'], path, issues);
     validateUuid(value.id, [...path, 'id'], issues);
-    if (typeof value.name !== 'string') {
+    if (!isRuntimeString(value.name)) {
         addIssue(issues, [...path, 'name'], 'invalid_type', 'Must be a string.');
     } else {
         const name = value.name.trim();
@@ -299,7 +294,7 @@ function validatePreset(
             validateUuid(edge.id, [...edgePath, 'id'], issues);
             validateUuid(edge.source, [...edgePath, 'source'], issues);
             validateUuid(edge.target, [...edgePath, 'target'], issues);
-            if (typeof edge.category !== 'string' || !EDGE_CATEGORIES.has(edge.category)) {
+            if (!isNodePresetEdgeCategory(edge.category)) {
                 addIssue(
                     issues,
                     [...edgePath, 'category'],
@@ -320,34 +315,42 @@ function nameKey(value: string): string {
         .replace(/[ßẞ]/g, 'ss')
         .replace(/ς/g, 'σ');
 }
-function canonicalizeSettings(value: NodePresetUnknownRecord): NodePresetSettings {
-    const presets = (value.presets as NodePreset[]).map((preset) => ({
+function asValidatedPreset<Value>(value: Value): Value & NodePreset {
+    return /* SAFETY: Full preset validation completed before canonicalization. */ value as Value & NodePreset;
+}
+function canonicalizeSettings<Value extends { presets?: RuntimeValue }>(value: Value): NodePresetSettings {
+    const presets = (Array.isArray(value.presets) ? value.presets : []).map((value) => {
+        const preset = asValidatedPreset(value);
+        return {
         ...preset,
         name: preset.name.trim(),
         accentColor:
-            typeof preset.accentColor === 'string'
+            isRuntimeString(preset.accentColor)
                 ? preset.accentColor.toLowerCase()
                 : DEFAULT_NODE_PRESET_ACCENT_COLOR,
-        nodes: preset.nodes.map((node) => ({
-            ...node,
-            ...(node.parentId === undefined ? {} : { parentId: node.parentId }),
-            data: { ...node.data },
-        })),
+        nodes: preset.nodes.map((node) => {
+            const canonicalNode = { ...node, data: { ...node.data } };
+            if (node.parentId !== undefined) {
+                Object.assign(canonicalNode, { parentId: node.parentId });
+            }
+            return canonicalNode;
+        }),
         edges: preset.edges.map((edge) => ({ ...edge })),
-    }));
+        };
+    });
     return { schemaVersion: NODE_PRESET_SCHEMA_VERSION, presets };
 }
 
 export function normalizeNodePresetSettings(value: NodePresetSettings): NodePresetSettings {
-    return canonicalizeSettings(value as unknown as NodePresetUnknownRecord);
+    return canonicalizeSettings(value);
 }
 
-export function validateNodePresetSettings(value: unknown): NodePresetResult<NodePresetSettings> {
+export function validateNodePresetSettings(value: RuntimeValue): NodePresetResult<NodePresetSettings> {
     const issues: NodePresetValidationIssue[] = [];
     if (!requireRecord(value, [], issues)) return { valid: false, issues };
     forbidExtraKeys(value, ['schemaVersion', 'presets'], [], issues);
     if (
-        typeof value.schemaVersion !== 'number' ||
+        !isRuntimeNumber(value.schemaVersion) ||
         !Number.isInteger(value.schemaVersion) ||
         value.schemaVersion !== NODE_PRESET_SCHEMA_VERSION
     ) {
@@ -374,7 +377,7 @@ export function validateNodePresetSettings(value: unknown): NodePresetResult<Nod
         const names = new Set<string>();
         value.presets.forEach((preset, index) => {
             if (!isRecord(preset)) return;
-            if (typeof preset.id === 'string') {
+            if (isRuntimeString(preset.id)) {
                 if (ids.has(preset.id)) {
                     addIssue(
                         issues,
@@ -385,7 +388,7 @@ export function validateNodePresetSettings(value: unknown): NodePresetResult<Nod
                 }
                 ids.add(preset.id);
             }
-            if (typeof preset.name === 'string') {
+            if (isRuntimeString(preset.name)) {
                 const key = nameKey(preset.name.trim());
                 if (names.has(key)) {
                     addIssue(
@@ -413,3 +416,4 @@ export function validateNodePresetSettings(value: unknown): NodePresetResult<Nod
         ? { valid: false, issues }
         : { valid: true, issues, value: normalized };
 }
+import { isRuntimeNumber, isRuntimeString } from '@/utils/runtimeTypes';

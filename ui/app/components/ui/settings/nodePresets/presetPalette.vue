@@ -50,7 +50,7 @@ onMounted(async () => {
     updateReducedMotion();
     reducedMotionQuery.addEventListener('change', updateReducedMotion);
     window.addEventListener('resize', updateScrollState);
-    if (typeof ResizeObserver !== 'undefined' && scroller.value) {
+    if (!isRuntimeUndefined(ResizeObserver) && scroller.value) {
         resizeObserver = new ResizeObserver(updateScrollState);
         resizeObserver.observe(scroller.value);
     }

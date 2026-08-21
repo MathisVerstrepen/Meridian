@@ -5,27 +5,16 @@ import UiUtilsSearchBar from '~/components/ui/utils/searchBar.vue';
 const LOAD_MORE_THRESHOLD_PX = 300;
 
 // --- Props ---
-const props = defineProps({
-    graphs: {
-        type: Array as PropType<GraphSummary[]>,
-        required: true,
-    },
-    folders: {
-        type: Array as PropType<Folder[]>,
-        required: true,
-    },
-    workspaces: {
-        type: Array as PropType<Workspace[]>,
-        default: () => [],
-    },
-    isLoading: {
-        type: Boolean,
-        default: false,
-    },
-    hasMoreGraphs: {
-        type: Boolean,
-        default: false,
-    },
+const props = withDefaults(defineProps<{
+    graphs: GraphSummary[];
+    folders: Folder[];
+    workspaces?: Workspace[];
+    isLoading?: boolean;
+    hasMoreGraphs?: boolean;
+}>(), {
+    workspaces: () => [],
+    isLoading: false,
+    hasMoreGraphs: false,
 });
 
 // --- Emits ---

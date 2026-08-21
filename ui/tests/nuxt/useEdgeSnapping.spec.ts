@@ -1,30 +1,34 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GraphNode, Position } from '@vue-flow/core';
+import { Position, type GraphNode } from '@vue-flow/core';
 import { useEdgeSnapping } from '@/composables/useEdgeSnapping';
+import { graphNode } from './support/graphNode';
 
-const stubs = vi.hoisted(() => ({
-    getNodes: { value: [] as GraphNode[] },
-    getEdges: { value: [] as Array<{ targetHandle?: string | null }> },
-    useVueFlow: vi.fn(),
-    acceptsMultipleInputEdges: vi.fn(() => true),
-}));
+interface GraphNodesState {
+    value: GraphNode[];
+}
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: stubs.useVueFlow,
-}));
+interface GraphEdgesState {
+    value: Array<{ targetHandle?: string | null }>;
+}
+
+const stubs = vi.hoisted(() => {
+    const getNodes: GraphNodesState = { value: [] };
+    const getEdges: GraphEdgesState = { value: [] };
+    return {
+        getNodes,
+        getEdges,
+        useGraphFlow: vi.fn(),
+        acceptsMultipleInputEdges: vi.fn(() => true),
+    };
+});
+
+mockNuxtImport('useGraphFlow', () => stubs.useGraphFlow);
 
 mockNuxtImport('useEdgeCompatibility', () => () => ({
     acceptsMultipleInputEdges: stubs.acceptsMultipleInputEdges,
 }));
 mockNuxtImport('isSourceNodeTypeCompatibleWithTargetHandle', () => () => true);
-
-const graphNode = (node: Partial<GraphNode> & Pick<GraphNode, 'id'>): GraphNode =>
-    ({
-        type: 'test-node',
-        position: { x: 0, y: 0 },
-        ...node,
-    }) as GraphNode;
 
 const targetNode = (id: string, x: number, handleId: string): GraphNode =>
     graphNode({
@@ -40,7 +44,7 @@ const targetNode = (id: string, x: number, handleId: string): GraphNode =>
                 width: 10,
                 height: 10,
                 type: 'target',
-                position: 'left' as Position,
+                position: Position.Left,
             }],
         },
     });
@@ -53,8 +57,8 @@ describe('useEdgeSnapping', () => {
             targetNode('far', 2000, 'far_input'),
         ];
         stubs.getEdges.value = [];
-        stubs.useVueFlow.mockReset();
-        stubs.useVueFlow.mockReturnValue({
+        stubs.useGraphFlow.mockReset();
+        stubs.useGraphFlow.mockReturnValue({
             getNodes: stubs.getNodes,
             getEdges: stubs.getEdges,
         });
@@ -79,7 +83,7 @@ describe('useEdgeSnapping', () => {
         snapping.findNearestHandle({ x: 105, y: 5 }, 'graph-id');
         frames.shift()?.(0);
 
-        expect(stubs.useVueFlow).toHaveBeenCalledTimes(1);
+        expect(stubs.useGraphFlow).toHaveBeenCalledTimes(1);
         expect(snapping.snappedHandle.value).toMatchObject({
             nodeId: 'near',
             handleId: 'near_input',
@@ -95,7 +99,7 @@ describe('useEdgeSnapping', () => {
         snapping.findNearestHandle({ x: 5, y: 5 }, 'graph-id');
         frames.shift()?.(1);
 
-        expect(stubs.useVueFlow).toHaveBeenCalledTimes(2);
+        expect(stubs.useGraphFlow).toHaveBeenCalledTimes(2);
         expect(snapping.snappedHandle.value?.nodeId).toBe('new');
         snapping.stopSnapping();
     });
@@ -136,7 +140,7 @@ describe('useEdgeSnapping', () => {
             handleId: 'source_output',
             handleType: 'source',
         });
-        expect(stubs.useVueFlow).not.toHaveBeenCalled();
+        expect(stubs.useGraphFlow).not.toHaveBeenCalled();
 
         snapping.findNearestHandle({ x: 105, y: 5 }, 'graph-id');
         snapping.stopSnapping();

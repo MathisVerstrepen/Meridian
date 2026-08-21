@@ -3,7 +3,6 @@ import {
     NODE_PRESET_SCHEMA_VERSION,
     type NodePreset,
     type NodePresetData,
-    type NodePresetGithubFile,
     type NodePresetNodeType,
 } from '@/types/nodePresets';
 import type {
@@ -11,24 +10,29 @@ import type {
     MaterializedPresetEdge,
     MaterializedPresetNode,
     MaterializeNodePresetOptions,
+    NodePresetRuntimeDefaults,
     NodePresetResult,
     NodePresetUnknownRecord,
 } from '@/utils/nodePresets/contracts';
 import { isRecord } from '@/utils/nodePresets/validationHelpers';
 import { validateNodePresetSettings } from '@/utils/nodePresets/validation';
+import { jsonObjectOrEmpty } from '@/utils/runtimeTypes';
 
 function runtimeData(
     type: NodePresetNodeType,
     configured: NodePresetData,
-    defaults: NodePresetUnknownRecord,
+    defaults: NodePresetRuntimeDefaults | Record<string, never>,
     generateId: () => string,
 ): NodePresetUnknownRecord {
-    const merged = { ...defaults, ...configured } as NodePresetUnknownRecord;
+    const merged = {
+        ...jsonObjectOrEmpty(defaults),
+        ...jsonObjectOrEmpty(configured),
+    };
     if (type === 'textToText') {
         return { ...merged, reply: '', usageData: null, activeGenerationHistoryId: undefined };
     }
-    if (type === 'parallelization') {
-        const data = configured as Extract<NodePresetData, { models: Array<{ model: string }> }>;
+    if (type === 'parallelization' && 'models' in configured && 'aggregator' in configured) {
+        const data = configured;
         const aggregator = isRecord(merged.aggregator) ? merged.aggregator : {};
         return {
             ...merged,
@@ -59,18 +63,23 @@ function runtimeData(
             activeGenerationHistoryId: undefined,
         };
     }
-    if (type === 'github') {
+    if (type === 'github' && 'files' in configured) {
         return {
             ...merged,
-            files: (configured as { files: NodePresetGithubFile[] }).files.map((file) => ({
+            files: configured.files.map((file) => ({
                 ...file,
                 children: [],
             })),
         };
     }
     if (type === 'contextMerger') return { ...merged, branch_summaries: {} };
-    if (type === 'group') {
-        const group = configured as { title: string; comment: string; colorIndex: number };
+    if (
+        type === 'group' &&
+        'title' in configured &&
+        'comment' in configured &&
+        'colorIndex' in configured
+    ) {
+        const group = configured;
         return {
             title: group.title,
             comment: group.comment,
@@ -134,14 +143,13 @@ export function materializeNodePreset(
             const position = parentNode
                 ? { ...node.position }
                 : { x: node.position.x + offset.x, y: node.position.y + offset.y };
-            return {
+            const materializedNode = {
                 id,
                 type: node.type,
                 position,
                 width: node.width,
                 height: node.height,
-                ...(parentNode ? { parentNode, expandParent: true } : {}),
-                selected: true,
+                selected: true as const,
                 data: runtimeData(
                     node.type,
                     node.data,
@@ -149,8 +157,10 @@ export function materializeNodePreset(
                     options.generateId,
                 ),
                 style: { width: `${node.width}px`, height: `${node.height}px` },
-                ...(node.type === 'group' ? { zIndex: -1 } : {}),
             };
+            if (parentNode) Object.assign(materializedNode, { parentNode, expandParent: true });
+            if (node.type === 'group') Object.assign(materializedNode, { zIndex: -1 });
+            return materializedNode;
         })
         .sort((left, right) => Number(right.type === 'group') - Number(left.type === 'group'));
     const edges = source.edges.map((edge): MaterializedPresetEdge => {

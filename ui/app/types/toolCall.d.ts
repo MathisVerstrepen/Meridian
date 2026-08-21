@@ -16,8 +16,8 @@ export interface ToolCallDetail {
     tool_name: string;
     status: string;
     duration_ms?: number | null;
-    arguments: Record<string, unknown> | unknown[];
-    result: Record<string, unknown> | unknown[];
+    arguments: JsonObject | unknown[];
+    result: JsonObject | unknown[];
     model_context_payload: string;
     created_at?: string | null;
 }

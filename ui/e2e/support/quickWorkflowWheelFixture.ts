@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { isRuntimeString } from '../../app/utils/runtimeTypes';
 import type { WheelSlot } from '../../app/types/settings';
 import { QUICK_WORKFLOW_FIXTURE_ROUTE } from '../fixtures/quickWorkflowWheelFixture';
 import {
@@ -46,9 +47,11 @@ interface WheelAnimationState {
     samples: WheelAnimationSample[];
 }
 
-type WheelFixtureWindow = Window & {
-    __quickWorkflowBottomAnimation?: WheelAnimationState;
-};
+declare global {
+    interface Window {
+        __quickWorkflowBottomAnimation?: WheelAnimationState;
+    }
+}
 
 const FIXTURE_HYDRATION_TIMEOUT = 30_000;
 const COLD_BOOTSTRAP_TIMEOUT = 120_000;
@@ -67,7 +70,7 @@ export const test = diagnosticsTest.extend<Record<string, never>, WheelWorkerFix
 
             try {
                 const baseURL = workerInfo.project.use.baseURL;
-                if (typeof baseURL !== 'string') throw new Error('Wheel bootstrap requires a configured baseURL');
+                if (!isRuntimeString(baseURL)) throw new Error('Wheel bootstrap requires a configured baseURL');
                 await page.goto(new URL(QUICK_WORKFLOW_FIXTURE_ROUTE, baseURL).toString(), {
                     timeout: COLD_BOOTSTRAP_TIMEOUT,
                 });
@@ -104,7 +107,9 @@ export const mountQuickWorkflowWheelFixture = async (page: Page) => {
 };
 
 export const readQuickWorkflowState = async (page: Page): Promise<QuickWorkflowFixtureState> =>
-    JSON.parse((await page.getByTestId('quick-workflow-state').textContent()) ?? '{}') as QuickWorkflowFixtureState;
+    page.getByTestId('quick-workflow-state').evaluate<QuickWorkflowFixtureState>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );
 
 export const seedInvalidQuickWorkflowSettings = async (page: Page) => {
     await page.getByTestId('seed-invalid-settings').click();
@@ -208,9 +213,8 @@ export const expectWheelOriginAtHandle = async (
 
 export const installBottomWheelAnimationCollector = async (page: Page) => {
     await page.evaluate(() => {
-        const fixtureWindow = window as WheelFixtureWindow;
         const state: WheelAnimationState = { complete: false, samples: [] };
-        fixtureWindow.__quickWorkflowBottomAnimation = state;
+        window.__quickWorkflowBottomAnimation = state;
         let transitionRoot: HTMLElement | null = null;
 
         const sample = () => {
@@ -249,10 +253,10 @@ export const installBottomWheelAnimationCollector = async (page: Page) => {
 
 export const readBottomWheelAnimation = async (page: Page): Promise<WheelAnimationSample[]> => {
     await page.waitForFunction(
-        () => (window as WheelFixtureWindow).__quickWorkflowBottomAnimation?.complete === true,
+        () => window.__quickWorkflowBottomAnimation?.complete === true,
     );
     return page.evaluate(
-        () => (window as WheelFixtureWindow).__quickWorkflowBottomAnimation?.samples ?? [],
+        () => window.__quickWorkflowBottomAnimation?.samples ?? [],
     );
 };
 
@@ -270,12 +274,16 @@ export const wheelAndHandleCenterX = async (wheel: Locator, handle: Locator) => 
 
 export const hoverWheelBridge = async (page: Page, wheel: Locator) => {
     const bridgePoint = await wheel.locator('[data-wheel-hover-bridge]').evaluate((bridge) => {
-        const path = bridge as SVGGraphicsElement;
-        const bounds = path.getBBox();
-        const point = path.ownerSVGElement!.createSVGPoint();
+        if (!(bridge instanceof SVGGraphicsElement) || !bridge.ownerSVGElement) {
+            throw new TypeError('Wheel hover bridge is not an attached SVG graphics element');
+        }
+        const bounds = bridge.getBBox();
+        const point = bridge.ownerSVGElement.createSVGPoint();
         point.x = bounds.x + bounds.width / 2;
         point.y = bounds.y + bounds.height / 4;
-        const screenPoint = point.matrixTransform(path.getScreenCTM()!);
+        const matrix = bridge.getScreenCTM();
+        if (!matrix) throw new TypeError('Wheel hover bridge has no screen transform');
+        const screenPoint = point.matrixTransform(matrix);
         return { x: screenPoint.x, y: screenPoint.y };
     });
     await page.mouse.move(bridgePoint.x, bridgePoint.y, { steps: 6 });

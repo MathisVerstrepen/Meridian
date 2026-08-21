@@ -105,7 +105,7 @@ const saveClaudeAgentToken = async () => {
         success('Claude Agent connected successfully.');
     } catch (err) {
         console.error('Failed to connect Claude Agent:', err);
-        error((err as Error).message || 'Failed to connect Claude Agent.', {
+        error(runtimeErrorMessage(err) || 'Failed to connect Claude Agent.', {
             title: 'Claude Agent Error',
         });
     } finally {
@@ -121,7 +121,7 @@ const removeClaudeAgentToken = async () => {
         success('Claude Agent disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect Claude Agent:', err);
-        error((err as Error).message || 'Failed to disconnect Claude Agent.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect Claude Agent.', {
             title: 'Claude Agent Error',
         });
     } finally {
@@ -142,7 +142,7 @@ const saveGitHubCopilotToken = async () => {
         success('GitHub Copilot connected successfully.');
     } catch (err) {
         console.error('Failed to connect GitHub Copilot:', err);
-        error((err as Error).message || 'Failed to connect GitHub Copilot.', {
+        error(runtimeErrorMessage(err) || 'Failed to connect GitHub Copilot.', {
             title: 'GitHub Copilot Error',
         });
     } finally {
@@ -158,7 +158,7 @@ const removeGitHubCopilotToken = async () => {
         success('GitHub Copilot disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect GitHub Copilot:', err);
-        error((err as Error).message || 'Failed to disconnect GitHub Copilot.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect GitHub Copilot.', {
             title: 'GitHub Copilot Error',
         });
     } finally {
@@ -179,7 +179,7 @@ const saveZAiCodingPlanApiKey = async () => {
         success('Z.AI Coding Plan connected successfully.');
     } catch (err) {
         console.error('Failed to connect Z.AI Coding Plan:', err);
-        error((err as Error).message || 'Failed to connect Z.AI Coding Plan.', {
+        error(runtimeErrorMessage(err) || 'Failed to connect Z.AI Coding Plan.', {
             title: 'Z.AI Coding Plan Error',
         });
     } finally {
@@ -195,7 +195,7 @@ const removeZAiCodingPlanApiKey = async () => {
         success('Z.AI Coding Plan disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect Z.AI Coding Plan:', err);
-        error((err as Error).message || 'Failed to disconnect Z.AI Coding Plan.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect Z.AI Coding Plan.', {
             title: 'Z.AI Coding Plan Error',
         });
     } finally {
@@ -218,7 +218,7 @@ const saveGeminiCliOAuthCreds = async () => {
         success('Gemini CLI connected successfully.');
     } catch (err) {
         console.error('Failed to connect Gemini CLI:', err);
-        error((err as Error).message || 'Failed to connect Gemini CLI.', {
+        error(runtimeErrorMessage(err) || 'Failed to connect Gemini CLI.', {
             title: 'Gemini CLI Error',
         });
     } finally {
@@ -234,7 +234,7 @@ const removeGeminiCliOAuthCreds = async () => {
         success('Gemini CLI disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect Gemini CLI:', err);
-        error((err as Error).message || 'Failed to disconnect Gemini CLI.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect Gemini CLI.', {
             title: 'Gemini CLI Error',
         });
     } finally {
@@ -253,7 +253,7 @@ const startOpenAICodexDeviceSignIn = async () => {
         success('OpenAI Codex device code created. Enter it in the opened page.');
     } catch (err) {
         console.error('Failed to start OpenAI Codex device sign-in:', err);
-        error((err as Error).message || 'Failed to start OpenAI Codex device sign-in.', {
+        error(runtimeErrorMessage(err) || 'Failed to start OpenAI Codex device sign-in.', {
             title: 'OpenAI Codex Error',
         });
     } finally {
@@ -276,7 +276,7 @@ const completeOpenAICodexDeviceSignIn = async () => {
         success('OpenAI Codex connected successfully.');
     } catch (err) {
         console.error('Failed to complete OpenAI Codex device sign-in:', err);
-        error((err as Error).message || 'Failed to complete OpenAI Codex device sign-in.', {
+        error(runtimeErrorMessage(err) || 'Failed to complete OpenAI Codex device sign-in.', {
             title: 'OpenAI Codex Error',
         });
     } finally {
@@ -292,7 +292,7 @@ const removeOpenAICodexOAuth = async () => {
         success('OpenAI Codex disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect OpenAI Codex:', err);
-        error((err as Error).message || 'Failed to disconnect OpenAI Codex.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect OpenAI Codex.', {
             title: 'OpenAI Codex Error',
         });
     } finally {
@@ -313,7 +313,7 @@ const saveOpenCodeGoApiKey = async () => {
         success('OpenCode Go connected successfully.');
     } catch (err) {
         console.error('Failed to connect OpenCode Go:', err);
-        error((err as Error).message || 'Failed to connect OpenCode Go.', {
+        error(runtimeErrorMessage(err) || 'Failed to connect OpenCode Go.', {
             title: 'OpenCode Go Error',
         });
     } finally {
@@ -329,7 +329,7 @@ const removeOpenCodeGoApiKey = async () => {
         success('OpenCode Go disconnected successfully.');
     } catch (err) {
         console.error('Failed to disconnect OpenCode Go:', err);
-        error((err as Error).message || 'Failed to disconnect OpenCode Go.', {
+        error(runtimeErrorMessage(err) || 'Failed to disconnect OpenCode Go.', {
             title: 'OpenCode Go Error',
         });
     } finally {

@@ -36,6 +36,20 @@ const getEmptyDraftStorage = (): ToolQuestionDraftStorage => ({
     stepIndex: 0,
 });
 
+const isToolQuestionAnswerMap = (value: JsonValue): value is ToolQuestionAnswerMap & JsonObject =>
+    isJsonObject(value) &&
+    Object.values(value).every(
+        (answer) =>
+            isJsonObject(answer) &&
+            (!('value' in answer) ||
+                isRuntimeString(answer.value) ||
+                isRuntimeBoolean(answer.value)) &&
+            (!('values' in answer) ||
+                (Array.isArray(answer.values) && answer.values.every(isRuntimeString))) &&
+            (!('other_text' in answer) || isRuntimeString(answer.other_text)) &&
+            (!('note' in answer) || isRuntimeString(answer.note)),
+    );
+
 const loadDraftStorage = (): ToolQuestionDraftStorage => {
     if (!import.meta.client) {
         return getEmptyDraftStorage();
@@ -47,16 +61,16 @@ const loadDraftStorage = (): ToolQuestionDraftStorage => {
             return getEmptyDraftStorage();
         }
 
-        const parsed = JSON.parse(storedDraft);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        const parsed: JsonValue = JSON.parse(storedDraft);
+        if (!isJsonObject(parsed)) {
             return getEmptyDraftStorage();
         }
 
         const answers =
-            parsed.answers && typeof parsed.answers === 'object' && !Array.isArray(parsed.answers)
-                ? (parsed.answers as ToolQuestionAnswerMap)
+            isToolQuestionAnswerMap(parsed.answers)
+                ? parsed.answers
                 : {};
-        const stepIndex = typeof parsed.stepIndex === 'number' ? parsed.stepIndex : 0;
+        const stepIndex = isRuntimeNumber(parsed.stepIndex) ? parsed.stepIndex : 0;
 
         return {
             answers,

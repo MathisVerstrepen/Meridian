@@ -107,9 +107,7 @@ const referenceMinimum = computed(() => alibabaCapabilities.value?.minimumRefere
 const referenceMaximum = computed(() => alibabaCapabilities.value?.maximumReferences ?? 8);
 const availableVideoResolutions = computed(() => isAlibabaHappyHorse.value
     ? videoResolutions.filter((item) =>
-        ALIBABA_HAPPYHORSE_RESOLUTIONS.includes(
-            item.id as (typeof ALIBABA_HAPPYHORSE_RESOLUTIONS)[number],
-        ),
+        ALIBABA_HAPPYHORSE_RESOLUTIONS.some((resolution) => resolution === item.id),
     )
     : videoResolutions,
 );
@@ -220,7 +218,7 @@ const handleFiles = async (files: FileList | File[] | null) => {
 };
 
 const handleFileInputChange = (event: Event) => {
-    const input = event.target as HTMLInputElement;
+    const input = requireElement(event.target, HTMLInputElement);
     void handleFiles(input.files);
     input.value = '';
 };
@@ -402,14 +400,10 @@ watch(alibabaCapabilities, (capabilities) => {
     if (!capabilities) return;
 
     generateAudio.value = false;
-    if (!ALIBABA_HAPPYHORSE_RESOLUTIONS.includes(
-        resolution.value as (typeof ALIBABA_HAPPYHORSE_RESOLUTIONS)[number],
-    )) {
+    if (!ALIBABA_HAPPYHORSE_RESOLUTIONS.some((option) => option === resolution.value)) {
         resolution.value = '720p';
     }
-    if (!ALIBABA_HAPPYHORSE_ASPECT_RATIOS.includes(
-        aspectRatio.value as (typeof ALIBABA_HAPPYHORSE_ASPECT_RATIOS)[number],
-    )) {
+    if (!ALIBABA_HAPPYHORSE_ASPECT_RATIOS.some((option) => option === aspectRatio.value)) {
         aspectRatio.value = '16:9';
     }
     if (sourceImages.value.length > capabilities.maximumReferences) {

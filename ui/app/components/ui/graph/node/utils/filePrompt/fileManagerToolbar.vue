@@ -89,7 +89,7 @@ const focusSearchInput = () => {
 };
 
 const openJumpMenu = (event: MouseEvent) => {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const rect = (requireElement(event.currentTarget, HTMLElement)).getBoundingClientRect();
     jumpMenuPosition.value = {
         top: rect.bottom + 6,
         left: rect.left,

@@ -65,7 +65,7 @@ const toggleColorPicker = async (event: MouseEvent, preset: NodePreset) => {
         closeColorPicker();
         return;
     }
-    const trigger = event.currentTarget as HTMLElement;
+    const trigger = requireElement(event.currentTarget, HTMLElement);
     const bounds = trigger.getBoundingClientRect();
     const pickerWidth = 225;
     const pickerHeight = 310;

@@ -86,7 +86,8 @@ const finalizePendingMermaid = async (): Promise<number> => {
         const renderedBlocks = entry.root.querySelectorAll<HTMLElement>('.mermaid-wrapper > pre');
         entry.tokens.forEach((token, index) => {
             const block = renderedBlocks[index];
-            if (block) next.set(token.key, block.cloneNode(true) as HTMLElement);
+            const clone = block?.cloneNode(true);
+            if (clone instanceof HTMLElement) next.set(token.key, clone);
         });
     }
     renderedMermaidElements.value = next;

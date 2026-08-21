@@ -1,7 +1,6 @@
-import { useVueFlow, type GraphNode } from '@vue-flow/core';
+import { type GraphNode } from '@vue-flow/core';
 import type { ComputedRef, Ref } from 'vue';
 
-import type { NodeTypeEnum } from '@/types/enums';
 import type { NodeWithDimensions } from '@/types/graph';
 import {
     calculateGraphAutoLayout,
@@ -10,22 +9,23 @@ import {
 
 interface UseGraphAutoLayoutOptions {
     graphId: Ref<string> | ComputedRef<string>;
-    fitGraph: () => unknown | Promise<unknown>;
+    fitGraph: () => RuntimeValue | Promise<RuntimeValue>;
+    calculateLayout?: typeof calculateGraphAutoLayout;
 }
 
-const positiveNumber = (value: unknown): number | undefined =>
-    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+const positiveNumber = (value: RuntimeValue): number | undefined =>
+    isRuntimeNumber(value) && Number.isFinite(value) && value > 0 ? value : undefined;
 
 const styleDimension = (style: GraphNode['style'], key: 'width' | 'height'): number | undefined => {
-    if (!style || typeof style !== 'object' || Array.isArray(style)) return undefined;
-    const value = (style as Record<string, unknown>)[key];
-    if (typeof value === 'number') return positiveNumber(value);
-    if (typeof value !== 'string') return undefined;
+    if (!style || !isRuntimeObject(style) || Array.isArray(style)) return undefined;
+    const value = Object.entries(style).find(([entryKey]) => entryKey === key)?.[1];
+    if (isRuntimeNumber(value)) return positiveNumber(value);
+    if (!isRuntimeString(value)) return undefined;
     return positiveNumber(Number.parseFloat(value));
 };
 
 export const useGraphAutoLayout = (options: UseGraphAutoLayoutOptions) => {
-    const { getNodes, getEdges, setNodes } = useVueFlow('main-graph-' + options.graphId.value);
+    const { getNodes, getEdges, setNodes } = useGraphFlow('main-graph-' + options.graphId.value);
     const { getBlockByNodeType } = useBlocks();
     const { saveGraph } = useCanvasSaveStore();
 
@@ -36,7 +36,7 @@ export const useGraphAutoLayout = (options: UseGraphAutoLayoutOptions) => {
         positiveNumber(node.dimensions?.[key]) ??
         positiveNumber(node[key]) ??
         styleDimension(node.style, key) ??
-        positiveNumber(getBlockByNodeType(node.type as NodeTypeEnum)?.minSize[key]) ??
+        positiveNumber(getBlockByNodeType(nodeTypeOrUndefined(node.type))?.minSize[key]) ??
         100;
 
     const autoLayoutGraph = async (): Promise<boolean> => {
@@ -46,12 +46,12 @@ export const useGraphAutoLayout = (options: UseGraphAutoLayoutOptions) => {
         const layoutNodes: GraphAutoLayoutNode[] = nodes.map((node) => ({
             id: node.id,
             position: { ...node.position },
-            width: resolveDimension(node as NodeWithDimensions, 'width'),
-            height: resolveDimension(node as NodeWithDimensions, 'height'),
+            width: resolveDimension(node, 'width'),
+            height: resolveDimension(node, 'height'),
             type: node.type,
             parentNode: node.parentNode,
         }));
-        const positions = calculateGraphAutoLayout(
+        const positions = (options.calculateLayout ?? calculateGraphAutoLayout)(
             layoutNodes,
             getEdges.value.map((edge) => ({
                 id: edge.id,

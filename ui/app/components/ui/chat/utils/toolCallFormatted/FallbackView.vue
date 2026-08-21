@@ -11,7 +11,7 @@ const argumentsHtml = ref('');
 const resultHtml = ref('');
 let lastRenderId = 0;
 
-const toJsonCodeFence = (value: Record<string, unknown> | unknown[] | undefined) => {
+const toJsonCodeFence = (value: Record<string, JsonValue> | unknown[] | undefined) => {
     const formatted = JSON.stringify(value ?? {}, null, 2);
     return `\`\`\`json\n${formatted}\n\`\`\``;
 };

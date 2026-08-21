@@ -25,7 +25,7 @@ const searchBarRef = ref<InstanceType<typeof UiUtilsSearchBar> | null>(null);
 
 // --- Handlers ---
 const handleFileChange = (event: Event) => {
-    const target = event.target as HTMLInputElement;
+    const target = requireElement(event.target, HTMLInputElement);
     if (target.files && target.files.length > 0) {
         emit('import', target.files);
         target.value = '';

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { test as baseTest, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from '../support/browserDiagnosticsFixture';
+import { isJsonObject, isRuntimeNumber } from '../../app/utils/runtimeTypes';
 import {
     GRAPH_RESPONSE_EDGE_COUNT,
     GRAPH_RESPONSE_FIXTURE_ROUTE,
@@ -17,15 +18,15 @@ import {
 } from '../fixtures/graphResponseFixture';
 
 interface GraphResponseSummary {
-    graph: Record<string, unknown>;
+    graph: Record<string, JsonValue>;
     counts: {
         nodes: number;
         edges: number;
         expectedNodes: number;
         expectedEdges: number;
     };
-    node: Record<string, unknown>;
-    edge: Record<string, unknown>;
+    node: Record<string, JsonValue>;
+    edge: Record<string, JsonValue>;
     reply: { length: number; hash: string; startsWith: string; endsWith: string };
     opaqueDataPreservedByReference: boolean;
     outbound: { nodeGraphId: string; edgeGraphId: string };
@@ -56,16 +57,23 @@ const mountFixture = async (page: Page): Promise<GraphResponseSummary> => {
     await page.goto(GRAPH_RESPONSE_FIXTURE_ROUTE);
     await expect(page.getByTestId('graph-response-fixture-page')).toBeVisible();
     await expect(page.getByTestId('graph-response-summary')).toBeVisible({ timeout: 30_000 });
-    const text = await page.getByTestId('graph-response-summary').textContent();
-    expect(text).not.toBeNull();
-    return JSON.parse(text ?? '{}') as GraphResponseSummary;
+    return page.getByTestId('graph-response-summary').evaluate<GraphResponseSummary>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );
 };
 
 const mockRequestCounts = async (): Promise<Record<string, number>> => {
     const response = await fetch(
         `http://127.0.0.1:${process.env.GRAPH_RESPONSE_MOCK_PORT ?? GRAPH_RESPONSE_MOCK_PORT}/__requests`,
     );
-    return (await response.json()) as Record<string, number>;
+    const payload: JsonValue = await response.json();
+    if (!isJsonObject(payload)) throw new TypeError('Request counts response is not an object');
+    const counts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(payload)) {
+        if (!isRuntimeNumber(value)) throw new TypeError(`Request count ${key} is not numeric`);
+        counts[key] = value;
+    }
+    return counts;
 };
 
 const isolatePerformancePage = async (page: Page) => {
@@ -181,7 +189,15 @@ baseTest('observes upstream gzip decoding through the real Nitro proxy', async (
     expect(response.headers()['content-length']).not.toBe(
         response.headers()['x-fixture-upstream-length'],
     );
-    const value = (await response.json()) as { version: number; nodes: unknown[]; edges: unknown[] };
+    const value: JsonValue = await response.json();
+    if (
+        !isJsonObject(value) ||
+        !isRuntimeNumber(value.version) ||
+        !Array.isArray(value.nodes) ||
+        !Array.isArray(value.edges)
+    ) {
+        throw new TypeError('Graph response fixture returned an invalid payload');
+    }
     expect(value.version).toBe(1);
     expect(value.nodes).toHaveLength(GRAPH_RESPONSE_NODE_COUNT);
     expect(value.edges).toHaveLength(GRAPH_RESPONSE_EDGE_COUNT);
@@ -196,9 +212,9 @@ test('decodes and maps 500 nodes within the browser timing budget after warm-up'
     await expect(page.getByTestId('graph-response-performance-fixture-page')).toBeVisible();
     const summaryElement = page.getByTestId('graph-response-performance-summary');
     await expect(summaryElement).toBeVisible({ timeout: 30_000 });
-    const text = await summaryElement.textContent();
-    expect(text).not.toBeNull();
-    const summary = JSON.parse(text ?? '{}') as GraphResponsePerformanceSummary;
+    const summary = await summaryElement.evaluate<GraphResponsePerformanceSummary>(
+        (element) => JSON.parse(element.textContent ?? '{}'),
+    );
 
     expect(summary.nodes).toBe(GRAPH_RESPONSE_PERFORMANCE_NODE_COUNT);
     expect(summary.edges).toBe(GRAPH_RESPONSE_PERFORMANCE_EDGE_COUNT);

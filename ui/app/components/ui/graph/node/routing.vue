@@ -37,7 +37,7 @@ const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
-const graphId = computed(() => (route.params.id as string) ?? '');
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Props ---
 const props = withDefaults(
@@ -136,7 +136,7 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    updateUpcomingModelData(NodeTypeEnum.ROUTING, props.data as unknown as Record<string, unknown>);
+    updateUpcomingModelData(NodeTypeEnum.ROUTING, props.data);
     loadAndOpenChat(graphId.value, props.id);
 };
 

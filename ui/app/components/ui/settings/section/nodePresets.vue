@@ -16,7 +16,7 @@ const canvas = ref<PresetCanvasExpose | null>(null);
 const selectedPreset = computed(() =>
     nodePresetSettings.value.presets.find((preset) => preset.id === selectedId.value),
 );
-const freePlan = computed(() => (user.value as User | null)?.plan_type === 'free');
+const freePlan = computed(() => (user.value)?.plan_type === 'free');
 
 const flushCanvas = () => canvas.value?.flush() ?? true;
 const firstAvailableName = () => {

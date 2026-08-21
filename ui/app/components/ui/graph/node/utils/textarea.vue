@@ -24,7 +24,7 @@ const displayValue = computed(() => {
 
 // --- Core Logic Functions ---
 function handleInput(event: Event) {
-    const target = event.target as HTMLTextAreaElement;
+    const target = requireElement(event.target, HTMLTextAreaElement);
     emit('update:reply', target.value);
 }
 
@@ -56,8 +56,8 @@ if (props.autoscroll) {
 watch(
     () => props.reply,
     (newValue = '') => {
-        const hasStartError = /^\[ERROR\]/.test(newValue);
-        const hasEndError = /\[!ERROR\]$/.test(newValue);
+        const hasStartError = newValue.startsWith('[ERROR]');
+        const hasEndError = newValue.endsWith('[!ERROR]');
         const nowError = hasStartError && hasEndError;
 
         if (isError.value !== nowError) {

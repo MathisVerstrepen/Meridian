@@ -4,7 +4,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core';
 import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
-import type { Settings } from '@/types/settings';
+import { createNodePresetFixtureSettings } from '~~/e2e/fixtures/nodePresetsFixture';
 import {
     QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS,
     QUICK_WORKFLOW_FIXTURE_GRAPH_ID,
@@ -17,35 +17,9 @@ if (!import.meta.dev) {
 }
 
 const settingsStore = useSettingsStore();
-settingsStore.setUserSettings({
-    block: structuredClone(QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS),
-    models: {
-        defaultModel: '',
-        routingModel: '',
-        titleGenerationModel: '',
-        autoToolSelectionModel: '',
-        excludeReasoning: false,
-        systemPrompt: [],
-        reasoningEffort: null,
-        preferHigherReasoningEffort: true,
-        maxTokens: null,
-        temperature: null,
-        topP: null,
-        topK: null,
-        frequencyPenalty: null,
-        presencePenalty: null,
-        repetitionPenalty: null,
-    },
-    blockParallelization: { models: [], aggregator: { prompt: '', model: '' } },
-    blockRouting: { routeGroups: [] },
-    blockContextMerger: {
-        merger_mode: 'full',
-        last_n: 5,
-        summarizer_model: '',
-        include_user_messages: true,
-    },
-    tools: { defaultSelectedTools: [], defaultAutoSelectTools: false },
-} as unknown as Settings);
+const fixtureSettings = createNodePresetFixtureSettings();
+fixtureSettings.block = structuredClone(QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS);
+settingsStore.setUserSettings(fixtureSettings);
 
 const graphId = ref(QUICK_WORKFLOW_FIXTURE_GRAPH_ID);
 const GENERATOR_ANCHOR_POSITION = { x: 600, y: 550 };
@@ -192,9 +166,9 @@ const state = computed(() => ({
         position: node.position,
         dimensions: {
             width:
-                node.dimensions.width || (typeof node.width === 'number' ? node.width : 0),
+                node.dimensions.width || (isRuntimeNumber(node.width) ? node.width : 0),
             height:
-                node.dimensions.height || (typeof node.height === 'number' ? node.height : 0),
+                node.dimensions.height || (isRuntimeNumber(node.height) ? node.height : 0),
         },
     })),
     edges: getEdges.value.map((edge) => ({

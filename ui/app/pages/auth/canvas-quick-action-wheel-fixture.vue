@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { VueFlow, useVueFlow, type GraphNode } from '@vue-flow/core';
+import { VueFlow, useVueFlow, type Node } from '@vue-flow/core';
 
 import { NodeTypeEnum } from '@/types/enums';
-import type { Settings } from '@/types/settings';
 import type { User } from '@/types/user';
 import {
     CANVAS_QUICK_ACTION_GRAPH_ID,
@@ -11,43 +10,19 @@ import {
     GITHUB_PLACEMENT_PRESET,
     INVALID_PLACEMENT_PRESET,
     PLACEMENT_PRESET,
+    createNodePresetFixtureSettings,
 } from '~~/e2e/fixtures/nodePresetsFixture';
 import { QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS } from '~~/e2e/fixtures/quickWorkflowWheelFixture';
 
 definePageMeta({ layout: false });
 if (!import.meta.dev) throw createError({ statusCode: 404, statusMessage: 'Not Found' });
 
+type FixtureNode = Node & { selected?: boolean };
+
 const settingsStore = useSettingsStore();
-settingsStore.setUserSettings({
-    block: structuredClone(QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS),
-    models: {
-        defaultModel: '',
-        routingModel: '',
-        titleGenerationModel: '',
-        autoToolSelectionModel: '',
-        excludeReasoning: false,
-        systemPrompt: [],
-        reasoningEffort: null,
-        preferHigherReasoningEffort: true,
-        maxTokens: null,
-        temperature: null,
-        topP: null,
-        topK: null,
-        frequencyPenalty: null,
-        presencePenalty: null,
-        repetitionPenalty: null,
-    },
-    blockParallelization: { models: [], aggregator: { prompt: '', model: '' } },
-    blockRouting: { routeGroups: [] },
-    blockContextMerger: {
-        merger_mode: 'full',
-        last_n: 5,
-        summarizer_model: '',
-        include_user_messages: true,
-    },
-    tools: { defaultSelectedTools: [], defaultAutoSelectTools: false },
-    nodePresets: { schemaVersion: 1, presets: [] },
-} as unknown as Settings);
+const fixtureSettings = createNodePresetFixtureSettings();
+fixtureSettings.block = structuredClone(QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS);
+settingsStore.setUserSettings(fixtureSettings);
 const { user, session } = useUserSession();
 const setPlan = (plan: 'free' | 'premium') => {
     session.value = { id: 'canvas-quick-action-fixture-session', user: {
@@ -66,7 +41,7 @@ const setPlan = (plan: 'free' | 'premium') => {
 setPlan('premium');
 
 const graphId = ref(CANVAS_QUICK_ACTION_GRAPH_ID);
-const seedNodes = (): GraphNode[] => [
+const seedNodes = (): FixtureNode[] => [
     {
         id: 'selected-a',
         type: NodeTypeEnum.TEXT_TO_TEXT,
@@ -75,7 +50,7 @@ const seedNodes = (): GraphNode[] => [
         height: 120,
         selected: true,
         data: { label: 'Selected A' },
-    } as GraphNode,
+    },
     {
         id: 'selected-b',
         type: NodeTypeEnum.PROMPT,
@@ -84,7 +59,7 @@ const seedNodes = (): GraphNode[] => [
         height: 120,
         selected: true,
         data: { label: 'Selected B' },
-    } as GraphNode,
+    },
     {
         id: 'unselected',
         type: NodeTypeEnum.TEXT_TO_TEXT,
@@ -92,7 +67,7 @@ const seedNodes = (): GraphNode[] => [
         width: 220,
         height: 120,
         data: { label: 'Unselected' },
-    } as GraphNode,
+    },
 ];
 const nodes = shallowRef(seedNodes());
 const seedEdges = () => [
@@ -111,17 +86,16 @@ const mixedWorkflowNodeSpecs: Array<[string, NodeTypeEnum, number, number]> = [
     ['prompt2', NodeTypeEnum.PROMPT, 200, 90],
     ['generator2', NodeTypeEnum.TEXT_TO_TEXT, 260, 160],
 ];
-const mixedWorkflowNodes = (): GraphNode[] =>
+const mixedWorkflowNodes = (): Node[] =>
     mixedWorkflowNodeSpecs.map(
-        ([id, type, width, height], index) =>
-            ({
+        ([id, type, width, height], index) => ({
                 id,
                 type,
                 position: { x: 180 + index * 80, y: 180 },
                 width,
                 height,
                 data: { label: id },
-            }) as GraphNode,
+            }),
     );
 const mixedWorkflowEdges = () => [
     {
@@ -268,7 +242,7 @@ const state = computed(() => ({
         type: edge.type,
     })),
     presetNames: settingsStore.nodePresetSettings.presets.map((preset) => preset.name),
-    plan: (user.value as User | null)?.plan_type ?? null,
+    plan: (user.value)?.plan_type ?? null,
     actions: actionLog.value,
     selecting: isSelecting.value,
     viewport: getViewport(),

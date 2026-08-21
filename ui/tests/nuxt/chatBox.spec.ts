@@ -6,41 +6,29 @@ import { NodeTypeEnum } from '@/types/enums';
 import type { ChatInputSubmission } from '@/types/chat';
 
 const stubs = vi.hoisted(() => ({
-    callOrder: [] as string[],
+    callOrder: Array<string>(),
     generateNew: vi.fn(),
     graphEmit: vi.fn(),
 }));
 
-vi.mock('@/composables/useChatGenerator', async () => {
-    const { ref: vueRef } = await import('vue');
-
-    return {
-        useChatGenerator: () => ({
-            isStreaming: vueRef(false),
-            streamingSession: vueRef(null),
-            generationError: vueRef(null),
-            selectedNodeType: vueRef(NodeTypeEnum.STREAMING),
+mockNuxtImport('useChatGenerator', () => () => ({
+            isStreaming: ref(false),
+            streamingSession: ref(null),
+            generationError: ref(null),
+            selectedNodeType: ref(NodeTypeEnum.STREAMING),
             generateNew: stubs.generateNew,
             generateFollowUp: vi.fn(),
             regenerate: vi.fn(),
             handleCancelStream: vi.fn(),
             restoreStreamingState: vi.fn(),
-        }),
-    };
-});
+        }));
 
-vi.mock('@/composables/useMessageEditing', async () => {
-    const { ref: vueRef } = await import('vue');
-
-    return {
-        useMessageEditing: () => ({
-            currentEditModeIdx: vueRef(null),
+mockNuxtImport('useMessageEditing', () => () => ({
+            currentEditModeIdx: ref(null),
             handleEditDone: vi.fn(),
-        }),
-    };
-});
+        }));
 
-mockNuxtImport('storeToRefs', () => (store: object) => store);
+mockNuxtImport('storeToRefs', () => <Store extends Record<string, RuntimeValue>>(store: Store) => store);
 mockNuxtImport('useChatStore', () => () => ({
     openChatId: ref('chat-id'),
     isFetching: ref(false),

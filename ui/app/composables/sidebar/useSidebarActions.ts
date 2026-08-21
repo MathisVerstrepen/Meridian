@@ -1,7 +1,7 @@
 import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { useDebounceFn } from '@vueuse/core';
 import { PLAN_LIMITS } from '@/constants/limits';
-import type { User } from '@/types/user';
+import { normalizeToolSelection } from '@/utils/toolSelection';
 
 export const useSidebarActions = (
     graphs: Ref<GraphSummary[]>,
@@ -40,7 +40,7 @@ export const useSidebarActions = (
 
     // --- Helpers ---
     const isLimitReached = computed(() => {
-        if ((user.value as User)?.plan_type !== 'free') return false;
+        if ((user.value)?.plan_type !== 'free') return false;
         const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
         return nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS;
     });
@@ -51,9 +51,9 @@ export const useSidebarActions = (
         syncUpcomingModelDefaults();
         upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
         upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
-        upcomingModelData.value.data.selectedTools = [
-            ...(toolsSettings.value.defaultSelectedTools || []),
-        ];
+        upcomingModelData.value.data.selectedTools = normalizeToolSelection(
+            toolsSettings.value.defaultSelectedTools || [],
+        );
         lastOpenedChatId.value = null;
         openChatId.value = null;
         navigateTo(`/graph/${id}?temporary=${temporary}`);
@@ -77,10 +77,7 @@ export const useSidebarActions = (
             }
         } catch (err: unknown) {
             console.error('Failed to create graph:', err);
-            const detail =
-                (err as { data?: { detail?: string } })?.data?.detail ||
-                (err as { message?: string })?.message ||
-                '';
+            const detail = runtimeErrorDetail(err) ?? '';
             if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
                 error('You have reached the maximum number of canvases for the Free plan.', {
                     title: 'Limit Reached',
@@ -113,10 +110,7 @@ export const useSidebarActions = (
             }
         } catch (err: unknown) {
             console.error('Failed to create graph in folder:', err);
-            const detail =
-                (err as { data?: { detail?: string } })?.data?.detail ||
-                (err as { message?: string })?.message ||
-                '';
+            const detail = runtimeErrorDetail(err) ?? '';
             if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
                 error('You have reached the maximum number of canvases for the Free plan.', {
                     title: 'Limit Reached',
@@ -351,8 +345,8 @@ export const useSidebarActions = (
         }
     };
 
-    const setInputRef = (id: string, el: unknown) => {
-        if (el) inputRefs.value.set(id, el as HTMLInputElement);
+    const setInputRef = (id: string, el: RuntimeValue) => {
+        if (el instanceof HTMLInputElement) inputRefs.value.set(id, el);
     };
 
     return {

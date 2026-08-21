@@ -3,10 +3,14 @@ import type { GraphNode } from '@vue-flow/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeTypeEnum } from '@/types/enums';
 import { useGraphChat } from '@/composables/useGraphChat';
+import { graphNode } from './support/graphNode';
 
-const stubs = vi.hoisted(() => ({
-    nodes: { value: [] as GraphNode[] },
-    edges: { value: [] as Array<{ source: string; target: string }> },
+const stubs = vi.hoisted(() => {
+    const nodes: GraphNode[] = [];
+    const edges: Array<{ source: string; target: string }> = [];
+    return {
+    nodes: { value: nodes },
+    edges: { value: edges },
     findNode: vi.fn((nodeId: string) =>
         stubs.nodes.value.find((node) => node.id === nodeId) ?? {
             id: nodeId,
@@ -25,15 +29,14 @@ const stubs = vi.hoisted(() => ({
     })),
     placeEdge: vi.fn(),
     resolveOverlaps: vi.fn(),
-}));
+    };
+});
 
-vi.mock('@vue-flow/core', () => ({
-    useVueFlow: () => ({
+mockNuxtImport('useGraphFlow', () => () => ({
         findNode: stubs.findNode,
         getNodes: stubs.nodes,
         getEdges: stubs.edges,
-    }),
-}));
+    }));
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'graph-id' } }));
 mockNuxtImport('useChatStore', () => () => ({}));
@@ -57,11 +60,11 @@ describe('useGraphChat createNodeFromVariant', () => {
         vi.clearAllMocks();
         vi.useFakeTimers();
         stubs.nodes.value = [
-            {
+            graphNode({
                 id: 'source-node-id',
                 type: NodeTypeEnum.TEXT_TO_TEXT,
                 position: { x: 100, y: 200 },
-            } as GraphNode,
+            }),
         ];
         stubs.edges.value = [];
         const parentElement = document.createElement('div');
@@ -92,18 +95,18 @@ describe('useGraphChat createNodeFromVariant', () => {
 
     it('places a generator right of the rightmost direct generator child', () => {
         stubs.nodes.value.push(
-            {
+            graphNode({
                 id: 'direct-child',
                 type: NodeTypeEnum.ROUTING,
                 position: { x: 500, y: 600 },
                 dimensions: { width: 350, height: 100 },
-            } as GraphNode,
-            {
+            }),
+            graphNode({
                 id: 'descendant',
                 type: NodeTypeEnum.PARALLELIZATION,
                 position: { x: 1200, y: 1000 },
                 width: 300,
-            } as GraphNode,
+            }),
         );
         stubs.edges.value = [
             { source: 'source-node-id', target: 'direct-child' },

@@ -4,7 +4,7 @@ definePageMeta({
 });
 
 const route = useRoute();
-const email = ref<string>((route.query.email as string) || '');
+const email = ref(firstRouteString(route.query.email) ?? '');
 const code = ref<string>('');
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
@@ -39,8 +39,7 @@ const verify = async () => {
         await fetchUserSession();
         await navigateTo('/');
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { message?: string } };
-        errorMessage.value = err.data?.message || 'Verification failed. Please try again.';
+        errorMessage.value = runtimeErrorDetail(error) || 'Verification failed. Please try again.';
     }
 };
 

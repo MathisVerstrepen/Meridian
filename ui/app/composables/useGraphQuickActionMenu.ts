@@ -6,7 +6,6 @@ import { useNodePresets } from '@/composables/useNodePresets';
 import { ExecutionPlanDirectionEnum, NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
 import type { WheelSlot } from '@/types/settings';
-import type { User } from '@/types/user';
 import { getQuickWorkflowSlots, type QuickWorkflowDirection } from '@/utils/quickWorkflow';
 
 interface UseGraphQuickActionMenuOptions {
@@ -17,8 +16,8 @@ interface UseGraphQuickActionMenuOptions {
     deleteNode: (nodeId: string) => void;
     unlinkNode: (nodeId: string) => void;
     deleteGroup: (graphId: string, groupId: string) => void;
-    fitGraph: () => unknown;
-    autoLayoutGraph: () => unknown;
+    fitGraph: () => void;
+    autoLayoutGraph: () => void;
 }
 
 const GENERATOR_TYPES = new Set<string>([
@@ -36,13 +35,16 @@ const QUICK_WORKFLOW_ACTION_GROUPS: ReadonlyArray<
     [NodeCategoryEnum.CONTEXT, 'source'],
     [NodeCategoryEnum.PROMPT, 'source'],
 ];
-const QUICK_WORKFLOW_CATEGORY_LABELS: Record<NodeCategoryEnum, string> = {
+const QUICK_WORKFLOW_CATEGORY_LABELS = {
     [NodeCategoryEnum.PROMPT]: 'Prompt',
     [NodeCategoryEnum.CONTEXT]: 'Context',
     [NodeCategoryEnum.ATTACHMENT]: 'Attachment',
-};
+} satisfies Record<NodeCategoryEnum, string>;
 
-export const createAddQuickActionMetadata = (block: BlockDefinition, locked: boolean) => ({
+type QuickActionBlockMetadata = Pick<BlockDefinition, 'id' | 'name' | 'icon' | 'color'>;
+type QuickWorkflowBlockMetadata = Pick<BlockDefinition, 'name' | 'icon' | 'color'>;
+
+export const createAddQuickActionMetadata = (block: QuickActionBlockMetadata, locked: boolean) => ({
     id: `add-${block.id}`,
     label: locked ? `${block.name} (Premium)` : block.name,
     icon: block.icon,
@@ -55,7 +57,7 @@ export const createQuickWorkflowActionMetadata = (
     category: NodeCategoryEnum,
     direction: QuickWorkflowDirection,
     index: number,
-    getBlockByNodeType: (nodeType: NodeTypeEnum) => BlockDefinition | undefined,
+    getBlockByNodeType: (nodeType: NodeTypeEnum) => QuickWorkflowBlockMetadata | undefined,
 ) => {
     const mainBlock = slot.mainBloc ? getBlockByNodeType(slot.mainBloc) : undefined;
     const handleDirection = direction === 'target' ? 'input' : 'output';
@@ -97,7 +99,7 @@ export const useGraphQuickActionMenu = (options: UseGraphQuickActionMenuOptions)
             .flat()
             .map((block: BlockDefinition) => {
                 const locked =
-                    (user.value as User | null)?.plan_type === 'free' &&
+                    (user.value)?.plan_type === 'free' &&
                     block.nodeType === NodeTypeEnum.GITHUB;
                 return {
                     ...createAddQuickActionMetadata(block, locked),

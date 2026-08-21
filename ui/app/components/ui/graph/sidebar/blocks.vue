@@ -17,7 +17,7 @@ const { user } = useUserSession();
 const { error } = useToast();
 
 const isLocked = (bloc: BlockDefinition) => {
-    if ((user.value as User)?.plan_type === 'free' && bloc.nodeType === NodeTypeEnum.GITHUB) {
+    if ((user.value)?.plan_type === 'free' && bloc.nodeType === NodeTypeEnum.GITHUB) {
         return true;
     }
     return false;

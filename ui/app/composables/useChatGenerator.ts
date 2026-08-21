@@ -2,7 +2,6 @@ import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/e
 import type { MessageContent, BlockDefinition } from '@/types/graph';
 import type { ChatInputSubmission, ChatSession } from '@/types/chat';
 import type { ShallowRef } from 'vue';
-import { useVueFlow } from '@vue-flow/core';
 
 export const useChatGenerator = (
     session: ShallowRef<ChatSession, ChatSession>,
@@ -41,7 +40,7 @@ export const useChatGenerator = (
     const { createNodeFromVariant, waitForRender } = useGraphChat();
     const { teleportViewportToNode } = useGraphActions();
     const { getBlockByNodeType } = useBlocks();
-    const { getNodes } = useVueFlow('main-graph-' + graphId.value);
+    const { getNodes } = useGraphFlow('main-graph-' + graphId.value);
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
     const nodeRegistry = useNodeRegistry();
@@ -118,22 +117,22 @@ export const useChatGenerator = (
     const getCurrentModelText = (nodeType: NodeTypeEnum) => {
         switch (nodeType) {
             case NodeTypeEnum.TEXT_TO_TEXT:
-                return upcomingModelData.value.data.model as string;
+                return runtimeString(upcomingModelData.value.data.model);
             case NodeTypeEnum.PARALLELIZATION:
                 return 'parallelization';
             case NodeTypeEnum.ROUTING:
                 return 'routing';
             default:
-                return upcomingModelData.value.data.model as string;
+                return runtimeString(upcomingModelData.value.data.model);
         }
     };
 
     const getCurrentModelTextFromNodeId = (nodeId: string) => {
         const node = getNodes.value.find((n) => n.id === nodeId);
         if (node) {
-            return node.data.model as string;
+            return runtimeString(node.data.model);
         }
-        return upcomingModelData.value.data.model as string;
+        return runtimeString(upcomingModelData.value.data.model);
     };
 
     // --- Core Generation Logic ---
@@ -193,6 +192,8 @@ export const useChatGenerator = (
         syncUpcomingModelDefaults();
 
         if (forcedNodeId) {
+            const currentChatId = openChatId.value;
+            if (!currentChatId) return;
             const lastestMessage = getLatestMessage();
             if (!lastestMessage?.content) {
                 console.warn('No message found, skipping generation.');
@@ -204,7 +205,7 @@ export const useChatGenerator = (
                 files: lastestMessage.data?.files ?? [],
                 githubContext: lastestMessage.data?.githubContext ?? null,
             };
-            const createdNodes = createNodeFromVariant(lastestMessage.type, openChatId.value as string, {
+            const createdNodes = createNodeFromVariant(lastestMessage.type, currentChatId, {
                 submission: storedSubmission,
                 forcedNodeId,
             });
@@ -213,9 +214,11 @@ export const useChatGenerator = (
                 lastestMessage.prompt_node_id = createdNodes.promptNodeId;
             }
         } else if (submission && selectedNodeType.value) {
+            const currentChatId = openChatId.value;
+            if (!currentChatId) return;
             const createdNodes = createNodeFromVariant(
                 selectedNodeType.value.nodeType,
-                openChatId.value as string,
+                currentChatId,
                 { submission },
             );
             generatorNodeId = createdNodes.generatorNodeId;

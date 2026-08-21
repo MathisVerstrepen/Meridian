@@ -19,7 +19,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 
 // --- Methods ---
 const handleFileChange = (event: Event) => {
-    const input = event.target as HTMLInputElement;
+    const input = requireElement(event.target, HTMLInputElement);
     if (input.files && input.files[0]) {
         const file = input.files[0];
         if (!file.type.startsWith('image/')) {
@@ -28,7 +28,9 @@ const handleFileChange = (event: Event) => {
         }
         const reader = new FileReader();
         reader.onload = (e) => {
-            imageSrc.value = e.target?.result as string;
+            if (isRuntimeString(e.target?.result)) {
+                imageSrc.value = e.target.result;
+            }
         };
         reader.readAsDataURL(file);
     }
@@ -48,7 +50,9 @@ const handleDrop = (event: DragEvent) => {
         }
         const reader = new FileReader();
         reader.onload = (e) => {
-            imageSrc.value = e.target?.result as string;
+            if (isRuntimeString(e.target?.result)) {
+                imageSrc.value = e.target.result;
+            }
         };
         reader.readAsDataURL(file);
     }

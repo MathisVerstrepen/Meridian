@@ -98,9 +98,14 @@ settings:
     sentry:
       dsn: ""
   email:
+    provider: "smtp"
     smtp:
       server: "smtp.example.com"
       port: 587
       username: ""
       auth_protocol: "TLS"
       from_email: ""
+    ses:
+      region: ""
+      from_email: ""
+      configuration_set_name: ""

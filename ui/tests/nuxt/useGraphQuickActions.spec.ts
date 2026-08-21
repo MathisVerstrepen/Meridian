@@ -10,7 +10,6 @@ import {
     createQuickWorkflowActionMetadata,
 } from '@/composables/useGraphQuickActionMenu';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
-import type { BlockDefinition } from '@/types/graph';
 import type { WheelSlot } from '@/types/settings';
 
 describe('graph quick-action target classification', () => {
@@ -20,7 +19,7 @@ describe('graph quick-action target classification', () => {
             name: 'Prompt Text',
             icon: 'prompt-icon',
             color: 'var(--color-ember-glow)',
-        } as BlockDefinition;
+        };
 
         expect(createAddQuickActionMetadata(block, false)).toEqual({
             id: 'add-prompt-text',
@@ -46,7 +45,7 @@ describe('graph quick-action target classification', () => {
             name: 'Routing',
             icon: 'routing-icon',
             color: 'var(--color-slate-blue)',
-        } as BlockDefinition;
+        };
 
         expect(
             createQuickWorkflowActionMetadata(

@@ -79,6 +79,9 @@ LINK_EXTRACTION_BROWSER_PROXY_URL="http://test-user:test-pass@proxy.invalid:8080
 EOF
     printf 'GITHUB_CLIENT_SECRET=$(touch %s)\n' "$SECRET_EVAL_MARKER" >> "$FIXTURE/config/secrets/$profile.env"
     printf 'SMTP_PASSWORD=`touch %s`\n' "$SECRET_EVAL_MARKER" >> "$FIXTURE/config/secrets/$profile.env"
+    printf 'AWS_ACCESS_KEY_ID="access=value#fragment"\n' >> "$FIXTURE/config/secrets/$profile.env"
+    printf 'AWS_SECRET_ACCESS_KEY=$(touch %s)\n' "$SECRET_EVAL_MARKER" >> "$FIXTURE/config/secrets/$profile.env"
+    printf 'AWS_SESSION_TOKEN=`touch %s`\n' "$SECRET_EVAL_MARKER" >> "$FIXTURE/config/secrets/$profile.env"
 }
 
 write_secrets local
@@ -101,11 +104,13 @@ POSTGRES_SHARED_BUFFERS POSTGRES_EFFECTIVE_CACHE_SIZE POSTGRES_WORK_MEM POSTGRES
 POSTGRES_RANDOM_PAGE_COST POSTGRES_MAX_WORKER_PROCESSES POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER
 POSTGRES_MAX_PARALLEL_WORKERS POSTGRES_LOG_MIN_DURATION_STATEMENT POSTGRES_LOG_LOCK_WAITS NEO4J_USER
 NEO4J_HOST NEO4J_BOLT_PORT NEO4J_BOLT_ADDRESS NEO4J_HTTP_PORT NEO4J_HTTP_ADDRESS GITHUB_CLIENT_ID
-GITHUB_REDIRECT_URI SENTRY_DSN SMTP_SERVER SMTP_PORT SMTP_USERNAME SMTP_AUTH_PROTOCOL SMTP_FROM_EMAIL
+GITHUB_REDIRECT_URI SENTRY_DSN EMAIL_PROVIDER SMTP_SERVER SMTP_PORT SMTP_USERNAME SMTP_AUTH_PROTOCOL
+SMTP_FROM_EMAIL SES_REGION SES_FROM_EMAIL SES_CONFIGURATION_SET_NAME
 NUXT_SESSION_PASSWORD MASTER_OPEN_ROUTER_API_KEY BACKEND_SECRET JWT_SECRET_KEY
 LINK_EXTRACTION_BROWSER_SERVICE_TOKEN REDIS_PASSWORD POSTGRES_PASSWORD NEO4J_PASSWORD USERPASS
 NUXT_OAUTH_GITHUB_CLIENT_SECRET NUXT_OAUTH_GOOGLE_CLIENT_SECRET GOOGLE_SEARCH_API_KEY
-LINK_EXTRACTION_BROWSER_PROXY_URL GITHUB_CLIENT_SECRET SMTP_PASSWORD
+LINK_EXTRACTION_BROWSER_PROXY_URL GITHUB_CLIENT_SECRET SMTP_PASSWORD AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 "
 
 EXPECTED_MAPPINGS=$(cat <<'EOF'
@@ -177,17 +182,29 @@ neo4j.http.address=NEO4J_HTTP_ADDRESS
 integrations.github.client_id=GITHUB_CLIENT_ID
 integrations.github.redirect_uri=GITHUB_REDIRECT_URI
 observability.sentry.dsn=SENTRY_DSN
+email.provider=EMAIL_PROVIDER
 email.smtp.server=SMTP_SERVER
 email.smtp.port=SMTP_PORT
 email.smtp.username=SMTP_USERNAME
 email.smtp.auth_protocol=SMTP_AUTH_PROTOCOL
 email.smtp.from_email=SMTP_FROM_EMAIL
+email.ses.region=SES_REGION
+email.ses.from_email=SES_FROM_EMAIL
+email.ses.configuration_set_name=SES_CONFIGURATION_SET_NAME
 EOF
 )
 
 ACTUAL_MAPPINGS="$("$YQ" -r '.settings[] | .path + "=" + .env' "$FIXTURE/config/schema.yaml")"
 [[ "$(printf '%s\n' "$ACTUAL_MAPPINGS" | sort)" == "$(printf '%s\n' "$EXPECTED_MAPPINGS" | sort)" ]] || fail "friendly path to env mapping inventory differs"
 [[ "$(printf '%s\n' "$ACTUAL_MAPPINGS" | cut -d= -f1 | sort | uniq -d)" == "" ]] || fail "duplicate friendly schema path"
+
+for compose_file in "$FIXTURE/docker-compose.yml" "$FIXTURE/docker-compose.prod.yml"; do
+    API_ENVIRONMENT="$("$YQ" -r '.services.api.environment[]' "$compose_file")"
+    for key in EMAIL_PROVIDER SES_REGION SES_FROM_EMAIL SES_CONFIGURATION_SET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN; do
+        [[ "$API_ENVIRONMENT" == *"$key="* ]] || fail "$key is not forwarded to API in $compose_file"
+        [[ "$(grep -Fc -- "- $key=\${$key}" "$compose_file")" == "1" ]] || fail "$key is forwarded outside API or duplicated in $compose_file"
+    done
+done
 
 assert_key_inventory() {
     local file="$1" expected="$2" actual expected_sorted
@@ -221,10 +238,18 @@ assert_contains "$LOCAL_COMPOSE_ENV" 'LINK_EXTRACTION_BROWSER_PROXY_URL="http://
 assert_not_contains "$LOCAL_ENV" "LINK_EXTRACTION_BROWSER_PROXY_URL="
 printf -v EXPECTED_COMMAND_SUBSTITUTION 'GITHUB_CLIENT_SECRET=$(touch %s)' "$SECRET_EVAL_MARKER"
 printf -v EXPECTED_BACKTICK 'SMTP_PASSWORD=`touch %s`' "$SECRET_EVAL_MARKER"
+printf -v EXPECTED_AWS_COMMAND_SUBSTITUTION 'AWS_SECRET_ACCESS_KEY=$(touch %s)' "$SECRET_EVAL_MARKER"
+printf -v EXPECTED_AWS_BACKTICK 'AWS_SESSION_TOKEN=`touch %s`' "$SECRET_EVAL_MARKER"
 assert_contains "$PROD_ENV" "$EXPECTED_COMMAND_SUBSTITUTION"
 assert_contains "$PROD_ENV" "$EXPECTED_BACKTICK"
+assert_contains "$PROD_ENV" 'AWS_ACCESS_KEY_ID="access=value#fragment"'
+assert_contains "$PROD_ENV" "$EXPECTED_AWS_COMMAND_SUBSTITUTION"
+assert_contains "$PROD_ENV" "$EXPECTED_AWS_BACKTICK"
 assert_contains "$LOCAL_COMPOSE_ENV" "$EXPECTED_COMMAND_SUBSTITUTION"
 assert_contains "$LOCAL_ENV" "$EXPECTED_BACKTICK"
+assert_contains "$LOCAL_COMPOSE_ENV" 'AWS_ACCESS_KEY_ID="access=value#fragment"'
+assert_contains "$LOCAL_COMPOSE_ENV" "$EXPECTED_AWS_COMMAND_SUBSTITUTION"
+assert_contains "$LOCAL_ENV" "$EXPECTED_AWS_BACKTICK"
 [[ ! -e "$SECRET_EVAL_MARKER" ]] || fail "secret parser executed a secret value"
 for pair in \
     "PLAN_FREE_WEB_SEARCH_LIMIT=0" \

@@ -29,7 +29,7 @@ const perfSummary = ref<{
 } | null>(null);
 const route = useRoute();
 const caseKey =
-    typeof route.query.case === 'string'
+    isRuntimeString(route.query.case)
         ? route.query.case
         : DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY;
 const fixtureCase = MARKDOWN_RENDERER_FIXTURE_CASES[caseKey];
@@ -46,7 +46,7 @@ const isStreamingMode = route.query.streaming === 'true';
 const STREAM_CHUNK_SIZE = 15;
 const streamingDone = ref(false);
 const stablePrefixRetained = ref<boolean | null>(null);
-let capturedPrefixRoot: Element | null = null;
+let capturedPrefixRoot: HTMLElement | null = null;
 const NARROW_WATCH_FIXTURE_CASE_KEY = 'externalLinkFaviconsMainThread';
 const REPLACEMENT_NODE_ID = 'fixture-node-external-link-favicons-replacement';
 
@@ -91,18 +91,7 @@ const syncPerfSummary = () => {
         return;
     }
 
-    const perfWindow = window as typeof window & {
-        __markdownRendererPerf?: {
-            lastRun?: {
-                status?: string;
-                measures?: Record<string, number>;
-                parsedSegmentCount?: number;
-                reusedSegmentCount?: number;
-                enhancedSegmentCount?: number;
-            };
-        };
-    };
-    const lastRun = perfWindow.__markdownRendererPerf?.lastRun;
+    const lastRun = window.__markdownRendererPerf?.lastRun;
 
     if (!lastRun) {
         perfSummary.value = null;
@@ -122,7 +111,7 @@ const handleRendered = () => {
     isRendered.value = true;
     syncPerfSummary();
     if (streamingDone.value && capturedPrefixRoot) {
-        const renderKey = (capturedPrefixRoot as HTMLElement).dataset.markdownSegmentKey;
+        const renderKey = capturedPrefixRoot.dataset.markdownSegmentKey;
         const currentRoot = renderKey
             ? document.querySelector(`[data-markdown-segment-key="${renderKey}"]`)
             : null;
@@ -137,17 +126,7 @@ if (isStreamingMode) {
 
         const deliver = () => {
             if (cursor >= fullText.length) {
-                const perfStore = (
-                    window as typeof window & {
-                        __markdownRendererPerf?: {
-                            lastRun?: {
-                                markdownLength?: number;
-                                isStreaming?: boolean;
-                                status?: string;
-                            };
-                        };
-                    }
-                ).__markdownRendererPerf;
+                const perfStore = window.__markdownRendererPerf;
                 const lastRun = perfStore?.lastRun;
                 if (
                     lastRun?.markdownLength !== fullText.trim().length ||
@@ -167,7 +146,7 @@ if (isStreamingMode) {
             message.value.content[0]!.text = fullText.slice(0, cursor);
             nextTick(() => {
                 if (capturedPrefixRoot) return;
-                const roots = document.querySelectorAll(
+                const roots = document.querySelectorAll<HTMLElement>(
                     '[data-testid="markdown-renderer-response"] [data-markdown-segment-key]',
                 );
                 if (roots.length > 1) capturedPrefixRoot = roots[0] ?? null;

@@ -17,18 +17,13 @@ const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSav
 
 // --- Routing ---
 const route = useRoute();
-const { id } = route.params as { id: string };
+const id = firstRouteString(route.params.id) ?? '';
 
 // --- Composables ---
 const { onNodesChange, onEdgesChange, onPaneReady } = useVueFlow('main-graph-' + id);
 
 // --- Props ---
-const props = defineProps({
-    updateGraphHandler: {
-        type: Function as PropType<() => Promise<void>>,
-        required: true,
-    },
-});
+const props = defineProps<{ updateGraphHandler: () => Promise<void> }>();
 
 let interval: NodeJS.Timeout;
 

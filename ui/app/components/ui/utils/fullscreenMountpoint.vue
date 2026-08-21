@@ -69,11 +69,11 @@ const closeFullscreen = () => {
 };
 
 const handleMouseDown = (event: MouseEvent) => {
-    if ((event.target as HTMLElement).closest('button')) return;
+    if ((requireElement(event.target, HTMLElement)).closest('button')) return;
     isDragging.value = true;
     startPos.x = event.clientX - translateX.value;
     startPos.y = event.clientY - translateY.value;
-    (event.currentTarget as HTMLElement).style.cursor = 'grabbing';
+    (requireElement(event.currentTarget, HTMLElement)).style.cursor = 'grabbing';
 };
 
 const handleMouseMove = (event: MouseEvent) => {
@@ -85,7 +85,7 @@ const handleMouseMove = (event: MouseEvent) => {
 const handleMouseUp = (event: MouseEvent) => {
     if (!isDragging.value) return;
     isDragging.value = false;
-    (event.currentTarget as HTMLElement).style.cursor = 'grab';
+    (requireElement(event.currentTarget, HTMLElement)).style.cursor = 'grab';
 };
 
 const handleWheel = (event: WheelEvent) => {
@@ -142,7 +142,10 @@ const exportToPng = async () => {
 
     // Clone the SVG and serialize it to a string.
     // This ensures we are working with a clean copy with explicit dimensions.
-    const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+    const svgClone = svgElement.cloneNode(true);
+    if (!(svgClone instanceof SVGSVGElement)) {
+        throw new TypeError('SVG clone did not preserve its element type');
+    }
     svgClone.setAttribute('width', `${svgWidth}px`);
     svgClone.setAttribute('height', `${svgHeight}px`);
     const svgString = new XMLSerializer().serializeToString(svgClone);

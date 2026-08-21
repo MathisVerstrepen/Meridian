@@ -11,7 +11,7 @@ const props = defineProps<{
     currentVersion: string;
 }>();
 
-const changelogs = useAppConfig().releaseChangelogs as ReleaseChangelog[];
+const changelogs = useAppConfig().releaseChangelogs;
 const isOpen = ref(false);
 const hasUnreadRelease = ref(false);
 const selectedChangelog = ref<ReleaseChangelog | null>(changelogs[0] ?? null);

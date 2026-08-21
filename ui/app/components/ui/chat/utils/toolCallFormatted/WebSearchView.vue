@@ -17,16 +17,16 @@ interface NormalizedSearch {
     error: string | null;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
+const isRecord = (value: RuntimeValue): value is Record<string, JsonValue> => {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 };
 
-const asNonEmptyString = (value: unknown): string | null => {
-    if (typeof value !== 'string' || !value.trim()) return null;
+const asNonEmptyString = (value: RuntimeValue): string | null => {
+    if (!isRuntimeString(value) || !value.trim()) return null;
     return value;
 };
 
-const normalizeResults = (value: unknown): SearchResult[] => {
+const normalizeResults = (value: RuntimeValue): SearchResult[] => {
     if (!Array.isArray(value)) return [];
     return value
         .filter(isRecord)

@@ -126,7 +126,7 @@ const lexRawBlocks = (source: string): RawBlock[] => {
 
         for (const token of tokens) {
             const raw = token.raw;
-            if (typeof raw !== 'string' || !raw) {
+            if (!isRuntimeString(raw) || !raw) {
                 return [{ start: 0, end: source.length, source, type: 'uncertain' }];
             }
 
@@ -231,3 +231,4 @@ export const buildMarkdownSegmentParserInput = (
         .join('\n');
     return `${segmentSource}\n\n${definitions}`;
 };
+import { isRuntimeString } from '@/utils/runtimeTypes';

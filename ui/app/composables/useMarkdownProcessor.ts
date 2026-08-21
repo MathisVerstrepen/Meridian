@@ -51,6 +51,10 @@ type ChannelBuild = {
     reusedSegmentCount: number;
 };
 
+interface RenderedSegmentCandidate {
+    value?: RenderedMarkdownSegment;
+}
+
 const emptyResult = (committed: boolean): MarkdownProcessResult => ({
     committed,
     changedResponseRenderKeys: [],
@@ -115,7 +119,7 @@ export const useMarkdownProcessor = () => {
             const id = prior?.id ?? createSegmentId(draft.channel);
             const revision = prior ? prior.revision + 1 : 0;
             const renderKey = `${id}:${revision}`;
-            const candidate: { value?: RenderedMarkdownSegment } = {};
+            const candidate: RenderedSegmentCandidate = {};
             parsedSegmentCount += 1;
             parseJobs.push(
                 parser(

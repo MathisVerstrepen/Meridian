@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { chromium } from '@playwright/test';
+import { isRuntimeNumber } from '../../shared/runtimeTypes.mjs';
 
 const PORT = 4174;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -150,7 +151,7 @@ const delay = (ms) => new Promise((resolve) => {
 
 const toSortedNumbers = (values) => {
     return values
-        .filter((value) => typeof value === 'number' && Number.isFinite(value))
+        .filter((value) => isRuntimeNumber(value) && Number.isFinite(value))
         .sort((left, right) => left - right);
 };
 
@@ -409,12 +410,12 @@ const main = async () => {
                 const allTotalMs = allIterations.flatMap((r) =>
                     r.completedMeasures
                         .map((m) => m.totalMs)
-                        .filter((v) => typeof v === 'number' && Number.isFinite(v)),
+                        .filter((v) => isRuntimeNumber(v) && Number.isFinite(v)),
                 );
                 const allProcessorMs = allIterations.flatMap((r) =>
                     r.completedMeasures
                         .map((m) => m.markdownProcessorMs)
-                        .filter((v) => typeof v === 'number' && Number.isFinite(v)),
+                        .filter((v) => isRuntimeNumber(v) && Number.isFinite(v)),
                 );
 
                 const sortedTotalMs = toSortedNumbers(allTotalMs);

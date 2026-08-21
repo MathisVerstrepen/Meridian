@@ -3,7 +3,7 @@ import { useVueFlow } from '@vue-flow/core';
 import type { FunctionalComponent } from 'vue';
 
 const route = useRoute();
-const { id } = route.params as { id: string };
+const id = firstRouteString(route.params.id) ?? '';
 
 const { viewport } = useVueFlow('main-graph-' + id);
 

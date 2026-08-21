@@ -39,7 +39,7 @@ const textExtensions = [
     'html',
 ];
 
-const sortConfig: Record<FileManagerSort, { sortBy: SortOption; sortDirection: SortDirection }> = {
+const sortConfig = {
     name_asc: { sortBy: 'name', sortDirection: 'asc' },
     name_desc: { sortBy: 'name', sortDirection: 'desc' },
     date_asc: { sortBy: 'date', sortDirection: 'asc' },
@@ -48,10 +48,10 @@ const sortConfig: Record<FileManagerSort, { sortBy: SortOption; sortDirection: S
     size_desc: { sortBy: 'size', sortDirection: 'desc' },
     type_asc: { sortBy: 'type', sortDirection: 'asc' },
     type_desc: { sortBy: 'type', sortDirection: 'desc' },
-};
+} satisfies Record<FileManagerSort, { sortBy: SortOption; sortDirection: SortDirection }>;
 
 const isFileManagerSort = (value: string | null | undefined): value is FileManagerSort => {
-    return fileManagerSortValues.includes(value as FileManagerSort);
+    return fileManagerSortValues.some((sort) => sort === value);
 };
 
 const isViewMode = (value: string | null | undefined): value is ViewMode => {
@@ -59,7 +59,8 @@ const isViewMode = (value: string | null | undefined): value is ViewMode => {
 };
 
 const getSortValue = (sortBy: SortOption, sortDirection: SortDirection): FileManagerSort => {
-    return `${sortBy}_${sortDirection}` as FileManagerSort;
+    const value = `${sortBy}_${sortDirection}`;
+    return isFileManagerSort(value) ? value : DEFAULT_SORT;
 };
 
 const getFileExtension = (item: FileSystemObject) => {
@@ -102,7 +103,7 @@ export const useFileFiltering = (
     items: Ref<FileSystemObject[]>,
     allUploadItems: Ref<FileSystemObject[]>,
     isUserUploadsTab: Ref<boolean>,
-    blockAttachmentSettings: Ref<BlockAttachmentSettings>,
+    blockAttachmentSettings: Ref<Partial<BlockAttachmentSettings>>,
 ) => {
     const getDefaultSort = () => {
         return isFileManagerSort(blockAttachmentSettings.value.file_manager_default_sort)

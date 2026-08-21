@@ -18,7 +18,7 @@ export function nodeGroupColorFromIndex(index: number): NodeGroupColor {
     return NODE_GROUP_COLORS[index] ?? NODE_GROUP_COLORS[0];
 }
 
-export function nodeGroupColorToIndex(color: unknown): number {
+export function nodeGroupColorToIndex(color: RuntimeValue): number {
     if (!Array.isArray(color)) return 0;
     const index = NODE_GROUP_COLORS.findIndex(
         (candidate) => candidate[0] === color[0] && candidate[1] === color[1],

@@ -19,7 +19,7 @@ if (!import.meta.dev) {
     });
 }
 
-const summary = shallowRef<Record<string, unknown> | null>(null);
+const summary = shallowRef<object | null>(null);
 const loadError = ref('');
 const { getGraphById } = useAPI();
 const {
@@ -27,7 +27,7 @@ const {
     mapNodeToNodeRequest,
 } = graphMappers();
 
-const errorMessage = (error: unknown): string =>
+const errorMessage = <ErrorValue>(error: ErrorValue): string =>
     error instanceof Error ? error.message : String(error);
 
 const sha256 = async (value: string): Promise<string> => {
@@ -61,7 +61,7 @@ onMounted(async () => {
         const promptNode = currentGraph.nodes[1];
         const firstEdge = currentGraph.edges[0];
         const defaultEdge = currentGraph.edges[1];
-        const reply = typeof firstNode?.data?.reply === 'string' ? firstNode.data.reply : '';
+        const reply = isRuntimeString(firstNode?.data?.reply) ? firstNode.data.reply : '';
         const decodedForIdentity = decodeGraphEditorResponse(GRAPH_RESPONSE_FIXTURE);
         const sourceData = GRAPH_RESPONSE_FIXTURE.nodes[0]?.data;
 
@@ -118,7 +118,7 @@ onMounted(async () => {
             gzip: {
                 nodes: gzipGraph.nodes.length,
                 replyLength:
-                    typeof gzipGraph.nodes[0]?.data?.reply === 'string'
+                    isRuntimeString(gzipGraph.nodes[0]?.data?.reply)
                         ? gzipGraph.nodes[0].data.reply.length
                         : 0,
             },

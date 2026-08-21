@@ -20,7 +20,7 @@ import {
 const TOOLS = new Set<string>(Object.values(ToolEnum));
 const CONTEXT_MODES = new Set<string>(Object.values(ContextMergerModeEnum));
 
-const DATA_KEYS: Record<NodePresetNodeType, readonly string[]> = {
+const DATA_KEYS = {
     prompt: ['prompt', 'templateId', 'templateVariables'],
     filePrompt: ['files'],
     textToText: [
@@ -43,7 +43,7 @@ const DATA_KEYS: Record<NodePresetNodeType, readonly string[]> = {
     github: ['repo', 'files', 'selectedIssues', 'branch'],
     contextMerger: ['mode', 'last_n', 'include_user_messages'],
     group: ['title', 'comment', 'colorIndex'],
-};
+} satisfies Record<NodePresetNodeType, readonly string[]>;
 
 function validateOptionalStringFields(
     data: NodePresetUnknownRecord,
@@ -70,7 +70,7 @@ function validateOptionalStringFields(
 }
 
 function validateTools(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
@@ -80,12 +80,12 @@ function validateTools(
     }
     const seen = new Set<string>();
     value.forEach((tool, index) => {
-        if (typeof tool !== 'string' || !TOOLS.has(tool)) {
+        if (!isRuntimeString(tool) || !TOOLS.has(tool)) {
             addIssue(issues, [...path, index], 'invalid_tool', 'Tool is not supported.');
         } else if (seen.has(tool)) {
             addIssue(issues, [...path, index], 'duplicate_tool', 'Selected tools must be unique.');
         }
-        if (typeof tool === 'string') seen.add(tool);
+        if (isRuntimeString(tool)) seen.add(tool);
     });
 }
 
@@ -180,7 +180,7 @@ function validateParallelData(
 }
 
 function validateRepository(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
@@ -217,7 +217,7 @@ function validateRepository(
 }
 
 function validateGithubIssue(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
@@ -301,7 +301,7 @@ function validateGithubData(
 
 export function validateNodeData(
     type: NodePresetNodeType,
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
@@ -317,7 +317,7 @@ export function validateNodeData(
     } else if (type === 'parallelization') validateParallelData(value, path, issues);
     else if (type === 'github') validateGithubData(value, path, issues);
     else if (type === 'contextMerger') {
-        if (typeof value.mode !== 'string' || !CONTEXT_MODES.has(value.mode)) {
+        if (!isRuntimeString(value.mode) || !CONTEXT_MODES.has(value.mode)) {
             addIssue(
                 issues,
                 [...path, 'mode'],
@@ -330,10 +330,10 @@ export function validateNodeData(
             required: true,
         });
     } else {
-        if (
-            validateString(value.title, [...path, 'title'], issues, 128, { required: true }) &&
-            containsDisallowedControl(value.title as string)
-        ) {
+        const titleValid = validateString(value.title, [...path, 'title'], issues, 128, {
+            required: true,
+        });
+        if (titleValid && isRuntimeString(value.title) && containsDisallowedControl(value.title)) {
             addIssue(
                 issues,
                 [...path, 'title'],
@@ -347,3 +347,4 @@ export function validateNodeData(
         });
     }
 }
+import { isRuntimeString } from '@/utils/runtimeTypes';

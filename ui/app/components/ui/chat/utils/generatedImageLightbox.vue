@@ -22,7 +22,7 @@ const downloadFilename = computed(() => {
 });
 
 const onImageLoad = (event: Event) => {
-    const img = event.target as HTMLImageElement;
+    const img = requireElement(event.target, HTMLImageElement);
     dimensions.value = `${img.naturalWidth}x${img.naturalHeight}`;
 };
 

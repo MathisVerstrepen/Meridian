@@ -8,8 +8,8 @@
         "generate": "nuxt generate",
         "preview": "nuxt preview",
         "postinstall": "nuxt prepare",
-        "lint": "eslint .",
-        "lint:fix": "eslint . --fix",
+        "lint": "oxlint .",
+        "lint:fix": "oxlint . --fix",
         "test:e2e": "playwright test --grep-invert @performance",
         "test:e2e:full": "playwright test --grep-invert @performance",
         "test:e2e:smoke": "playwright test --grep @smoke --grep-invert @performance",
@@ -22,7 +22,6 @@
     "dependencies": {
         "@dagrejs/dagre": "^3.1.0",
         "@headlessui/tailwindcss": "^0.2.2",
-        "@nuxt/eslint": "^1.15.2",
         "@nuxt/image": "^2.1.0",
         "@pinia/nuxt": "^0.11.3",
         "@tailwindcss/postcss": "^4.3.3",
@@ -65,10 +64,11 @@
     },
     "devDependencies": {
         "@nuxt/test-utils": "^4.0.3",
+        "@oxlint/plugins": "1.78.0",
         "@playwright/test": "^1.58.2",
         "@vue/test-utils": "^2.4.11",
-        "eslint": "9.39.4",
         "happy-dom": "^20.11.0",
+        "oxlint": "1.78.0",
         "typescript": "^5.9.3",
         "vitest": "^4.1.10",
         "vue-tsc": "^3.2.5"

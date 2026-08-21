@@ -38,7 +38,7 @@ const resetPassword = () => {
 
 // --- Methods for Username Editing ---
 const startEditing = () => {
-    newUsername.value = (user.value as User)?.name || '';
+    newUsername.value = (user.value)?.name || '';
     isEditingUsername.value = true;
     nextTick(() => {
         usernameInput.value?.focus();
@@ -51,7 +51,7 @@ const cancelEditing = () => {
 };
 
 const saveUsername = async () => {
-    if (!newUsername.value.trim() || newUsername.value.trim() === (user.value as User).name) {
+    if (!newUsername.value.trim() || newUsername.value.trim() === (user.value).name) {
         warning(
             'New username is the same as the current one or empty, please choose a different name.',
         );
@@ -65,12 +65,13 @@ const saveUsername = async () => {
         success('Username updated successfully.');
         isEditingUsername.value = false;
     } catch (err) {
-        if ((err as { status?: number })?.status === 409) {
+        const status = runtimeErrorStatus(err);
+        if (status === 409) {
             error('This username is already taken. Please choose another one.', {
                 title: 'Username Conflict',
             });
             return;
-        } else if ((err as { status?: number })?.status === 422) {
+        } else if (status === 422) {
             error(
                 'Invalid username. Please ensure it meets the required criteria of at least 3 characters and maximum 50 characters.',
                 {

@@ -1,7 +1,11 @@
+import type { BlockDefinition } from '@/types/graph';
 import type { NodePresetNodeType } from '@/types/nodePresets';
 
 export type NodePresetPathPart = string | number;
-export type NodePresetUnknownRecord = Record<string, unknown>;
+export type NodePresetUnknownRecord = Record<string, JsonValue>;
+export type NodePresetRuntimeDefaults =
+    | NonNullable<BlockDefinition['defaultData']>
+    | NodePresetUnknownRecord;
 
 export interface NodePresetValidationIssue {
     path: NodePresetPathPart[];
@@ -19,8 +23,8 @@ export interface NodePresetDraftInput {
     id: string;
     name: string;
     accentColor?: string;
-    nodes: readonly NodePresetUnknownRecord[];
-    edges: readonly NodePresetUnknownRecord[];
+    nodes: readonly RuntimeValue[];
+    edges: readonly RuntimeValue[];
 }
 
 export interface MaterializedPresetNode {
@@ -50,7 +54,7 @@ export interface MaterializedPresetEdge {
 export interface MaterializeNodePresetOptions {
     generateId: () => string;
     invocationPosition?: { x: number; y: number };
-    dataDefaults?: Partial<Record<NodePresetNodeType, NodePresetUnknownRecord>>;
+    dataDefaults?: Partial<Record<NodePresetNodeType, NodePresetRuntimeDefaults>>;
 }
 
 export interface MaterializedNodePreset {

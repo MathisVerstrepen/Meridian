@@ -18,9 +18,10 @@ const displayedEfforts = [
 
 const mountHydratedReasoningEffortFixture = async (page: Page) => {
     const fixture = await mountReasoningEffortFixture(page);
-    await page.waitForFunction(() => Boolean(
-        (document.querySelector('#__nuxt') as HTMLElement & { __vue_app__?: unknown })?.__vue_app__,
-    ));
+    await page.waitForFunction(() => {
+        const root = document.querySelector('#__nuxt');
+        return Boolean(root && '__vue_app__' in root && root.__vue_app__);
+    });
     return fixture;
 };
 

@@ -34,59 +34,59 @@ export const useSettingsStore = defineStore('settings', () => {
     const hasChanged = ref(false);
     const nodePresetEditorIssues = ref<NodePresetValidationIssue[]>([]);
 
-    const generalSettings = computed<GeneralSettings>(
-        () => settings.value?.general ?? ({} as GeneralSettings),
+    const generalSettings = computed<Partial<GeneralSettings>>(
+        () => settings.value?.general ?? {},
     );
-    const accountSettings = computed<AccountSettings>(
-        () => settings.value?.account ?? ({} as AccountSettings),
+    const accountSettings = computed<Partial<AccountSettings>>(
+        () => settings.value?.account ?? {},
     );
-    const appearanceSettings = computed<AppearanceSettings>(
-        () => settings.value?.appearance ?? ({} as AppearanceSettings),
+    const appearanceSettings = computed<Partial<AppearanceSettings>>(
+        () => settings.value?.appearance ?? {},
     );
-    const modelsSettings = computed<ModelsSettings>(
-        () => settings.value?.models ?? ({} as ModelsSettings),
+    const modelsSettings = computed<Partial<ModelsSettings>>(
+        () => settings.value?.models ?? {},
     );
-    const modelsDropdownSettings = computed<ModelsDropdownSettings>(
-        () => settings.value?.modelsDropdown ?? ({} as ModelsDropdownSettings),
+    const modelsDropdownSettings = computed<Partial<ModelsDropdownSettings>>(
+        () => settings.value?.modelsDropdown ?? {},
     );
-    const blockSettings = computed<BlockSettings>(
-        () => settings.value?.block ?? ({} as BlockSettings),
+    const blockSettings = computed<Partial<BlockSettings>>(
+        () => settings.value?.block ?? {},
     );
-    const blockPromptSettings = computed<BlockPromptSettings>(
-        () => settings.value?.blockPrompt ?? ({} as BlockPromptSettings),
+    const blockPromptSettings = computed<Partial<BlockPromptSettings>>(
+        () => settings.value?.blockPrompt ?? {},
     );
-    const blockAttachmentSettings = computed<BlockAttachmentSettings>(
-        () => settings.value?.blockAttachment ?? ({} as BlockAttachmentSettings),
+    const blockAttachmentSettings = computed<Partial<BlockAttachmentSettings>>(
+        () => settings.value?.blockAttachment ?? {},
     );
-    const blockParallelizationSettings = computed<BlockParallelizationSettings>(
-        () => settings.value?.blockParallelization ?? ({} as BlockParallelizationSettings),
+    const blockParallelizationSettings = computed<Partial<BlockParallelizationSettings>>(
+        () => settings.value?.blockParallelization ?? {},
     );
-    const blockRoutingSettings = computed(
-        () => settings.value?.blockRouting ?? ({} as BlockRoutingSettings),
+    const blockRoutingSettings = computed<Partial<BlockRoutingSettings>>(
+        () => settings.value?.blockRouting ?? {},
     );
-    const blockGithubSettings = computed<BlockGithubSettings>(
-        () => settings.value?.blockGithub ?? ({} as BlockGithubSettings),
+    const blockGithubSettings = computed<Partial<BlockGithubSettings>>(
+        () => settings.value?.blockGithub ?? {},
     );
-    const blockContextMergerSettings = computed<BlockContextMergerSettings>(
-        () => settings.value?.blockContextMerger ?? ({} as BlockContextMergerSettings),
+    const blockContextMergerSettings = computed<Partial<BlockContextMergerSettings>>(
+        () => settings.value?.blockContextMerger ?? {},
     );
-    const generationHistorySettings = computed<GenerationHistorySettings>(
-        () => settings.value?.generationHistory ?? ({} as GenerationHistorySettings),
+    const generationHistorySettings = computed<Partial<GenerationHistorySettings>>(
+        () => settings.value?.generationHistory ?? {},
     );
-    const toolsSettings = computed<ToolsSettings>(
-        () => settings.value?.tools ?? ({} as ToolsSettings),
+    const toolsSettings = computed<Partial<ToolsSettings>>(
+        () => settings.value?.tools ?? {},
     );
-    const toolsWebSearchSettings = computed<ToolsWebSearchSettings>(
-        () => settings.value?.toolsWebSearch ?? ({} as ToolsWebSearchSettings),
+    const toolsWebSearchSettings = computed<Partial<ToolsWebSearchSettings>>(
+        () => settings.value?.toolsWebSearch ?? {},
     );
-    const toolsLinkExtractionSettings = computed<ToolsLinkExtractionSettings>(
-        () => settings.value?.toolsLinkExtraction ?? ({} as ToolsLinkExtractionSettings),
+    const toolsLinkExtractionSettings = computed<Partial<ToolsLinkExtractionSettings>>(
+        () => settings.value?.toolsLinkExtraction ?? {},
     );
-    const toolsImageGenerationSettings = computed<ToolsImageGenerationSettings>(
-        () => settings.value?.toolsImageGeneration ?? ({} as ToolsImageGenerationSettings),
+    const toolsImageGenerationSettings = computed<Partial<ToolsImageGenerationSettings>>(
+        () => settings.value?.toolsImageGeneration ?? {},
     );
-    const toolsVisualiseSettings = computed<ToolsVisualiseSettings>(
-        () => settings.value?.toolsVisualise ?? ({} as ToolsVisualiseSettings),
+    const toolsVisualiseSettings = computed<Partial<ToolsVisualiseSettings>>(
+        () => settings.value?.toolsVisualise ?? {},
     );
     const nodePresetSettings = computed<NodePresetSettings>(() =>
         settings.value?.nodePresets ?? {
@@ -195,7 +195,7 @@ export const useSettingsStore = defineStore('settings', () => {
             return true;
         } catch (err) {
             console.error('Failed to update user settings:', err);
-            error('Failed to update user settings: ' + (err as Error).message, {
+            error('Failed to update user settings: ' + runtimeErrorMessage(err), {
                 title: 'Update Error',
             });
             return false;

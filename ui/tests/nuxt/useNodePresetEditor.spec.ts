@@ -1,6 +1,6 @@
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import type { Edge, Node } from '@vue-flow/core';
-import { defineComponent, h, reactive, ref, type Ref } from 'vue';
+import { defineComponent, h, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useNodePresetEditor } from '@/composables/useNodePresetEditor';
@@ -15,7 +15,7 @@ interface TestNode {
     height?: number;
     parentNode?: string;
     selected?: boolean;
-    data: Record<string, unknown>;
+    data: Record<string, JsonValue>;
 }
 
 interface TestEdge {
@@ -27,9 +27,14 @@ interface TestEdge {
     type?: string;
 }
 
-const state = vi.hoisted(() => ({
-    nodes: null as Ref<TestNode[]> | null,
-    edges: null as Ref<TestEdge[]> | null,
+const isEdgeId = (edge: string | TestEdge): edge is string => typeof edge === 'string';
+
+const state = vi.hoisted(() => {
+    const nodes: TestNode[] = [];
+    const edges: TestEdge[] = [];
+    return {
+    nodes: { value: nodes },
+    edges: { value: edges },
     ids: [
         '10000000-0000-4000-8000-000000000001',
         '10000000-0000-4000-8000-000000000002',
@@ -40,22 +45,28 @@ const state = vi.hoisted(() => ({
     editorIssues: vi.fn(),
     markChanged: vi.fn(),
     mergerPlacement: vi.fn(),
-}));
+    };
+});
 
-vi.mock('@vue-flow/core', async () => {
-    const actual = await vi.importActual<typeof import('@vue-flow/core')>('@vue-flow/core');
-    const { ref: createRef } = await vi.importActual<typeof import('vue')>('vue');
-    state.nodes ??= createRef<TestNode[]>([]);
-    state.edges ??= createRef<TestEdge[]>([]);
+mockNuxtImport('useGraphFlow', () => () => {
     const asArray = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
     const toTestNode = (node: Node): TestNode => {
-        const source = node as unknown as TestNode;
         return {
-            ...source,
+            id: node.id,
+            type: node.type,
+            position: node.position,
             dimensions: {
-                width: typeof node.width === 'number' ? node.width : 0,
-                height: typeof node.height === 'number' ? node.height : 0,
+                width: isRuntimeNumber(node.width) ? node.width : 0,
+                height: isRuntimeNumber(node.height) ? node.height : 0,
             },
+            width: isRuntimeNumber(node.width) ? node.width : undefined,
+            height: isRuntimeNumber(node.height) ? node.height : undefined,
+            parentNode: node.parentNode,
+            selected:
+                'selected' in node && isRuntimeBoolean(node.selected)
+                    ? node.selected
+                    : undefined,
+            data: isJsonObject(node.data) ? node.data : {},
         };
     };
     const toTestEdge = (edge: Edge): TestEdge => ({
@@ -67,30 +78,27 @@ vi.mock('@vue-flow/core', async () => {
         type: edge.type,
     });
     return {
-        ...actual,
-        useVueFlow: () => ({
             getNodes: state.nodes,
             getEdges: state.edges,
             setNodes: (nodes: Node[]) => {
-                state.nodes!.value = nodes.map(toTestNode);
+                state.nodes.value = nodes.map(toTestNode);
             },
-            setEdges: (edges: Edge[]) => (state.edges!.value = edges.map(toTestEdge)),
+            setEdges: (edges: Edge[]) => (state.edges.value = edges.map(toTestEdge)),
             addNodes: (nodes: Node | Node[]) => {
-                for (const node of asArray(nodes)) state.nodes!.value.push(toTestNode(node));
+                for (const node of asArray(nodes)) state.nodes.value.push(toTestNode(node));
             },
             addEdges: (edges: Edge | Edge[]) => {
-                for (const edge of asArray(edges)) state.edges!.value.push(toTestEdge(edge));
+                for (const edge of asArray(edges)) state.edges.value.push(toTestEdge(edge));
             },
             removeNodes: (nodes: TestNode[]) => {
                 const ids = new Set(nodes.map((node) => node.id));
-                state.nodes!.value = state.nodes!.value.filter((node) => !ids.has(node.id));
+                state.nodes.value = state.nodes.value.filter((node) => !ids.has(node.id));
             },
             removeEdges: (edges: string[] | TestEdge[]) => {
-                const ids = new Set(edges.map((edge) => (typeof edge === 'string' ? edge : edge.id)));
-                state.edges!.value = state.edges!.value.filter((edge) => !ids.has(edge.id));
+                const ids = new Set(edges.map((edge) => (isEdgeId(edge) ? edge : edge.id)));
+                state.edges.value = state.edges.value.filter((edge) => !ids.has(edge.id));
             },
             fitView: vi.fn().mockResolvedValue(true),
-        }),
     };
 });
 

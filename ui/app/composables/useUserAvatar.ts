@@ -1,5 +1,3 @@
-import type { User } from '@/types/user';
-
 /**
  * A composable to manage fetching and caching the user's avatar.
  * It ensures the avatar is fetched only once and the result is shared globally.
@@ -23,7 +21,7 @@ export const useUserAvatar = () => {
             return;
         }
 
-        const userAvatarUrl = (user.value as User)?.avatarUrl;
+        const userAvatarUrl = (user.value)?.avatarUrl;
 
         // If user has no avatar, clear the cached src and exit.
         if (!userAvatarUrl) {
@@ -52,10 +50,7 @@ export const useUserAvatar = () => {
             const response = await fetch(fullUrl);
 
             if (response.status === 401) {
-                const error = new Error('Unauthorized');
-                const typedError = error as Error & { response?: { status: number } };
-                typedError.response = { status: 401 };
-                throw error;
+                throw Object.assign(new Error('Unauthorized'), { status: 401 });
             }
             if (!response.ok) {
                 throw new Error(`Failed to fetch avatar: ${response.statusText}`);
@@ -80,7 +75,7 @@ export const useUserAvatar = () => {
 
     // Automatically load the avatar when the user's avatar URL changes.
     watch(
-        () => (user.value as User)?.avatarUrl,
+        () => (user.value)?.avatarUrl,
         () => {
             loadAvatar({ force: true });
         },

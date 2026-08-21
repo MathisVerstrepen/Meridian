@@ -183,10 +183,7 @@ const addFiles = async (
             files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {
-            const detail =
-                (err as { data?: { detail?: string } })?.data?.detail ||
-                (err as { message?: string })?.message ||
-                '';
+            const detail = runtimeErrorDetail(err) ?? '';
             console.error(`Failed to upload file ${file.name}:`, err);
             error(`Failed to upload file ${file.name}. ${detail}`, {
                 title: 'Upload Error',

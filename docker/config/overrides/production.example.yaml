@@ -7,6 +7,12 @@ settings: {}
 #   ui:
 #     api:
 #       public_base_url: "https://api.example.com"
+#   email:
+#     provider: "ses"
+#     ses:
+#       region: "eu-west-1"
+#       from_email: "meridian@example.com"
+#       configuration_set_name: ""
 #   limits:
 #     free:
 #       web_search: 0

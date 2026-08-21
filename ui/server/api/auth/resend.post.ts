@@ -17,10 +17,9 @@ export default defineEventHandler(async (event) => {
 
         return { status: 'sent' };
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { detail?: string } };
         throw createError({
-            statusCode: err.response?.status || 500,
-            message: err.data?.detail || 'Failed to resend verification email.',
+            statusCode: runtimeErrorStatus(error) ?? 500,
+            message: runtimeErrorDetail(error) ?? 'Failed to resend verification email.',
         });
     }
 });

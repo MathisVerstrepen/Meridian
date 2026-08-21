@@ -75,7 +75,7 @@ interface NodeRequest {
     width?: number | null;
     height?: number | null;
     label?: string | null;
-    data?: Record<string, unknown> | unknown[] | null; // JSONB
+    data?: Record<string, JsonValue> | unknown[] | null; // JSONB
     created_at?: string; // ISO Date string
     updated_at?: string; // ISO Date string
     graph?: Graph;
@@ -270,11 +270,11 @@ export interface GenerationHistoryEntry {
 }
 
 export interface GenerationHistoryDetail extends GenerationHistoryEntry {
-    snapshot: Record<string, unknown> | unknown[];
+    snapshot: Record<string, JsonValue> | unknown[];
 }
 
 export interface GenerationHistoryRestoreResponse {
-    node_data: Record<string, unknown> | unknown[];
+    node_data: Record<string, JsonValue> | unknown[];
 }
 
 export interface BlockCategories {

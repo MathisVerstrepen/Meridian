@@ -410,7 +410,12 @@ Additional enforcement:
 - GitHub OAuth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`
 - Search fallback: `GOOGLE_SEARCH_API_KEY`, `GOOGLE_CSE_ID`
 - Search primary: `SEARXNG_URL`
-- Email verification delivery: `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_AUTH_PROTOCOL`
+- Email provider selector: `EMAIL_PROVIDER` (`smtp` by default; accepts `smtp` or `ses`)
+- SMTP verification delivery: `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_AUTH_PROTOCOL`
+- Amazon SES v2 verification delivery: `SES_REGION`, `SES_FROM_EMAIL`, optional `SES_CONFIGURATION_SET_NAME`
+- Optional Boto3 credential-chain inputs: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`; prefer workload roles and keep populated keys in protected deployment secret files
+
+Selected-provider failures are captured with sanitized logs and never trigger cross-provider fallback. SES requires a verified sender in `SES_REGION`, appropriate `ses:SendEmail` IAM permission, and production access or verified recipients while the account is sandboxed. Boto3 receives no explicit credentials from application code and uses its default credential chain.
 
 ## Migrations
 

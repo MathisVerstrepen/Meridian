@@ -23,7 +23,7 @@ const displayLabel = computed(() => {
 });
 
 const handleLoad = (event: Event) => {
-    const image = event.target as HTMLImageElement;
+    const image = requireElement(event.target, HTMLImageElement);
     dimensions.value = `${image.naturalWidth}x${image.naturalHeight}`;
     hasError.value = false;
 };

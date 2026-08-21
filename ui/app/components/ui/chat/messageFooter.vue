@@ -98,8 +98,9 @@ const supportsGenerationHistory = computed(() => {
         props.message.role === MessageRoleEnum.assistant &&
         !!props.graphId &&
         !!props.message.node_id &&
+        isNodeTypeEnum(props.message.type) &&
         [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.ROUTING, NodeTypeEnum.PARALLELIZATION].includes(
-            props.message.type as NodeTypeEnum,
+            props.message.type,
         )
     );
 });

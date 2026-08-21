@@ -70,13 +70,13 @@ const route = useRoute();
 const graphEvents = useGraphEvents();
 
 // --- Local Utils ---
-const historyListRef = ref<HTMLDivElement | null>(null) as Ref<HTMLDivElement | null>;
+const historyListRef = ref<HTMLDivElement | null>(null);
 const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
 const hasLoadedInitialGraphs = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
-const currentGraphId = computed(() => route.params.id as string | undefined);
+const currentGraphId = computed(() => firstRouteString(route.params.id));
 const LOAD_MORE_THRESHOLD_PX = 200;
 
 // Use existing graph deletion composable

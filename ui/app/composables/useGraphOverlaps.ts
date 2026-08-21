@@ -1,7 +1,5 @@
-import { useVueFlow, type Rect } from '@vue-flow/core';
+import { type GraphNode, type Rect } from '@vue-flow/core';
 
-import type { NodeTypeEnum } from '@/types/enums';
-import type { NodeWithDimensions } from '@/types/graph';
 import {
     calculateOverlapTranslation,
     type OverlapResolutionDirection,
@@ -18,7 +16,7 @@ interface ResolveOverlapOptions {
 }
 
 interface BlockerEntry {
-    node: NodeWithDimensions;
+    node: GraphNode;
     order: number;
     rect: Rect;
 }
@@ -28,21 +26,21 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
     const { error } = useToast();
     const { getBlockByNodeType } = useBlocks();
 
-    const graphId = computed(() => graphIdOverride?.value ?? (route.params.id as string));
+    const graphId = computed(() => graphIdOverride?.value ?? firstRouteString(route.params.id) ?? '');
 
-    const nodeToRect = (node: NodeWithDimensions): Rect => {
-        const minimumSize = getBlockByNodeType(node.type as NodeTypeEnum)?.minSize;
+    const nodeToRect = (node: GraphNode): Rect => {
+        const minimumSize = getBlockByNodeType(nodeTypeOrUndefined(node.type))?.minSize;
         return {
             x: node.position.x,
             y: node.position.y,
             width:
                 node.dimensions?.width ||
-                (typeof node.width === 'number' && node.width > 0
+                (isRuntimeNumber(node.width) && node.width > 0
                     ? node.width
                     : (minimumSize?.width ?? 0)),
             height:
                 node.dimensions?.height ||
-                (typeof node.height === 'number' && node.height > 0
+                (isRuntimeNumber(node.height) && node.height > 0
                     ? node.height
                     : (minimumSize?.height ?? 0)),
         };
@@ -53,18 +51,17 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
         attachedNodeIds: (string | undefined)[],
         options?: ResolveOverlapOptions,
     ) => {
-        const { findNode, updateNode, getNodes, isNodeIntersecting } = useVueFlow(
+        const { findNode, updateNode, getNodes, isNodeIntersecting } = useGraphFlow(
             'main-graph-' + graphId.value,
         );
 
         const aOptions = {
-            direction: 'right' as OverlapResolutionDirection,
-            gap: AUTO_PLACEMENT_GAP,
-            maxIterations: 50,
-            ...options,
+            direction: options?.direction ?? 'right',
+            gap: options?.gap ?? AUTO_PLACEMENT_GAP,
+            maxIterations: options?.maxIterations ?? 50,
         };
 
-        const mainNode = findNode(nodeId) as NodeWithDimensions | undefined;
+        const mainNode = findNode(nodeId);
         if (!mainNode) {
             console.error(`[resolveOverlaps] Main node with ID ${nodeId} not found.`);
             error(`[resolveOverlaps] Main node with ID ${nodeId} not found.`, {
@@ -77,7 +74,7 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
         const movableNodeIds = new Set([mainNode.id]);
         for (const attachedId of attachedNodeIds) {
             if (!attachedId || movableNodeIds.has(attachedId)) continue;
-            const attachedNode = findNode(attachedId) as NodeWithDimensions | undefined;
+            const attachedNode = findNode(attachedId);
             if (attachedNode) {
                 movableNodes.push(attachedNode);
                 movableNodeIds.add(attachedId);
@@ -88,7 +85,7 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
 
         const otherNodes = getNodes.value.filter(
             (node) => !movableNodeIds.has(node.id) && !node.id.startsWith('group-'),
-        ) as NodeWithDimensions[];
+        );
         if (otherNodes.length === 0) {
             return;
         }

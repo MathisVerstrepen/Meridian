@@ -46,8 +46,8 @@ export const useMessage = () => {
      */
     const getFilesFromMessage = (message: Message): MessageContentFile[] => {
         return message.content
-            .filter((content) => content.type === MessageContentTypeEnum.FILE)
-            .map((content) => content.file as MessageContentFile);
+            .filter((content) => content.type === MessageContentTypeEnum.FILE && content.file)
+            .flatMap((content) => content.file ? [content.file] : []);
     };
 
     /**
@@ -58,8 +58,11 @@ export const useMessage = () => {
      */
     const getImageUrlsFromMessage = (message: Message): MessageContentImageURL[] => {
         return message.content
-            .filter((content) => content.type === MessageContentTypeEnum.IMAGE_URL)
-            .map((content) => content.image_url as MessageContentImageURL);
+            .filter(
+                (content) =>
+                    content.type === MessageContentTypeEnum.IMAGE_URL && content.image_url,
+            )
+            .flatMap((content) => content.image_url ? [content.image_url] : []);
     };
 
     return {

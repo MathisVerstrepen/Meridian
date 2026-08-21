@@ -1,6 +1,6 @@
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import type { Edge, Node } from '@vue-flow/core';
-import { defineComponent, h, reactive, ref, type Ref } from 'vue';
+import { defineComponent, h, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useNodePresets } from '@/composables/useNodePresets';
@@ -10,7 +10,7 @@ interface TestNode {
     id: string;
     type?: string;
     position: { x: number; y: number };
-    data: Record<string, unknown>;
+    data: object;
     selected?: boolean;
 }
 
@@ -23,26 +23,31 @@ interface TestEdge {
     type?: string;
 }
 
-const state = vi.hoisted(() => ({
-    nodes: null as Ref<TestNode[]> | null,
-    edges: null as Ref<TestEdge[]> | null,
-    addedNodeBatches: [] as string[][],
+const state = vi.hoisted(() => {
+    const nodes: TestNode[] = [];
+    const edges: TestEdge[] = [];
+    const addedNodeBatches: string[][] = [];
+    return {
+    nodes: { value: nodes },
+    edges: { value: edges },
+    addedNodeBatches,
     failEdges: false,
     overlap: vi.fn(),
     toastError: vi.fn(),
     id: 0,
-}));
-
-vi.mock('@vue-flow/core', async () => {
-    const actual = await vi.importActual<typeof import('@vue-flow/core')>('@vue-flow/core');
-    const { ref: createRef } = await vi.importActual<typeof import('vue')>('vue');
-    state.nodes ??= createRef<TestNode[]>([]);
-    state.edges ??= createRef<TestEdge[]>([]);
-    const asArray = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
-    const toTestNode = (node: Node): TestNode => {
-        const source = node as unknown as TestNode;
-        return { ...source, data: source.data ?? {} };
     };
+});
+
+mockNuxtImport('useGraphFlow', () => () => {
+    const asArray = <T>(value: T | T[]): T[] => (Array.isArray(value) ? value : [value]);
+    const toTestNode = (node: Node): TestNode => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        data: node.data,
+        selected:
+            'selected' in node && isRuntimeBoolean(node.selected) ? node.selected : undefined,
+    });
     const toTestEdge = (edge: Edge): TestEdge => ({
         id: edge.id,
         source: edge.source,
@@ -52,27 +57,24 @@ vi.mock('@vue-flow/core', async () => {
         type: edge.type,
     });
     return {
-        ...actual,
-        useVueFlow: () => ({
             getNodes: state.nodes,
             addNodes: (nodes: Node | Node[]) => {
                 const batch = asArray(nodes);
                 state.addedNodeBatches.push(batch.map((node) => node.id));
-                state.nodes!.value.push(...batch.map(toTestNode));
+                state.nodes.value.push(...batch.map(toTestNode));
             },
             addEdges: (edges: Edge | Edge[]) => {
                 if (state.failEdges) throw new Error('edge add failed');
-                state.edges!.value.push(...asArray(edges).map(toTestEdge));
+                state.edges.value.push(...asArray(edges).map(toTestEdge));
             },
             removeNodes: (nodes: TestNode[]) => {
                 const ids = new Set(nodes.map((node) => node.id));
-                state.nodes!.value = state.nodes!.value.filter((node) => !ids.has(node.id));
+                state.nodes.value = state.nodes.value.filter((node) => !ids.has(node.id));
             },
             removeEdges: (edges: TestEdge[]) => {
                 const ids = new Set(edges.map((edge) => edge.id));
-                state.edges!.value = state.edges!.value.filter((edge) => !ids.has(edge.id));
+                state.edges.value = state.edges.value.filter((edge) => !ids.has(edge.id));
             },
-        }),
     };
 });
 
@@ -132,7 +134,9 @@ const duplicatePreset: NodePreset = {
 const settings = reactive<{ nodePresetSettings: NodePresetSettings }>({
     nodePresetSettings: { schemaVersion: 1, presets: [preset, emptyPreset, duplicatePreset] },
 });
-const session = { user: ref({ plan_type: 'premium' as 'free' | 'premium' }) };
+const session = {
+    user: ref<{ plan_type: 'free' | 'premium' }>({ plan_type: 'premium' }),
+};
 
 mockNuxtImport('useSettingsStore', () => () => settings);
 mockNuxtImport('useUserSession', () => () => session);

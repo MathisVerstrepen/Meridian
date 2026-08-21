@@ -69,12 +69,12 @@ const register = async () => {
         await navigateTo(`/auth/verify?email=${encodeURIComponent(email.value.trim())}`);
     } catch (error: unknown) {
         isLoading.value = false;
-        const err = error as { response?: { status?: number }; data?: { message?: string } };
-        console.error('Error registering:', err.response?.status);
-        if (err.response?.status === 429) {
+        const status = runtimeErrorStatus(error);
+        console.error('Error registering:', status);
+        if (status === 429) {
             errorMessage.value = 'Too many attempts. Please try again later.';
         } else {
-            errorMessage.value = err.data?.message || 'An unexpected error occurred.';
+            errorMessage.value = runtimeErrorDetail(error) || 'An unexpected error occurred.';
         }
     }
 };

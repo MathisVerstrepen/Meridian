@@ -33,13 +33,7 @@ const { getNodes } = useVueFlow('main-graph-' + props.graphId);
 const { getBlockById } = useBlocks();
 
 // --- Local State ---
-type SidebarEditableData =
-    | DataContextMerger
-    | DataParallelization
-    | DataPrompt
-    | DataRouting
-    | DataTextToText
-    | Record<string, unknown>;
+type SidebarEditableData = object;
 
 type SidebarEditableNode = SidebarNode<SidebarEditableData>;
 
@@ -60,11 +54,7 @@ const lastAssistantMessage = computed(() => {
 
 const lastAssistantNode = computed<SidebarEditableNode | null>(() => {
     if (!lastAssistantMessage.value) return null;
-    return (
-        (getNodes.value.find((n) => n.id === lastAssistantMessage.value.node_id) as
-            | SidebarEditableNode
-            | undefined) || null
-    );
+    return getNodes.value.find((n) => n.id === lastAssistantMessage.value.node_id) ?? null;
 });
 
 const isEditingUpcomingNode = computed(() => !props.nodeId && !!openChatId.value);
@@ -75,7 +65,7 @@ const displayNode = computed<SidebarEditableNode | null>(() => {
             id: 'upcoming-node',
             label: 'Upcoming Node',
             type: upcomingModelData.value.type,
-            data: upcomingModelData.value.data as SidebarEditableData,
+            data: isRuntimeObject(upcomingModelData.value.data) ? upcomingModelData.value.data : {},
             position: { x: 0, y: 0 },
         };
     }
@@ -90,29 +80,29 @@ const navigatorNode = computed<SidebarEditableNode | null>(() => {
 });
 
 const promptNode = computed<SidebarNode<DataPrompt> | null>(() =>
-    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataPrompt>) : null,
+    displayNode.value ? (/* SAFETY: Block registry pairs PROMPT nodes with DataPrompt; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataPrompt>) : null,
 );
 
 const textToTextNode = computed<SidebarNode<DataTextToText> | null>(() =>
-    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataTextToText>) : null,
+    displayNode.value ? (/* SAFETY: Block registry pairs TEXT_TO_TEXT nodes with DataTextToText; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataTextToText>) : null,
 );
 
 const parallelizationNode = computed<SidebarNode<DataParallelization> | null>(() =>
     displayNode.value
-        ? (displayNode.value as unknown as SidebarNode<DataParallelization>)
+        ? (/* SAFETY: Block registry pairs PARALLELIZATION nodes with DataParallelization; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataParallelization>)
         : null,
 );
 
 const routingNode = computed<SidebarNode<DataRouting> | null>(() =>
-    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataRouting>) : null,
+    displayNode.value ? (/* SAFETY: Block registry pairs ROUTING nodes with DataRouting; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataRouting>) : null,
 );
 
 const contextMergerNode = computed<SidebarNode<DataContextMerger> | null>(() =>
-    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataContextMerger>) : null,
+    displayNode.value ? (/* SAFETY: Block registry pairs CONTEXT_MERGER nodes with DataContextMerger; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataContextMerger>) : null,
 );
 
 // --- Core logic ---
-const setNodeDataKey = (key: string, value: unknown) => {
+const setNodeDataKey = (key: string, value: JsonValue) => {
     const target = isEditingUpcomingNode.value ? upcomingModelData.value : node.value;
     if (!target) return;
 
@@ -122,7 +112,7 @@ const setNodeDataKey = (key: string, value: unknown) => {
     if (!dataObject) return;
 
     const keys = key.split('.');
-    const current = dataObject as unknown as Record<string, unknown>;
+    const current = isJsonObject(dataObject) ? dataObject : {};
 
     current[keys[keys.length - 1]] = value;
 
@@ -130,51 +120,46 @@ const setNodeDataKey = (key: string, value: unknown) => {
     if (isEditingUpcomingNode.value) {
         updateUpcomingModelData(upcomingModelData.value.type, current);
     } else {
-        node.value!.data = {
-            ...(node.value!.data as unknown as Record<string, unknown>),
-        };
+        const currentNode = node.value;
+        if (!currentNode) return;
+        currentNode.data = { ...current };
         setNeedSave(SavingStatus.NOT_SAVED);
     }
 };
 
 const setCurrentModel = (model: string) => {
-    if (isEditingUpcomingNode.value) {
-        (upcomingModelData.value.data as Record<string, unknown>).model = model;
+    if (isEditingUpcomingNode.value && isJsonObject(upcomingModelData.value.data)) {
+        upcomingModelData.value.data.model = model;
     }
 };
 
 const handleUpdateUpcomingType = (newType: NodeTypeEnum) => {
-    let defaultData: Record<string, unknown> | undefined;
+    let defaultData: object | undefined;
 
     if (lastAssistantMessage.value && newType === lastAssistantMessage.value.type) {
         const node = getNodes.value.find((n) => n.id === lastAssistantMessage.value!.node_id);
 
         if (node) {
-            defaultData = node.data as unknown as Record<string, unknown>;
+            defaultData = node.data;
         }
     }
 
     if (!defaultData) {
         switch (newType) {
             case NodeTypeEnum.ROUTING:
-                defaultData = getBlockById('primary-model-routing').defaultData as unknown as Record<
-                    string,
-                    unknown
-                >;
+                defaultData = getBlockById('primary-model-routing').defaultData;
                 break;
             case NodeTypeEnum.PARALLELIZATION:
-                defaultData = getBlockById('primary-model-parallelization')
-                    .defaultData as unknown as Record<string, unknown>;
+                defaultData = getBlockById('primary-model-parallelization').defaultData;
                 break;
             case NodeTypeEnum.TEXT_TO_TEXT:
             default:
-                defaultData = getBlockById('primary-model-text-to-text')
-                    .defaultData as unknown as Record<string, unknown>;
+                defaultData = getBlockById('primary-model-text-to-text').defaultData;
                 break;
         }
     }
 
-    updateUpcomingModelData(newType, defaultData as unknown as Record<string, unknown>);
+    if (defaultData) updateUpcomingModelData(newType, defaultData);
 };
 
 // --- Watchers ---
@@ -182,9 +167,7 @@ watch(
     () => props.nodeId,
     (newVal) => {
         if (newVal) {
-            node.value =
-                (getNodes.value.find((n) => n.id === newVal) as SidebarEditableNode | undefined) ||
-                null;
+            node.value = getNodes.value.find((n) => n.id === newVal) ?? null;
         } else {
             node.value = null;
         }

@@ -488,14 +488,29 @@ Sets the Sentry DSN for API monitoring and Compose-derived frontend public confi
 
 | YAML path or secret env key | Type | Production default | Optional |
 |---|---|---|---|
+| `email.provider` | string | `smtp` | No |
 | `email.smtp.server` | string | `smtp.example.com` | Yes |
 | `email.smtp.port` | integer | `587` | Yes |
 | `email.smtp.username` | string | empty | Yes |
 | `email.smtp.auth_protocol` | string | `TLS` | Yes |
 | `email.smtp.from_email` | string | empty | Yes |
+| `email.ses.region` | string | empty | Yes |
+| `email.ses.from_email` | string | empty | Yes |
+| `email.ses.configuration_set_name` | string | empty | Yes |
 | `SMTP_PASSWORD` | string (secret) | empty | Yes |
+| `AWS_ACCESS_KEY_ID` | string (secret) | empty | Yes |
+| `AWS_SECRET_ACCESS_KEY` | string (secret) | empty | Yes |
+| `AWS_SESSION_TOKEN` | string (secret) | empty | Yes |
 
-Email delivery currently requires server, port, username, and password to all be non-empty. If any is missing, the API logs a configuration error and does not send the verification message. Restart the API after changing any email value.
+`email.provider` explicitly selects `smtp` or `ses`; values are case-insensitive and surrounding whitespace is ignored. SMTP remains the default. Invalid provider values, incomplete selected-provider configuration, and delivery failures produce sanitized API errors and send nothing. Delivery never falls back to the unselected provider, avoiding duplicate messages. Restart or recreate the API after changing email or credential values.
+
+### `email.provider`
+
+Selects SMTP delivery with `smtp` or the AWS SES v2 API with `ses`. Provider settings may coexist, but only the selected provider is read for delivery.
+
+### SMTP
+
+SMTP requires `email.smtp.server`, `email.smtp.port`, `email.smtp.username`, and `SMTP_PASSWORD` to all be non-empty. `email.smtp.from_email` supplies the sender address but is not part of the prerequisite check.
 
 ### `email.smtp.server`
 
@@ -515,11 +530,31 @@ Selects connection behavior: `SSL` uses implicit TLS, `STARTTLS` explicitly upgr
 
 ### `email.smtp.from_email`
 
-Sets the message sender address. The current prerequisite check does not require it to be non-empty, but successful delivery may depend on a valid provider-authorized address.
+Sets the message sender address. Successful delivery may depend on a valid provider-authorized address.
 
 ### `SMTP_PASSWORD`
 
-Sets the required SMTP login password. Keep it only in the profile secrets env file; empty disables delivery through the prerequisite check. Restart the API after rotation.
+Sets the required SMTP login password. Keep it only in the profile secrets env file; empty disables SMTP delivery through the prerequisite check.
+
+### Amazon SES
+
+SES delivery requires non-empty `email.ses.region` and `email.ses.from_email`. The sender address or its domain must be verified in the selected region. Accounts in the SES sandbox can send only to verified recipients or the SES mailbox simulator until AWS grants production access. When `email.ses.configuration_set_name` is non-empty, the API passes it to SES; the configuration set must exist in the selected region.
+
+Boto3 uses its default credential chain. In typical deployments it checks populated AWS environment credentials before shared profile, web-identity, container-role, and instance-role sources. Prefer workload roles or short-lived credentials and grant only required `ses:SendEmail` access for the intended identity. Repository configuration does not provision IAM, verified identities, production access, quotas, or configuration sets.
+
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are optional for deployments without workload identity and must be supplied together. Add `AWS_SESSION_TOKEN` when using temporary credentials. Keep all three only in the mode-`0600` profile secrets env file. Populated environment credentials take precedence over role sources, so remove stale values when switching to a role. Application code does not pass credentials directly to Boto3 or log SES request data, addresses, verification codes, credentials, or provider exception text.
+
+### `email.ses.region`
+
+Sets the explicit AWS region used to create the SES v2 client.
+
+### `email.ses.from_email`
+
+Sets the verified SES sender address.
+
+### `email.ses.configuration_set_name`
+
+Optionally attaches an existing SES configuration set to each verification message. Empty omits the SES request field.
 
 ## Secrets
 

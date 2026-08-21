@@ -28,7 +28,7 @@ interface RawLayoutEdge {
     targetHandle?: string | null;
 }
 
-const KNOWN_CATEGORIES = new Set<LayoutEdgeCategory>(['attachment', 'context', 'prompt']);
+const KNOWN_CATEGORIES: LayoutEdgeCategory[] = ['attachment', 'context', 'prompt'];
 const GENERATOR_TYPES = new Set<string>([
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
@@ -36,11 +36,11 @@ const GENERATOR_TYPES = new Set<string>([
 ]);
 
 const canonicalCategory = (handle: string | null | undefined): LayoutEdgeCategory | undefined => {
-    if (typeof handle !== 'string') return undefined;
+    if (!isRuntimeString(handle)) return undefined;
     const separator = handle.indexOf('_');
     if (separator <= 0 || separator === handle.length - 1) return undefined;
-    const prefix = handle.slice(0, separator) as LayoutEdgeCategory;
-    return KNOWN_CATEGORIES.has(prefix) ? prefix : undefined;
+    const prefix = handle.slice(0, separator);
+    return KNOWN_CATEGORIES.find((category) => category === prefix);
 };
 
 const categoryForNodeType = (nodeType: string | undefined): LayoutEdgeCategory | undefined => {
@@ -221,3 +221,4 @@ export const mergeGeneratorSpineBlocks = (
 
     return [...blocks.filter((block) => !consumed.has(block)), ...merged];
 };
+import { isRuntimeString } from '@/utils/runtimeTypes';

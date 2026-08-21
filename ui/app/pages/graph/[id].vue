@@ -23,7 +23,7 @@ isCanvasReady.value = false;
 
 // --- Route ---
 const route = useRoute();
-const graphId = computed(() => route.params.id as string);
+const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Local State ---
 const graph = ref<Graph | null>(null);
@@ -119,14 +119,9 @@ const isGraphNameDefault = computed(() => {
 const canvasModelIds = computed(() => getCanvasModelIds(getNodes.value));
 const getViewportStorageKey = () => `meridian-graph-viewport-${graphId.value}`;
 
-const getGraphLoadErrorState = (err: unknown) => {
-    const apiError = err as {
-        response?: { status?: number };
-        statusCode?: number;
-        data?: { detail?: string };
-    };
-    const statusCode = apiError?.response?.status ?? apiError?.statusCode ?? null;
-    const detail = apiError?.data?.detail ?? '';
+const getGraphLoadErrorState = (err: RuntimeValue) => {
+    const statusCode = runtimeErrorStatus(err) ?? null;
+    const detail = runtimeErrorDetail(err) ?? '';
 
     if (statusCode === 404) {
         return {
@@ -354,12 +349,12 @@ const handleKeyDown = (event: KeyboardEvent) => {
             return;
         }
 
-        let element = activeElement as HTMLElement;
+        let element = activeElement instanceof HTMLElement ? activeElement : null;
         while (element) {
             if (element.classList?.contains('nodrag')) {
                 return;
             }
-            element = element.parentElement as HTMLElement;
+            element = element.parentElement;
         }
     }
 
@@ -514,7 +509,8 @@ onNodesInitialized(async () => {
 });
 
 onNodeDragStart(async (nodeDragEvent) => {
-    const nodeType = nodeDragEvent.node.type as NodeTypeEnum;
+    const nodeType = nodeTypeOrUndefined(nodeDragEvent.node.type);
+    if (!nodeType) return;
 
     isDragging.value = true;
     isHoverDelete.value = false;
@@ -541,7 +537,7 @@ onNodeDragStop(async (event) => {
 });
 
 onNodeDrag((event) => {
-    const target = event.event.target as HTMLElement;
+    const target = requireElement(event.event.target, HTMLElement);
     if (target && target.classList.contains('node-trash')) {
         isHoverDelete.value = true;
     } else {
@@ -578,13 +574,16 @@ onMounted(async () => {
                     return node;
                 }
 
+                const data = {
+                    ...node.data,
+                    prompt: promptText,
+                };
+                if (detachTemplate) {
+                    Object.assign(data, { templateId: null, templateVariables: {} });
+                }
                 return {
                     ...node,
-                    data: {
-                        ...node.data,
-                        prompt: promptText,
-                        ...(detachTemplate ? { templateId: null, templateVariables: {} } : {}),
-                    },
+                    data,
                 };
             });
 
@@ -601,7 +600,7 @@ onMounted(async () => {
                 graphEvents.emit('prompt-improver-applied', {
                     nodeId,
                     success: false,
-                    error: (err as Error).message || 'Failed to save graph changes.',
+                    error: runtimeErrorMessage(err) || 'Failed to save graph changes.',
                 });
             }
         },

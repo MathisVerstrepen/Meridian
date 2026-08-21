@@ -314,13 +314,15 @@ describe('web tool groups', () => {
     });
 
     it('starts streaming searches closed and preserves a user toggle across prop updates', async () => {
+        const successfulSearch = successfulSearches[0];
+        if (!successfulSearch) throw new Error('Expected successful search fixture');
         const streamingSearches: WebSearch[] = [
             {
                 query: 'live query',
                 results: [],
                 streaming: true,
             },
-            successfulSearches[0] as WebSearch,
+            successfulSearch,
         ];
         const wrapper = await mountSuspended(WebSearchGroup, {
             props: {
@@ -347,7 +349,7 @@ describe('web tool groups', () => {
                         query: 'live query',
                         results: [],
                     },
-                    successfulSearches[0] as WebSearch,
+                    successfulSearch,
                 ],
             });
             expect(button.attributes('aria-expanded')).toBe('true');

@@ -41,10 +41,11 @@ const parseAutoToolSelection = (rawText: string): [ParsedAutoToolSelection | nul
         return [null, rawText];
     }
 
+    const toolValues: ToolEnum[] = Object.values(ToolEnum);
     const selectedTools = match[1]
         .split(',')
         .map((tool) => tool.trim())
-        .filter((tool): tool is ToolEnum => Object.values(ToolEnum).includes(tool as ToolEnum));
+        .flatMap((tool) => toolValues.find((value) => value === tool) ?? []);
 
     return [
         {
@@ -255,7 +256,7 @@ const stripLeadingReplayBlocks = (text: string): string => {
 
 const splitThinkingAndResponse = (
     rawText: string,
-): { thinkingMarkdown: string; responseMarkdown: string } => {
+) => {
     const trimmed = rawText.trim();
     const thinkOpenTag = '[THINK]';
     const thinkCloseTag = '[!THINK]';

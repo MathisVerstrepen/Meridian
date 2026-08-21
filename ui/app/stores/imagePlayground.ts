@@ -27,7 +27,7 @@ const IMAGE_PROMPT_HISTORY_MAX_ITEMS = 24;
 const IMAGE_PROMPT_HISTORY_STORAGE_KEY = 'meridian-image-playground-prompt-history';
 const ACTIVE_JOBS_SYNC_INTERVAL_MS = 30000;
 
-export const IMAGE_STYLE_PRESETS: Record<string, ImageStylePreset> = {
+export const IMAGE_STYLE_PRESETS = {
     none: { label: 'None', suffix: '' },
     photorealistic: {
         label: 'Photorealistic',
@@ -49,7 +49,7 @@ export const IMAGE_STYLE_PRESETS: Record<string, ImageStylePreset> = {
         label: 'Cyberpunk',
         suffix: 'cyberpunk neon, rainy city, high contrast, futuristic atmosphere',
     },
-};
+} satisfies Record<string, ImageStylePreset>;
 
 export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const settingsStore = useSettingsStore();
@@ -182,16 +182,14 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         try {
             const storedHistory = localStorage.getItem(IMAGE_PROMPT_HISTORY_STORAGE_KEY);
             if (!storedHistory) return;
-            const parsedHistory = JSON.parse(storedHistory) as unknown[];
+            const parsedHistory: JsonValue = JSON.parse(storedHistory);
             if (!Array.isArray(parsedHistory)) return;
 
             const historyPrompts = parsedHistory
                 .map((entry) => {
-                    if (typeof entry === 'string') return entry.trim();
-                    if (entry && typeof entry === 'object' && 'prompt' in entry) {
-                        return String(entry.prompt).trim();
-                    }
-                    return '';
+                    if (isRuntimeString(entry)) return entry.trim();
+                    const prompt = jsonObjectOrEmpty(entry).prompt;
+                    return prompt === undefined ? '' : String(prompt).trim();
                 })
                 .filter(Boolean);
 
@@ -228,12 +226,12 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         savePromptHistory();
     };
 
-    const mapCustomTonePreset = (preset: CustomImageTonePresetResponse): ImageStylePreset => ({
-        label: preset.label,
-        suffix: preset.suffix,
-        ...(preset.description ? { description: preset.description } : {}),
-        ...(preset.image_id ? { imageId: preset.image_id } : {}),
-    });
+    const mapCustomTonePreset = (preset: CustomImageTonePresetResponse): ImageStylePreset => {
+        const mapped = { label: preset.label, suffix: preset.suffix };
+        if (preset.description) Object.assign(mapped, { description: preset.description });
+        if (preset.image_id) Object.assign(mapped, { imageId: preset.image_id });
+        return mapped;
+    };
 
     const loadCustomStylePresets = async () => {
         const presets = await getCustomImageTonePresets();
@@ -243,12 +241,12 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     };
 
     const addCustomStylePreset = async (preset: ImageStylePreset) => {
-        const payload: CustomImageTonePresetPayload = {
+        const payload = {
             label: preset.label,
             suffix: preset.suffix,
-            ...(preset.description ? { description: preset.description } : {}),
-            ...(preset.imageId ? { image_id: preset.imageId } : {}),
-        };
+        } satisfies CustomImageTonePresetPayload;
+        if (preset.description) Object.assign(payload, { description: preset.description });
+        if (preset.imageId) Object.assign(payload, { image_id: preset.imageId });
         const savedPreset = await createCustomImageTonePreset(payload);
         customStylePresets.value = {
             ...customStylePresets.value,
@@ -386,7 +384,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             .map((job) => {
                 const createdAt = job.completed_at || job.updated_at || job.created_at;
                 return {
-                    id: job.file_id as string,
+                    id: runtimeString(job.file_id),
                     name: `Gen: ${job.prompt.slice(0, 30)}`,
                     path: `/Generated Images/Gen: ${job.prompt.slice(0, 30)}`,
                     size: null,
@@ -639,17 +637,20 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         });
     };
 
-    const generatedImageToSourceImage = (image: GeneratedImageGalleryItem): FileSystemObject => ({
-        id: image.id,
-        name: image.name,
-        path: image.path,
-        type: 'file',
-        ...(image.size ? { size: image.size } : {}),
-        content_type: image.content_type || 'image/*',
-        created_at: image.created_at,
-        updated_at: image.updated_at,
-        cached: false,
-    });
+    const generatedImageToSourceImage = (image: GeneratedImageGalleryItem): FileSystemObject => {
+        const sourceImage = {
+            id: image.id,
+            name: image.name,
+            path: image.path,
+            type: 'file' as const,
+            content_type: image.content_type || 'image/*',
+            created_at: image.created_at,
+            updated_at: image.updated_at,
+            cached: false,
+        };
+        if (image.size) Object.assign(sourceImage, { size: image.size });
+        return sourceImage;
+    };
 
     const addGeneratedImageReference = (image: GeneratedImageGalleryItem) => {
         if (sourceImages.value.some((sourceImage) => sourceImage.id === image.id)) return false;

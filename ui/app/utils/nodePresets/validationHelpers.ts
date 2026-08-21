@@ -6,7 +6,7 @@ import type {
 
 const UUID_PATTERN = /^(?:urn:uuid:)?(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\})$/i;
 
-export function isRecord(value: unknown): value is NodePresetUnknownRecord {
+export function isRecord<Value>(value: Value): value is Value & NodePresetUnknownRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -20,7 +20,7 @@ export function addIssue(
 }
 
 export function requireRecord(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): value is NodePresetUnknownRecord {
@@ -44,7 +44,7 @@ export function forbidExtraKeys(
 }
 
 export function validateString(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
     maxLength: number,
@@ -66,18 +66,18 @@ export function validateString(
 }
 
 export function validateBoolean(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
     options: { required?: boolean; nullable?: boolean } = {},
 ): void {
     if (value === undefined && !options.required) return;
     if (value === null && options.nullable) return;
-    if (typeof value !== 'boolean') addIssue(issues, path, 'invalid_type', 'Must be a boolean.');
+    if (!isRuntimeBoolean(value)) addIssue(issues, path, 'invalid_type', 'Must be a boolean.');
 }
 
 export function validateInteger(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
     min: number,
@@ -86,17 +86,17 @@ export function validateInteger(
 ): void {
     if (value === undefined && !options.required) return;
     if (value === null && options.nullable) return;
-    if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
+    if (!isRuntimeNumber(value) || !Number.isInteger(value) || value < min || value > max) {
         addIssue(issues, path, 'invalid_integer', `Must be an integer from ${min} to ${max}.`);
     }
 }
 
 export function validateUuid(
-    value: unknown,
+    value: RuntimeValue,
     path: NodePresetPathPart[],
     issues: NodePresetValidationIssue[],
 ): void {
-    if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+    if (!isRuntimeString(value) || !UUID_PATTERN.test(value)) {
         addIssue(issues, path, 'invalid_uuid', 'Must be a UUID string.');
     }
 }
@@ -104,3 +104,4 @@ export function validateUuid(
 export function containsDisallowedControl(value: string): boolean {
     return [...value].some((character) => /\p{C}/u.test(character) && !/\s/u.test(character));
 }
+import { isRuntimeBoolean, isRuntimeNumber, isRuntimeString } from '@/utils/runtimeTypes';

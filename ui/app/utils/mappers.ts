@@ -4,11 +4,11 @@ import type { DecodedGraphEditorEdgeV1, DecodedGraphEditorNodeV1 } from '@/types
 import { NodeTypeEnum, NodeCategoryEnum } from '@/types/enums';
 
 export const graphMappers = () => {
-    const getFallbackDimension = (value: unknown, fallback: number): number => {
-        if (typeof value === 'number') {
+    const getFallbackDimension = (value: RuntimeValue, fallback: number): number => {
+        if (isRuntimeNumber(value)) {
             return value;
         }
-        if (typeof value === 'string') {
+        if (isRuntimeString(value)) {
             const parsed = Number.parseFloat(value);
             return Number.isNaN(parsed) ? fallback : parsed;
         }
@@ -21,15 +21,15 @@ export const graphMappers = () => {
         key: 'width' | 'height',
         fallback: number,
     ): number => {
-        if (!style || typeof style !== 'object' || !(key in style)) {
+        if (!style || !isRuntimeObject(style) || !(key in style)) {
             return fallback;
         }
 
         const value = style[key];
-        if (typeof value === 'number') {
+        if (isRuntimeNumber(value)) {
             return value;
         }
-        if (typeof value === 'string') {
+        if (isRuntimeString(value)) {
             const parsed = Number.parseFloat(value);
             return Number.isNaN(parsed) ? fallback : parsed;
         }
@@ -41,7 +41,7 @@ export const graphMappers = () => {
         const data =
             req.type === NodeTypeEnum.PROMPT &&
             req.data !== null &&
-            typeof req.data === 'object' &&
+            isRuntimeObject(req.data) &&
             !Array.isArray(req.data)
                 ? {
                       ...req.data,
@@ -92,6 +92,13 @@ export const graphMappers = () => {
     };
 
     const mapEdgeRequestToEdge = (req: DecodedGraphEditorEdgeV1): Edge => {
+        const style =
+            isJsonObject(req.style) &&
+            Object.values(req.style).every(
+                (value) => isRuntimeString(value) || isRuntimeNumber(value),
+            )
+                ? /* SAFETY: Every decoded style value is a CSS-compatible string or number; Vue Flow's Styles type lacks a matching JSON index signature. */ req.style as Edge['style']
+                : undefined;
         const edge: Edge = {
             id: req.id,
             source: req.source_node_id,
@@ -101,7 +108,7 @@ export const graphMappers = () => {
             targetHandle: req.target_handle_id ?? undefined,
             label: req.label ?? undefined,
             ...(req.data && { data: req.data }),
-            ...(req.style && { style: req.style as Edge['style'] }),
+            style,
             ...(req.type && { type: req.type }),
         };
         return edge;
@@ -119,10 +126,10 @@ export const graphMappers = () => {
             animated: edge.animated ?? false,
             source_handle_id: edge.sourceHandle ?? null,
             target_handle_id: edge.targetHandle ?? null,
-            label: typeof edge.label === 'string' ? edge.label : null,
+            label: isRuntimeString(edge.label) ? edge.label : null,
             type: edge.type ?? null,
             ...(edge.data && { data: edge.data }),
-            ...(edge.style && { style: edge.style as Edge['style'] }),
+            style: isJsonObject(edge.style) ? edge.style : undefined,
         };
         return request;
     };
@@ -183,3 +190,4 @@ export const graphMappers = () => {
         mapNodeTypeToColor,
     };
 };
+import { isRuntimeNumber, isRuntimeObject, isRuntimeString } from '@/utils/runtimeTypes';

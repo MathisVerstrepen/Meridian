@@ -78,7 +78,7 @@ const setupGalleryObserver = () => {
     galleryObserver?.disconnect();
     galleryObserver = null;
 
-    if (!gallerySentinelRef.value || typeof IntersectionObserver === 'undefined') return;
+    if (!gallerySentinelRef.value || isRuntimeUndefined(IntersectionObserver)) return;
 
     galleryObserver = new IntersectionObserver(
         (entries) => {
