@@ -54,6 +54,20 @@ const mountFixture = async (page: Page) => {
         modelRequestCount += 1;
         await route.fulfill({ json: MODEL_CATALOG_FIXTURE_RESPONSE });
     });
+    await page.route('**/api/inference/providers/status', (route) =>
+        route.fulfill({
+            json: {
+                providers: [
+                    {
+                        provider: 'github_copilot',
+                        label: 'GitHub Copilot',
+                        isConnected: true,
+                        requiresUserToken: false,
+                    },
+                ],
+            },
+        }),
+    );
     await page.goto(MODEL_CATALOG_FIXTURE_ROUTE);
 
     const fixturePage = page.getByTestId('model-catalog-fixture-page');
@@ -202,6 +216,101 @@ test('applies optional defaults, retains warnings, and rejects invalid catalogs 
     expect(summary.malformedRequiredValue.countAfter).toBe(
         summary.malformedRequiredValue.countBefore,
     );
+});
+
+test('keeps filtered model rows consecutive after activation and scrolling', async ({ page }) => {
+    await mountFixture(page);
+
+    const selector = page.getByTestId('model-selector-spacing-fixture');
+    const input = selector.locator('input');
+    await input.click();
+
+    const panel = page.locator('.ui-models-panel');
+    await expect(panel).toBeVisible();
+    const list = panel.locator('.custom_scroll');
+    const lingOption = panel.getByRole('option', { name: /Ling-3\.0-flash/ });
+    const githubJump = panel.getByRole('button', { name: /GitHub Copilot 1/ });
+
+    await expect
+        .poll(() =>
+            panel.evaluate((element) => {
+                const transform = new DOMMatrixReadOnly(window.getComputedStyle(element).transform);
+                return transform.a;
+            }),
+        )
+        .toBeCloseTo(0.8, 2);
+
+    await githubJump.click();
+    await expect(
+        panel.getByRole('option', { name: /GitHub Copilot.*GitHub Subscription Text/ }),
+    ).toBeVisible();
+
+    await input.fill('Flash');
+    await expect(lingOption).toBeVisible();
+    await expect(lingOption).toHaveAttribute('aria-selected', 'true');
+    await input.press('ArrowDown');
+    await input.press('ArrowDown');
+
+    await list.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+        element.dispatchEvent(new Event('scroll'));
+    });
+    await expect(panel.getByRole('option', { name: /OpenRouter: Long Context Flash/ })).toBeVisible();
+    await input.press('ArrowUp');
+
+    await input.fill('Gemini');
+    await expect(panel.getByRole('option', { name: /Gemini 3\.6 Flash/ })).toBeVisible();
+    await input.fill('Flash');
+    await expect(lingOption).toBeVisible();
+
+    for (let index = 0; index < 8; index += 1) {
+        await input.press('ArrowDown');
+    }
+
+    const activeOptionId = await input.getAttribute('aria-activedescendant');
+    expect(activeOptionId).not.toBeNull();
+    await expect(panel.locator(`#${activeOptionId}`)).toBeVisible();
+
+    await list.evaluate((element) => {
+        element.scrollTop = Math.min(180, element.scrollHeight - element.clientHeight);
+        element.dispatchEvent(new Event('scroll'));
+    });
+
+    const geometry = await panel.getByRole('option').evaluateAll((elements) => {
+        const listElement = elements[0]?.closest('.custom_scroll');
+        if (!(listElement instanceof HTMLElement)) {
+            throw new TypeError('Model options are missing their scrolling container');
+        }
+
+        const viewport = listElement.getBoundingClientRect();
+        const rows = elements
+            .map((element) => {
+                const bounds = element.getBoundingClientRect();
+                return {
+                    name: element.getAttribute('title') ?? element.textContent ?? '',
+                    top: bounds.top,
+                    bottom: bounds.bottom,
+                    visibility: window.getComputedStyle(element).visibility,
+                };
+            })
+            .filter(
+                (row) =>
+                    row.visibility !== 'hidden' &&
+                    row.bottom > viewport.top &&
+                    row.top < viewport.bottom,
+            );
+        const errors = rows.slice(1).map((row, index) => Math.abs(row.top - rows[index].bottom));
+
+        return {
+            rows,
+            maxError: errors.length ? Math.max(...errors) : Number.POSITIVE_INFINITY,
+            scrollTop: listElement.scrollTop,
+            scrollHeight: listElement.scrollHeight,
+        };
+    });
+
+    expect(geometry.rows.length).toBeGreaterThanOrEqual(3);
+    expect(geometry.maxError, JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(2);
 });
 
 test('decodes 500 models within the browser timing budget after warm-up', {

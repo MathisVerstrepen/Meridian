@@ -1,7 +1,4 @@
 <script lang="ts" setup>
-import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
-import { RecycleScroller } from 'vue-virtual-scroller';
-
 import {
     MODEL_DROPDOWN_ALL_SECTION_ID,
     MODEL_DROPDOWN_PINNED_SECTION_ID,
@@ -14,10 +11,9 @@ import {
 import { SavingStatus } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
 
-type VirtualizedModelRow = {
+type ModelRow = {
     id: string;
     model: ModelInfo;
-    size: number;
     headerMeta?: string;
     headerTitle?: string;
     headerTooltip?: string;
@@ -75,16 +71,13 @@ const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
 const buttonRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
-const scrollerRef = ref<{ scrollToItem: (index: number) => void } | null>(null);
+const scrollerRef = ref<HTMLElement | null>(null);
 const menuPosition = ref({ top: 0, left: 0, zoom: 1 });
 const activeJumpSection = ref<string | null>(null);
 
 const TELEPORTED_MENU_WIDTH = 640;
 const TELEPORTED_MENU_OFFSET = 4;
 const TELEPORTED_MENU_FALLBACK_HEIGHT = 276;
-const MODEL_ROW_HEIGHT = 40;
-const MODEL_ROW_WITH_HEADER_HEIGHT = 70;
-
 let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
 let panelResizeObserver: ResizeObserver | null = null;
@@ -217,7 +210,7 @@ const subscriptionModelsByProvider = computed(() => {
 });
 
 const rowData = computed(() => {
-    const rows: VirtualizedModelRow[] = [];
+    const rows: ModelRow[] = [];
     const sectionStartIndices: Record<string, number> = {};
     const subscriptionSections: SubscriptionSectionButton[] = [];
 
@@ -251,7 +244,6 @@ const rowData = computed(() => {
             rows.push({
                 id: `${sectionId}:${model.id}`,
                 model,
-                size: index === 0 ? MODEL_ROW_WITH_HEADER_HEIGHT : MODEL_ROW_HEIGHT,
                 headerTitle: index === 0 ? options.headerTitle : undefined,
                 headerMeta: index === 0 ? options.headerMeta : undefined,
                 headerTooltip: index === 0 ? options.headerTooltip : undefined,
@@ -303,7 +295,7 @@ const rowData = computed(() => {
     };
 });
 
-const virtualizedMergedModels = computed(() => rowData.value.rows);
+const modelRows = computed(() => rowData.value.rows);
 const subscriptionSectionButtons = computed(() => rowData.value.subscriptionSections);
 
 // --- Methods ---
@@ -448,13 +440,19 @@ const handleTriggerClick = (event: MouseEvent) => {
 
 const jumpToSubscriptionSection = (sectionId: string) => {
     const targetIndex = rowData.value.sectionStartIndices[sectionId];
+    const list = scrollerRef.value;
 
-    if (targetIndex === undefined) {
+    if (targetIndex === undefined || !list) {
+        return;
+    }
+
+    const target = list.querySelector(`[data-model-row-index="${targetIndex}"]`);
+    if (!(target instanceof HTMLElement)) {
         return;
     }
 
     activeJumpSection.value = sectionId;
-    scrollerRef.value?.scrollToItem(targetIndex);
+    list.scrollTop = target.offsetTop;
 };
 
 const getPinShortcutTargetModel = (activeOption: RuntimeValue) => {
@@ -714,34 +712,32 @@ onUnmounted(() => {
                         </div>
 
                         <!-- List -->
-                        <RecycleScroller
-                            v-if="virtualizedMergedModels.length"
+                        <div
+                            v-if="modelRows.length"
                             ref="scrollerRef"
-                            :items="virtualizedMergedModels"
-                            :item-size="null"
-                            :min-item-size="MODEL_ROW_HEIGHT"
-                            key-field="id"
-                            class="nowheel custom_scroll max-h-64 px-1.5 py-1"
+                            class="nowheel custom_scroll relative max-h-64 overflow-y-auto px-1.5
+                                py-1"
                         >
-                            <template #default="{ item: modelRow }">
-                                <HeadlessComboboxOption
-                                    v-slot="{ selected: isSelected, active: isActive }"
-                                    :value="modelRow.model"
-                                    as="template"
-                                >
-                                    <UiModelsSelectItem
-                                        :model="modelRow.model"
-                                        :active="isActive"
-                                        :selected="isSelected"
-                                        :header-title="modelRow.headerTitle"
-                                        :header-meta="modelRow.headerMeta"
-                                        :header-tooltip="modelRow.headerTooltip"
-                                        :hide-tool="hideTool"
-                                        :warning-label="modelRow.warningLabel"
-                                    />
-                                </HeadlessComboboxOption>
-                            </template>
-                        </RecycleScroller>
+                            <HeadlessComboboxOption
+                                v-for="(modelRow, index) in modelRows"
+                                :key="modelRow.id"
+                                v-slot="{ selected: isSelected, active: isActive }"
+                                :value="modelRow.model"
+                                as="template"
+                            >
+                                <UiModelsSelectItem
+                                    :data-model-row-index="index"
+                                    :model="modelRow.model"
+                                    :active="isActive"
+                                    :selected="isSelected"
+                                    :header-title="modelRow.headerTitle"
+                                    :header-meta="modelRow.headerMeta"
+                                    :header-tooltip="modelRow.headerTooltip"
+                                    :hide-tool="hideTool"
+                                    :warning-label="modelRow.warningLabel"
+                                />
+                            </HeadlessComboboxOption>
+                        </div>
 
                         <!-- Empty state -->
                         <div

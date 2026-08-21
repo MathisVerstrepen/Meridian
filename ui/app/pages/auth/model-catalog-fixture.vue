@@ -25,6 +25,7 @@ const decoded = import.meta.client
     : decodeModelCatalog(MODEL_CATALOG_FIXTURE_RESPONSE);
 
 modelStore.setModels(decoded.data);
+modelStore.triggerFilter();
 if (import.meta.client) {
     modelStore.showModelDiscoveryWarnings(decoded.warnings ?? []);
 }
@@ -33,6 +34,7 @@ const fixtureIds = Object.keys(MODEL_CATALOG_MODALITY_EXPECTATIONS);
 const fixtureModels = decoded.data.filter((model) => fixtureIds.includes(model.id));
 const allCapabilitiesModel = modelStore.getModel('fixture-all-capabilities');
 const defaultedModel = modelStore.getModel('fixture-text');
+const selectedModelId = ref('spacing-flash-ling');
 
 const rejectionResult = (value: RuntimeValue) => {
     const countBefore = modelStore.models.length;
@@ -135,6 +137,25 @@ const renderedSummary = {
         class="bg-obsidian text-soft-silk min-h-screen overflow-auto p-6"
     >
         <h1 class="text-lg font-semibold">Model catalog fixture</h1>
+        <ClientOnly>
+            <div
+                data-testid="model-selector-spacing-fixture"
+                class="vue-flow__transformationpane mt-4 h-10 w-80 origin-top-left"
+                style="transform: scale(0.8); pointer-events: auto"
+            >
+                <div class="h-10 w-80">
+                    <UiModelsSelect
+                        :model="selectedModelId"
+                        :set-model="(model: string) => (selectedModelId = model)"
+                        :disabled="false"
+                        to="left"
+                        from="bottom"
+                        variant="grey"
+                        prevent-trigger-on-mount
+                    />
+                </div>
+            </div>
+        </ClientOnly>
         <ClientOnly>
             <pre data-testid="model-catalog-summary" class="mt-4 whitespace-pre-wrap text-xs">{{
                 JSON.stringify(renderedSummary)
