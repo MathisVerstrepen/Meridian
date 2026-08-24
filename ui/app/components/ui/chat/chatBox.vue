@@ -38,7 +38,7 @@ const isTemporaryGraph = computed(() => props.isTemporary === true || route.quer
 const COLLAPSE_THRESHOLD = 500;
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
-const session = shallowRef(getSession(openChatId.value || ''));
+const session = ref(getSession(openChatId.value || ''));
 const isAtTop = ref(false);
 const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);

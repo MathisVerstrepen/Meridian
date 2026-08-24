@@ -3,7 +3,7 @@ import type { CompactModelCatalogResponse, CompactModelInfo } from '../../app/ty
 export const MODEL_CATALOG_FIXTURE_ROUTE = '/auth/model-catalog-fixture';
 export const MODEL_CATALOG_PERFORMANCE_FIXTURE_ROUTE =
     '/auth/model-catalog-performance-fixture';
-export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 8;
+export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 25;
 export const MODEL_CATALOG_PERFORMANCE_MODEL_COUNT = 500;
 
 const namedModels: CompactModelInfo[] = [
@@ -65,9 +65,158 @@ const namedModels: CompactModelInfo[] = [
     },
 ];
 
+const selectorSpacingModels: CompactModelInfo[] = [
+    {
+        id: 'spacing-flash-ling',
+        name: 'Ling-3.0-flash',
+        pricing: { prompt: '0.00000002', completion: '0.00000006' },
+        capabilities: 17,
+        supportedTools: 1,
+        contextLength: 262144,
+    },
+    {
+        id: 'spacing-flash-gemini-36',
+        name: 'Google: Gemini 3.6 Flash',
+        pricing: { prompt: '0.00000075', completion: '0.00000375' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'google',
+        contextLength: 1000000,
+    },
+    {
+        id: 'spacing-flash-gemini-35-lite',
+        name: 'Google: Gemini 3.5 Flash Lite',
+        pricing: { prompt: '0.0000003', completion: '0.0000025' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'google',
+        contextLength: 1000000,
+    },
+    {
+        id: 'spacing-flash-step-37',
+        name: 'StepFun: Step 3.7 Flash',
+        pricing: { prompt: '0.0000002', completion: '0.00000115' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'stepfun-ai',
+        contextLength: 256000,
+    },
+    {
+        id: 'spacing-flash-qwen-coder',
+        name: 'Qwen: Qwen3 Coder Flash',
+        pricing: { prompt: '0.0000002', completion: '0.00000097' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'qwen',
+        contextLength: 1000000,
+    },
+    {
+        id: 'spacing-flash-gemini-preview',
+        name: 'Google: Gemini 3 Flash Preview',
+        pricing: { prompt: '0.0000005', completion: '0.000003' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'google',
+        contextLength: 1000000,
+    },
+    {
+        id: 'spacing-flash-mistral',
+        name: 'Mistral: Codestral Flash',
+        pricing: { prompt: '0.00000015', completion: '0.0000006' },
+        capabilities: 1,
+        icon: 'mistralai',
+        contextLength: 131072,
+    },
+    {
+        id: 'spacing-flash-deepseek',
+        name: 'DeepSeek: V3 Flash',
+        pricing: { prompt: '0.00000014', completion: '0.00000028' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'deepseek',
+        contextLength: 65536,
+    },
+    {
+        id: 'spacing-flash-llama',
+        name: 'Meta: Llama Flash',
+        pricing: { prompt: '0', completion: '0' },
+        capabilities: 1,
+        icon: 'meta-llama',
+        contextLength: 32768,
+    },
+    {
+        id: 'spacing-flash-minimax',
+        name: 'MiniMax: M2 Flash',
+        pricing: { prompt: '0.0000001', completion: '0.0000004' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'minimax',
+        contextLength: 204800,
+    },
+    {
+        id: 'spacing-flash-nova',
+        name: 'Nova Flash',
+        pricing: { prompt: '0.00000008', completion: '0.00000024' },
+        capabilities: 1,
+        contextLength: 128000,
+    },
+    {
+        id: 'spacing-flash-command',
+        name: 'Cohere: Command Flash',
+        pricing: { prompt: '0.00000025', completion: '0.000001' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'cohere',
+        contextLength: 128000,
+    },
+    {
+        id: 'spacing-flash-grok',
+        name: 'xAI: Grok Flash',
+        pricing: { prompt: '0.0000002', completion: '0.0000005' },
+        capabilities: 1,
+        icon: 'x-ai',
+        contextLength: 131072,
+    },
+    {
+        id: 'spacing-flash-phi',
+        name: 'Microsoft: Phi Flash',
+        pricing: { prompt: '0', completion: '0' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'microsoft',
+        contextLength: 65536,
+    },
+    {
+        id: 'spacing-flash-kimi',
+        name: 'Moonshot: Kimi Flash',
+        pricing: { prompt: '0.00000012', completion: '0.0000005' },
+        capabilities: 1,
+        icon: 'moonshotai',
+        contextLength: 262144,
+    },
+    {
+        id: 'spacing-flash-long-context',
+        name: 'OpenRouter: Long Context Flash',
+        pricing: { prompt: '0.0000004', completion: '0.0000012' },
+        capabilities: 17,
+        supportedTools: 1,
+        icon: 'openrouter',
+        contextLength: 2000000,
+    },
+    {
+        id: 'spacing-github-subscription',
+        name: 'GitHub Subscription Text',
+        pricing: { prompt: '0', completion: '0' },
+        capabilities: 65,
+        provider: 'github_copilot',
+        icon: 'github',
+        contextLength: 128000,
+    },
+];
+
 export const MODEL_CATALOG_FIXTURE_RESPONSE: CompactModelCatalogResponse = {
     version: 1,
-    data: namedModels,
+    data: [...selectorSpacingModels, ...namedModels],
     warnings: [
         {
             provider: 'github_copilot',
