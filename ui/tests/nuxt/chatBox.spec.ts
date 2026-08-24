@@ -1,27 +1,49 @@
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ChatBox from '@/components/ui/chat/chatBox.vue';
-import { NodeTypeEnum } from '@/types/enums';
-import type { ChatInputSubmission } from '@/types/chat';
+import { DEFAULT_NODE_ID } from '@/constants';
+import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
+import type { ChatInputSubmission, ChatSession } from '@/types/chat';
+import type { Message } from '@/types/graph';
 
-const stubs = vi.hoisted(() => ({
+interface ChatBoxTestStubs {
+    callOrder: string[];
+    generateNew: ReturnType<typeof vi.fn>;
+    graphEmit: ReturnType<typeof vi.fn>;
+    initialOpenChatId: string;
+    openChatId: Ref<string | null> | null;
+    session: ChatSession;
+    sessionRef: Ref<ChatSession> | null;
+}
+
+const stubs = vi.hoisted((): ChatBoxTestStubs => ({
     callOrder: Array<string>(),
     generateNew: vi.fn(),
     graphEmit: vi.fn(),
+    initialOpenChatId: 'chat-id',
+    openChatId: null,
+    session: {
+        fromNodeId: 'chat-id',
+        messages: [],
+    },
+    sessionRef: null,
 }));
 
-mockNuxtImport('useChatGenerator', () => () => ({
-            isStreaming: ref(false),
-            streamingSession: ref(null),
-            generationError: ref(null),
-            selectedNodeType: ref(NodeTypeEnum.STREAMING),
-            generateNew: stubs.generateNew,
-            generateFollowUp: vi.fn(),
-            regenerate: vi.fn(),
-            handleCancelStream: vi.fn(),
-            restoreStreamingState: vi.fn(),
-        }));
+mockNuxtImport('useChatGenerator', () => (session: Ref<ChatSession>) => {
+    stubs.sessionRef = session;
+    return {
+        isStreaming: ref(false),
+        streamingSession: ref(null),
+        generationError: ref(null),
+        selectedNodeType: ref(NodeTypeEnum.STREAMING),
+        generateNew: stubs.generateNew,
+        generateFollowUp: vi.fn(),
+        regenerate: vi.fn(),
+        handleCancelStream: vi.fn(),
+        restoreStreamingState: vi.fn(),
+    };
+});
 
 mockNuxtImport('useMessageEditing', () => () => ({
             currentEditModeIdx: ref(null),
@@ -29,15 +51,19 @@ mockNuxtImport('useMessageEditing', () => () => ({
         }));
 
 mockNuxtImport('storeToRefs', () => <Store extends Record<string, RuntimeValue>>(store: Store) => store);
-mockNuxtImport('useChatStore', () => () => ({
-    openChatId: ref('chat-id'),
-    isFetching: ref(false),
-    isCanvasReady: ref(false),
-    lastOpenedChatId: ref('chat-id'),
-    closeChat: vi.fn(),
-    loadAndOpenChat: vi.fn(),
-    getSession: vi.fn(() => ({ fromNodeId: null, messages: [] })),
-}));
+mockNuxtImport('useChatStore', () => () => {
+    const openChatId = ref<string | null>(stubs.initialOpenChatId);
+    stubs.openChatId = openChatId;
+    return {
+        openChatId,
+        isFetching: ref(false),
+        isCanvasReady: ref(false),
+        lastOpenedChatId: ref('chat-id'),
+        closeChat: vi.fn(),
+        loadAndOpenChat: vi.fn(),
+        getSession: vi.fn(() => stubs.session),
+    };
+});
 mockNuxtImport('useSidebarCanvasStore', () => () => ({
     isRightOpen: ref(false),
     isLeftOpen: ref(false),
@@ -87,9 +113,30 @@ const TextInputStub = defineComponent({
     },
 });
 
+const MarkdownRendererStub = (props: { message: Message }) =>
+    h('span', { class: 'message-text' }, props.message.content[0]?.text ?? '');
+
+const NodeTypeIndicatorStub = defineComponent({
+    name: 'UiChatNodeTypeIndicator',
+    props: {
+        nodeType: {
+            type: String,
+            required: true,
+        },
+    },
+    setup() {
+        return () => h('span');
+    },
+});
+
 describe('chatBox manual message generation', () => {
     beforeEach(() => {
         stubs.callOrder.length = 0;
+        stubs.initialOpenChatId = 'chat-id';
+        stubs.openChatId = null;
+        stubs.session.fromNodeId = 'chat-id';
+        stubs.session.messages.splice(0);
+        stubs.sessionRef = null;
         stubs.graphEmit.mockReset().mockImplementation(() => {
             stubs.callOrder.push('open-upcoming-node-data');
         });
@@ -131,5 +178,52 @@ describe('chatBox manual message generation', () => {
         } finally {
             wrapper.unmount();
         }
+    });
+
+    it('renders nested streamed text after migrating the temporary session', async () => {
+        stubs.initialOpenChatId = DEFAULT_NODE_ID;
+        stubs.session.fromNodeId = DEFAULT_NODE_ID;
+        const wrapper = await mountSuspended(ChatBox, {
+            shallow: true,
+            global: {
+                stubs: {
+                    UiChatMarkdownRenderer: MarkdownRendererStub,
+                    UiChatNodeTypeIndicator: NodeTypeIndicatorStub,
+                    UiChatTextInput: TextInputStub,
+                },
+            },
+        });
+
+        const generatedNodeId = 'generated-node-id';
+        const assistantMessage: Message = {
+            role: MessageRoleEnum.assistant,
+            content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
+            model: 'test-model',
+            node_id: generatedNodeId,
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: null,
+            usageData: null,
+        };
+        const activeSession = stubs.sessionRef;
+        const openChatId = stubs.openChatId;
+        expect(activeSession).not.toBeNull();
+        expect(openChatId).not.toBeNull();
+        if (!activeSession || !openChatId) return;
+
+        activeSession.value.fromNodeId = generatedNodeId;
+        activeSession.value.messages.push(assistantMessage);
+        openChatId.value = generatedNodeId;
+        await nextTick();
+
+        expect(wrapper.find('.message-text').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('First streamed chunk');
+
+        const textContent = activeSession.value.messages[0]?.content[0];
+        expect(textContent?.type).toBe(MessageContentTypeEnum.TEXT);
+        if (!textContent || textContent.type !== MessageContentTypeEnum.TEXT) return;
+        textContent.text += 'First streamed chunk';
+        await nextTick();
+
+        expect(wrapper.text()).toContain('First streamed chunk');
     });
 });
