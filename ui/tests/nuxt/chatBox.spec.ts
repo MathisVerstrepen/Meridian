@@ -116,6 +116,17 @@ const TextInputStub = defineComponent({
 const MarkdownRendererStub = (props: { message: Message }) =>
     h('span', { class: 'message-text' }, props.message.content[0]?.text ?? '');
 
+const StatefulMarkdownRendererStub = defineComponent(
+    (props: { message: Message }, { expose }) => {
+        expose({ submitEdit: () => undefined });
+        return () => h('span', { class: 'message-text' }, props.message.content[0]?.text ?? '');
+    },
+    {
+        name: 'UiChatMarkdownRenderer',
+        props: ['message'],
+    },
+);
+
 const NodeTypeIndicatorStub = defineComponent({
     name: 'UiChatNodeTypeIndicator',
     props: {
@@ -225,5 +236,42 @@ describe('chatBox manual message generation', () => {
         await nextTick();
 
         expect(wrapper.text()).toContain('First streamed chunk');
+    });
+
+    it('clears stateful renderer refs without Vue teardown errors', async () => {
+        stubs.session.messages.push({
+            role: MessageRoleEnum.user,
+            content: [{ type: MessageContentTypeEnum.TEXT, text: 'Message to tear down' }],
+            model: null,
+            node_id: 'user-node-id',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: null,
+            usageData: null,
+        });
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        try {
+            const wrapper = await mountSuspended(ChatBox, {
+                shallow: true,
+                global: {
+                    stubs: {
+                        UiChatMarkdownRenderer: StatefulMarkdownRendererStub,
+                        UiChatTextInput: TextInputStub,
+                    },
+                },
+            });
+
+            expect(wrapper.findComponent(StatefulMarkdownRendererStub).exists()).toBe(true);
+            expect(() => wrapper.unmount()).not.toThrow();
+
+            const warnings = warnSpy.mock.calls
+                .flatMap(call => call.map(String))
+                .join('\n');
+            expect(warnings).not.toMatch(
+                /\[Vue warn\]: Unhandled error during execution of (?:ref function|component update)/,
+            );
+        } finally {
+            warnSpy.mockRestore();
+        }
     });
 });

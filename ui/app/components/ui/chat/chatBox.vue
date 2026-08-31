@@ -83,7 +83,7 @@ const toggleMessageExpansion = (index: number) => {
 };
 
 const setMessageRendererRef = (index: number, component: RuntimeValue) => {
-    const submitEdit = isRuntimeObject(component) && 'submitEdit' in component
+    const submitEdit = component !== null && isRuntimeObject(component) && 'submitEdit' in component
         ? component.submitEdit
         : undefined;
     if (isRuntimeFunction(submitEdit)) {
