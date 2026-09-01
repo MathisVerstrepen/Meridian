@@ -41,6 +41,7 @@ from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
 from services.providers.models_dev import fetch_models_dev_catalog
 from services.rate_limit import limiter
+from services.topology_preview_backfill import run_topology_preview_backfill
 from services.web.browser_fetch import browser_fetch_manager
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
@@ -125,6 +126,15 @@ async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
             )
 
 
+def start_topology_preview_backfill(app: FastAPI) -> None:
+    app.state.background_tasks.append(
+        asyncio.create_task(
+            run_topology_preview_backfill(app.state.pg_engine),
+            name="topology_preview_backfill",
+        )
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
@@ -171,6 +181,7 @@ async def lifespan(app: FastAPI):
             logger.info("No Sentry DSN found, skipping Sentry initialization.")
 
         app.state.pg_engine = await get_pg_async_engine()
+        start_topology_preview_backfill(app)
 
         recovered_image_jobs = await recover_stale_image_generation_jobs(app.state.pg_engine)
         if recovered_image_jobs:
@@ -220,17 +231,19 @@ async def lifespan(app: FastAPI):
             logger.error(f"Startup: Error refreshing OpenRouter models: {e}", exc_info=True)
             sentry_sdk.capture_exception(e)
 
-        app.state.background_tasks = [
-            asyncio.create_task(cron_delete_temp_graphs(app), name="cron_delete_temp_graphs"),
-            asyncio.create_task(
-                cron_refresh_openrouter_models(app),
-                name="cron_refresh_openrouter_models",
-            ),
-            asyncio.create_task(
-                cron_refresh_models_dev_catalog(app),
-                name="cron_refresh_models_dev_catalog",
-            ),
-        ]
+        app.state.background_tasks.extend(
+            [
+                asyncio.create_task(cron_delete_temp_graphs(app), name="cron_delete_temp_graphs"),
+                asyncio.create_task(
+                    cron_refresh_openrouter_models(app),
+                    name="cron_refresh_openrouter_models",
+                ),
+                asyncio.create_task(
+                    cron_refresh_models_dev_catalog(app),
+                    name="cron_refresh_models_dev_catalog",
+                ),
+            ]
+        )
 
         yield
     finally:

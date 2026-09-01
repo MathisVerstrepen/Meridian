@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Graph, TopologyPreviewV1 } from '@/types/graph';
-import { createEmptyTopologyPreviewV1, toGraphSummary } from '@/utils/graphSummary';
+import type { Graph, TopologyPreviewV2 } from '@/types/graph';
+import { createEmptyTopologyPreviewV2, toGraphSummary } from '@/utils/graphSummary';
 
-const graphFixture = (topologyPreview?: TopologyPreviewV1): Graph => {
+const graphFixture = (topologyPreview?: TopologyPreviewV2): Graph => {
     const graph: Graph = {
         id: 'graph-1',
         name: 'Graph',
@@ -30,13 +30,13 @@ const graphFixture = (topologyPreview?: TopologyPreviewV1): Graph => {
 };
 
 describe('graph summary conversion', () => {
-    it('supplies an exact empty V1 preview while preserving raw graph identity', () => {
+    it('supplies an exact empty V2 preview while preserving raw graph identity', () => {
         const graph = graphFixture();
         const summary = toGraphSummary(graph);
 
         expect(summary).toBe(graph);
         expect(summary.topology_preview).toEqual({
-            version: 1,
+            version: 2,
             width: 1000,
             height: 600,
             nodes: [],
@@ -46,18 +46,18 @@ describe('graph summary conversion', () => {
     });
 
     it('preserves a server-provided preview and creates independent empty arrays', () => {
-        const preview: TopologyPreviewV1 = {
-            version: 1,
+        const preview: TopologyPreviewV2 = {
+            version: 2,
             width: 1000,
             height: 600,
-            nodes: [{ x: 10, y: 20, width: 100, height: 80 }],
+            nodes: [{ x: 10, y: 20, width: 100, height: 80, color: 'olive-grove' }],
             edges: [],
         };
 
         expect(toGraphSummary(graphFixture(preview)).topology_preview).toBe(preview);
 
-        const firstEmpty = createEmptyTopologyPreviewV1();
-        const secondEmpty = createEmptyTopologyPreviewV1();
+        const firstEmpty = createEmptyTopologyPreviewV2();
+        const secondEmpty = createEmptyTopologyPreviewV2();
         expect(firstEmpty.nodes).not.toBe(secondEmpty.nodes);
         expect(firstEmpty.edges).not.toBe(secondEmpty.edges);
     });

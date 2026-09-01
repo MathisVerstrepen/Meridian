@@ -242,7 +242,7 @@ def test_backup_get_retains_full_unversioned_shape() -> None:
     assert body["edges"][0]["graph_id"] == str(GRAPH_ID)
     assert body["edges"][0]["markerEnd"] == {"type": "arrowclosed"}
     assert body["graph"]["topology_preview"] == {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
         "nodes": [],
@@ -291,7 +291,7 @@ def test_create_raw_response_includes_server_default_preview() -> None:
 
     assert response.status_code == 200
     assert response.json()["topology_preview"] == {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
         "nodes": [],
@@ -302,19 +302,35 @@ def test_create_raw_response_includes_server_default_preview() -> None:
 def test_restore_accepts_backup_preview_but_returns_server_replacement() -> None:
     backup = build_small_graph_fixture()
     supplied_preview = {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
-        "nodes": [{"x": 1, "y": 2, "width": 3, "height": 4}],
+        "nodes": [
+            {
+                "x": 1,
+                "y": 2,
+                "width": 3,
+                "height": 4,
+                "color": "github",
+            }
+        ],
         "edges": [],
     }
     backup.graph.topology_preview = supplied_preview
     returned_graph = build_small_graph_fixture().graph
     returned_graph.topology_preview = {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
-        "nodes": [{"x": 100, "y": 200, "width": 30, "height": 40}],
+        "nodes": [
+            {
+                "x": 100,
+                "y": 200,
+                "width": 30,
+                "height": 40,
+                "color": "slate-blue",
+            }
+        ],
         "edges": [],
     }
     app = _test_app()

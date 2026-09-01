@@ -1,7 +1,7 @@
-import type { Graph, GraphSummary, TopologyPreviewV1 } from '@/types/graph';
+import type { Graph, GraphSummary, TopologyPreviewV2 } from '@/types/graph';
 
-export const createEmptyTopologyPreviewV1 = (): TopologyPreviewV1 => ({
-    version: 1,
+export const createEmptyTopologyPreviewV2 = (): TopologyPreviewV2 => ({
+    version: 2,
     width: 1000,
     height: 600,
     nodes: [],
@@ -10,5 +10,5 @@ export const createEmptyTopologyPreviewV1 = (): TopologyPreviewV1 => ({
 
 export const toGraphSummary = (graph: Graph): GraphSummary =>
     Object.assign(graph, {
-        topology_preview: graph.topology_preview ?? createEmptyTopologyPreviewV1(),
+        topology_preview: graph.topology_preview ?? createEmptyTopologyPreviewV2(),
     });

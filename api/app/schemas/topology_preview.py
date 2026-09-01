@@ -8,16 +8,29 @@ TOPOLOGY_PREVIEW_MAX_NODES = 64
 TOPOLOGY_PREVIEW_MAX_EDGES = 128
 
 
-class TopologyPreviewNodeV1(BaseModel):
+TopologyPreviewColorToken = Literal[
+    "slate-blue",
+    "dried-heather",
+    "github",
+    "olive-grove",
+    "terracotta-clay",
+    "sunbaked-sand-dark",
+    "golden-ochre",
+    "stone-gray",
+]
+
+
+class TopologyPreviewNodeV2(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     x: int = Field(ge=0, le=TOPOLOGY_PREVIEW_WIDTH)
     y: int = Field(ge=0, le=TOPOLOGY_PREVIEW_HEIGHT)
     width: int = Field(gt=0, le=TOPOLOGY_PREVIEW_WIDTH)
     height: int = Field(gt=0, le=TOPOLOGY_PREVIEW_HEIGHT)
+    color: TopologyPreviewColorToken
 
     @model_validator(mode="after")
-    def validate_rectangle_containment(self) -> "TopologyPreviewNodeV1":
+    def validate_rectangle_containment(self) -> "TopologyPreviewNodeV2":
         if self.x + self.width > TOPOLOGY_PREVIEW_WIDTH:
             raise ValueError("node rectangle exceeds preview width")
         if self.y + self.height > TOPOLOGY_PREVIEW_HEIGHT:
@@ -25,7 +38,7 @@ class TopologyPreviewNodeV1(BaseModel):
         return self
 
 
-class TopologyPreviewEdgeV1(BaseModel):
+class TopologyPreviewEdgeV2(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     x1: int = Field(ge=0, le=TOPOLOGY_PREVIEW_WIDTH)
@@ -34,21 +47,21 @@ class TopologyPreviewEdgeV1(BaseModel):
     y2: int = Field(ge=0, le=TOPOLOGY_PREVIEW_HEIGHT)
 
 
-class TopologyPreviewV1(BaseModel):
+class TopologyPreviewV2(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    version: Literal[1] = 1
+    version: Literal[2] = 2
     width: Literal[1000] = 1000
     height: Literal[600] = 600
-    nodes: list[TopologyPreviewNodeV1] = Field(
+    nodes: list[TopologyPreviewNodeV2] = Field(
         default_factory=list,
         max_length=TOPOLOGY_PREVIEW_MAX_NODES,
     )
-    edges: list[TopologyPreviewEdgeV1] = Field(
+    edges: list[TopologyPreviewEdgeV2] = Field(
         default_factory=list,
         max_length=TOPOLOGY_PREVIEW_MAX_EDGES,
     )
 
 
-def empty_topology_preview_v1() -> dict[str, Any]:
-    return TopologyPreviewV1().model_dump(mode="json")
+def empty_topology_preview_v2() -> dict[str, Any]:
+    return TopologyPreviewV2().model_dump(mode="json")

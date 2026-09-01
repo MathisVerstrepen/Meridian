@@ -2,7 +2,7 @@ import datetime
 import uuid
 
 from pydantic import BaseModel
-from schemas.topology_preview import TopologyPreviewV1
+from schemas.topology_preview import TopologyPreviewV2
 
 
 class GraphSummary(BaseModel):
@@ -14,7 +14,7 @@ class GraphSummary(BaseModel):
     pinned: bool
     updated_at: datetime.datetime
     node_count: int
-    topology_preview: TopologyPreviewV1
+    topology_preview: TopologyPreviewV2
 
 
 class GraphSummaryPage(BaseModel):

@@ -5,14 +5,16 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from database.pg.models import Edge, Node
+from models.message import NodeTypeEnum
 from schemas.topology_preview import (
     TOPOLOGY_PREVIEW_HEIGHT,
     TOPOLOGY_PREVIEW_MAX_EDGES,
     TOPOLOGY_PREVIEW_MAX_NODES,
     TOPOLOGY_PREVIEW_WIDTH,
-    TopologyPreviewEdgeV1,
-    TopologyPreviewNodeV1,
-    TopologyPreviewV1,
+    TopologyPreviewColorToken,
+    TopologyPreviewEdgeV2,
+    TopologyPreviewNodeV2,
+    TopologyPreviewV2,
 )
 
 _MAX_ANCESTORS = 32
@@ -24,6 +26,17 @@ _MIN_WORLD_WIDTH = 600.0
 _MIN_WORLD_HEIGHT = 360.0
 _VIEWPORT_PADDING = 40.0
 _PIXEL_DIMENSION_PATTERN = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)px")
+_DEFAULT_NODE_COLOR: TopologyPreviewColorToken = "stone-gray"
+_NODE_COLORS: dict[str, TopologyPreviewColorToken] = {
+    NodeTypeEnum.PROMPT.value: "slate-blue",
+    NodeTypeEnum.FILE_PROMPT.value: "dried-heather",
+    NodeTypeEnum.GITHUB.value: "github",
+    NodeTypeEnum.TEXT_TO_TEXT.value: "olive-grove",
+    NodeTypeEnum.PARALLELIZATION.value: "terracotta-clay",
+    NodeTypeEnum.PARALLELIZATION_MODELS.value: "terracotta-clay",
+    NodeTypeEnum.ROUTING.value: "sunbaked-sand-dark",
+    NodeTypeEnum.CONTEXT_MERGER.value: "golden-ochre",
+}
 
 
 @dataclass
@@ -34,6 +47,7 @@ class _SelectedNode:
     y: float
     width: float
     height: float
+    color: TopologyPreviewColorToken
     parent_id: str | None
     visited_ids: set[str]
 
@@ -96,6 +110,7 @@ def _select_nodes(nodes: list[Node]) -> list[_SelectedNode]:
             y=_source_coordinate(node.position_y) or 0.0,
             width=_source_dimension(node.width),
             height=_source_dimension(node.height),
+            color=_NODE_COLORS.get(node.type, _DEFAULT_NODE_COLOR),
             parent_id=str(node.parent_node_id) if node.parent_node_id is not None else None,
             visited_ids={str(node.id)},
         )
@@ -156,7 +171,7 @@ def _resolve_absolute_positions(selected_nodes: list[_SelectedNode], nodes: list
             )
 
 
-def _fit_nodes(selected_nodes: list[_SelectedNode]) -> list[TopologyPreviewNodeV1]:
+def _fit_nodes(selected_nodes: list[_SelectedNode]) -> list[TopologyPreviewNodeV2]:
     min_x = min(state.x for state in selected_nodes)
     min_y = min(state.y for state in selected_nodes)
     max_x = max(state.x + state.width for state in selected_nodes)
@@ -194,7 +209,15 @@ def _fit_nodes(selected_nodes: list[_SelectedNode]) -> list[TopologyPreviewNodeV
         )
         width = max(1, min(TOPOLOGY_PREVIEW_WIDTH - x, round(state.width * scale)))
         height = max(1, min(TOPOLOGY_PREVIEW_HEIGHT - y, round(state.height * scale)))
-        fitted_nodes.append(TopologyPreviewNodeV1(x=x, y=y, width=width, height=height))
+        fitted_nodes.append(
+            TopologyPreviewNodeV2(
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                color=state.color,
+            )
+        )
     return fitted_nodes
 
 
@@ -213,8 +236,8 @@ def _eligible_edges(edges: Iterable[Edge], selected_node_ids: set[str]) -> Itera
 def _build_edges(
     edges: list[Edge],
     selected_nodes: list[_SelectedNode],
-    fitted_nodes: list[TopologyPreviewNodeV1],
-) -> list[TopologyPreviewEdgeV1]:
+    fitted_nodes: list[TopologyPreviewNodeV2],
+) -> list[TopologyPreviewEdgeV2]:
     fitted_by_id = {
         state.node_id: fitted_node
         for state, fitted_node in zip(selected_nodes, fitted_nodes, strict=True)
@@ -234,7 +257,7 @@ def _build_edges(
         source = fitted_by_id[str(edge.source_node_id)]
         target = fitted_by_id[str(edge.target_node_id)]
         preview_edges.append(
-            TopologyPreviewEdgeV1(
+            TopologyPreviewEdgeV2(
                 x1=round(source.x + source.width / 2),
                 y1=round(source.y + source.height / 2),
                 x2=round(target.x + target.width / 2),
@@ -244,12 +267,12 @@ def _build_edges(
     return preview_edges
 
 
-def build_topology_preview(nodes: list[Node], edges: list[Edge]) -> TopologyPreviewV1:
+def build_topology_preview(nodes: list[Node], edges: list[Edge]) -> TopologyPreviewV2:
     selected_nodes = _select_nodes(nodes)
     if not selected_nodes:
-        return TopologyPreviewV1()
+        return TopologyPreviewV2()
 
     _resolve_absolute_positions(selected_nodes, nodes)
     fitted_nodes = _fit_nodes(selected_nodes)
     preview_edges = _build_edges(edges, selected_nodes, fitted_nodes)
-    return TopologyPreviewV1(nodes=fitted_nodes, edges=preview_edges)
+    return TopologyPreviewV2(nodes=fitted_nodes, edges=preview_edges)

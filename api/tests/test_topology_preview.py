@@ -11,7 +11,7 @@ APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 sys.path.append(str(APP_ROOT))
 
 from database.pg.models import Edge, Node
-from schemas.topology_preview import TopologyPreviewEdgeV1, TopologyPreviewNodeV1, TopologyPreviewV1
+from schemas.topology_preview import TopologyPreviewEdgeV2, TopologyPreviewNodeV2, TopologyPreviewV2
 from services.graph_topology_preview import build_topology_preview
 
 GRAPH_ID = uuid.UUID("11111111-2222-3333-4444-555555555555")
@@ -26,11 +26,12 @@ def _node(
     height: str = "100px",
     parent_id: str | None = None,
     data: object = None,
+    node_type: str = "secret-node-type",
 ) -> Node:
     return Node(
         id=node_id,
         graph_id=GRAPH_ID,
-        type="secret-node-type",
+        type=node_type,
         position_x=x,
         position_y=y,
         width=width,
@@ -54,10 +55,10 @@ def _edge(edge_id: str, source: str, target: str) -> Edge:
 
 def _descriptor() -> dict[str, object]:
     return {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
-        "nodes": [{"x": 0, "y": 0, "width": 1, "height": 1}],
+        "nodes": [{"x": 0, "y": 0, "width": 1, "height": 1, "color": "stone-gray"}],
         "edges": [{"x1": 0, "y1": 0, "x2": 1000, "y2": 600}],
     }
 
@@ -65,11 +66,13 @@ def _descriptor() -> dict[str, object]:
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda value: value.update(version=2),
+        lambda value: value.update(version=1),
         lambda value: value.update(width=999),
         lambda value: value.update(height=599),
         lambda value: value.update(extra="forbidden"),
         lambda value: value["nodes"][0].update(id="forbidden"),
+        lambda value: value["nodes"][0].update(color="red"),
+        lambda value: value["nodes"][0].pop("color"),
         lambda value: value["edges"][0].update(label="forbidden"),
         lambda value: value.update(nodes=[value["nodes"][0]] * 65),
         lambda value: value.update(edges=[value["edges"][0]] * 129),
@@ -86,25 +89,25 @@ def _descriptor() -> dict[str, object]:
         lambda value: value["edges"][0].update(x1=True),
     ],
 )
-def test_v1_schema_rejects_invalid_or_extended_descriptors(mutation: object) -> None:
+def test_v2_schema_rejects_invalid_or_extended_descriptors(mutation: object) -> None:
     value = copy.deepcopy(_descriptor())
     mutation(value)  # type: ignore[operator]
 
     with pytest.raises(ValidationError):
-        TopologyPreviewV1.model_validate(value)
+        TopologyPreviewV2.model_validate(value)
 
 
-def test_v1_schema_accepts_only_exact_geometry_keys() -> None:
-    descriptor = TopologyPreviewV1.model_validate(_descriptor()).model_dump(mode="json")
+def test_v2_schema_accepts_only_exact_geometry_and_color_keys() -> None:
+    descriptor = TopologyPreviewV2.model_validate(_descriptor()).model_dump(mode="json")
 
     assert set(descriptor) == {"version", "width", "height", "nodes", "edges"}
-    assert set(descriptor["nodes"][0]) == {"x", "y", "width", "height"}
+    assert set(descriptor["nodes"][0]) == {"x", "y", "width", "height", "color"}
     assert set(descriptor["edges"][0]) == {"x1", "y1", "x2", "y2"}
 
 
 def test_empty_and_single_node_previews_are_valid_and_centered() -> None:
     assert build_topology_preview([], []).model_dump(mode="json") == {
-        "version": 1,
+        "version": 2,
         "width": 1000,
         "height": 600,
         "nodes": [],
@@ -113,8 +116,40 @@ def test_empty_and_single_node_previews_are_valid_and_centered() -> None:
 
     preview = build_topology_preview([_node("node", 123, -456)], [])
 
-    assert preview.nodes == [TopologyPreviewNodeV1(x=428, y=228, width=144, height=144)]
+    assert preview.nodes == [
+        TopologyPreviewNodeV2(
+            x=428,
+            y=228,
+            width=144,
+            height=144,
+            color="stone-gray",
+        )
+    ]
     assert preview.edges == []
+
+
+@pytest.mark.parametrize(
+    ("node_type", "expected_color"),
+    [
+        ("prompt", "slate-blue"),
+        ("filePrompt", "dried-heather"),
+        ("github", "github"),
+        ("textToText", "olive-grove"),
+        ("parallelization", "terracotta-clay"),
+        ("parallelizationModels", "terracotta-clay"),
+        ("routing", "sunbaked-sand-dark"),
+        ("contextMerger", "golden-ochre"),
+        ("unknown", "stone-gray"),
+    ],
+)
+def test_generator_maps_node_types_to_canonical_color_tokens(
+    node_type: str,
+    expected_color: str,
+) -> None:
+    preview = build_topology_preview([_node("node", node_type=node_type)], [])
+
+    assert preview.nodes[0].color == expected_color
+    assert "type" not in preview.nodes[0].model_dump(mode="json")
 
 
 def test_generator_is_deterministic_and_excludes_content_and_invalid_edges() -> None:
@@ -168,7 +203,7 @@ def test_uniform_fit_preserves_square_geometry_and_viewport_containment() -> Non
     assert all(node.x + node.width <= 1000 for node in preview.nodes)
     assert all(node.y + node.height <= 600 for node in preview.nodes)
     assert preview.edges == [
-        TopologyPreviewEdgeV1(
+        TopologyPreviewEdgeV2(
             x1=240,
             y1=40,
             x2=760,
@@ -182,7 +217,7 @@ def _selected_fixture(child: Node, ancestors: list[Node]) -> list[Node]:
     return [child, *selected_fillers, *ancestors]
 
 
-def _child_geometry(child: Node, ancestors: list[Node]) -> TopologyPreviewNodeV1:
+def _child_geometry(child: Node, ancestors: list[Node]) -> TopologyPreviewNodeV2:
     return build_topology_preview(_selected_fixture(child, ancestors), []).nodes[0]
 
 

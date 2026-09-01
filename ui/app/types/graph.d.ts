@@ -2,26 +2,37 @@ import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
 import type { RepositoryInfo } from '@/types/github';
 
-export interface TopologyPreviewNodeV1 {
+export type TopologyPreviewColorToken =
+    | 'slate-blue'
+    | 'dried-heather'
+    | 'github'
+    | 'olive-grove'
+    | 'terracotta-clay'
+    | 'sunbaked-sand-dark'
+    | 'golden-ochre'
+    | 'stone-gray';
+
+export interface TopologyPreviewNodeV2 {
     x: number;
     y: number;
     width: number;
     height: number;
+    color: TopologyPreviewColorToken;
 }
 
-export interface TopologyPreviewEdgeV1 {
+export interface TopologyPreviewEdgeV2 {
     x1: number;
     y1: number;
     x2: number;
     y2: number;
 }
 
-export interface TopologyPreviewV1 {
-    version: 1;
+export interface TopologyPreviewV2 {
+    version: 2;
     width: 1000;
     height: 600;
-    nodes: TopologyPreviewNodeV1[];
-    edges: TopologyPreviewEdgeV1[];
+    nodes: TopologyPreviewNodeV2[];
+    edges: TopologyPreviewEdgeV2[];
 }
 
 interface Folder {
@@ -54,7 +65,7 @@ interface Graph {
     reasoning_effort: ReasoningEffortEnum | null;
     node_count: number;
     workspace_id: string | null; // UUID
-    topology_preview?: TopologyPreviewV1;
+    topology_preview?: TopologyPreviewV2;
 }
 
 export interface GraphSummary {
@@ -66,7 +77,7 @@ export interface GraphSummary {
     updated_at: string; // ISO Date string
     node_count: number;
     workspace_id?: string | null; // UUID
-    topology_preview: TopologyPreviewV1;
+    topology_preview: TopologyPreviewV2;
 }
 
 export interface GraphSummaryPage {

@@ -17,19 +17,30 @@ sys.path.append(str(APP_ROOT))
 
 from database.pg.graph_ops import graph_crud, graph_node_crud
 from database.pg.models import Graph, Node
-from schemas.topology_preview import TopologyPreviewV1
+from schemas.topology_preview import TopologyPreviewV2
 from services.graph_topology_preview import build_topology_preview
 
 GRAPH_ID = uuid.UUID("11111111-2222-3333-4444-555555555555")
 USER_ID = uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-EMPTY_PREVIEW = {
+EMPTY_V1_PREVIEW = {
     "version": 1,
     "width": 1000,
     "height": 600,
     "nodes": [],
     "edges": [],
 }
+EMPTY_PREVIEW = {
+    "version": 2,
+    "width": 1000,
+    "height": 600,
+    "nodes": [],
+    "edges": [],
+}
 EXPECTED_COLUMN_SQL = (
+    'topology_preview JSONB DEFAULT \'{"version":2,"width":1000,"height":600,'
+    '"nodes":[],"edges":[]}\'::jsonb NOT NULL'
+)
+EXPECTED_V1_COLUMN_SQL = (
     'topology_preview JSONB DEFAULT \'{"version":1,"width":1000,"height":600,'
     '"nodes":[],"edges":[]}\'::jsonb NOT NULL'
 )
@@ -93,9 +104,47 @@ def test_migration_renders_empty_v1_default_without_bind_parameters() -> None:
     add_column.assert_called_once()
     table_name, column = add_column.call_args.args
     assert table_name == "graphs"
-    assert str(CreateColumn(column).compile(dialect=postgresql.dialect())) == EXPECTED_COLUMN_SQL
+    assert str(CreateColumn(column).compile(dialect=postgresql.dialect())) == EXPECTED_V1_COLUMN_SQL
     assert migration.revision == "ae52881f1633"
     assert migration.down_revision == "4e7a9c2b6d10"
+
+
+def test_v2_migration_resets_all_data_and_restores_v1_on_downgrade() -> None:
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "migrations"
+        / "versions"
+        / "9a7abff8eac4_upgrade_topology_previews_to_v2.py"
+    )
+    spec = importlib.util.spec_from_file_location("topology_preview_v2_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    assert migration.revision == "9a7abff8eac4"
+    assert migration.down_revision == "ae52881f1633"
+
+    with (
+        patch.object(migration.op, "alter_column") as alter_column,
+        patch.object(migration.op, "execute") as execute,
+    ):
+        migration.upgrade()
+
+    assert str(alter_column.call_args.kwargs["server_default"]) == migration.EMPTY_V2_SQL
+    upgrade_reset = execute.call_args.args[0].compile(dialect=postgresql.dialect())
+    assert upgrade_reset.params == {}
+    assert str(upgrade_reset) == f"UPDATE graphs SET topology_preview={migration.EMPTY_V2_SQL}"
+
+    with (
+        patch.object(migration.op, "alter_column") as alter_column,
+        patch.object(migration.op, "execute") as execute,
+    ):
+        migration.downgrade()
+
+    assert str(alter_column.call_args.kwargs["server_default"]) == migration.EMPTY_V1_SQL
+    downgrade_reset = execute.call_args.args[0].compile(dialect=postgresql.dialect())
+    assert downgrade_reset.params == {}
+    assert str(downgrade_reset) == f"UPDATE graphs SET topology_preview={migration.EMPTY_V1_SQL}"
 
 
 class _ScalarResult:
@@ -188,10 +237,18 @@ def test_full_save_replaces_request_preview_and_rolls_assignment_back_on_failure
     persisted = _graph(topology_preview={"untrusted": "old"})
     request_graph = _graph(
         topology_preview={
-            "version": 1,
+            "version": 2,
             "width": 1000,
             "height": 600,
-            "nodes": [{"x": 1, "y": 1, "width": 1, "height": 1}],
+            "nodes": [
+                {
+                    "x": 1,
+                    "y": 1,
+                    "width": 1,
+                    "height": 1,
+                    "color": "github",
+                }
+            ],
             "edges": [],
         }
     )
@@ -311,13 +368,12 @@ def test_summary_query_returns_required_validated_preview_and_preserves_paginati
     assert page.next_offset == 4
     assert len(page.items) == 1
     assert page.items[0].node_count == 7
-    assert page.items[0].topology_preview == TopologyPreviewV1.model_validate(preview)
+    assert page.items[0].topology_preview == TopologyPreviewV2.model_validate(preview)
     assert "graphs.topology_preview" in str(session.statement)
 
 
 def test_summary_rejects_invalid_persisted_preview() -> None:
-    invalid_preview = {**EMPTY_PREVIEW, "version": 2}
-    session = _SummarySession([_summary_row(GRAPH_ID, invalid_preview)])
+    session = _SummarySession([_summary_row(GRAPH_ID, EMPTY_V1_PREVIEW)])
 
     with (
         patch.object(graph_crud, "AsyncSession", return_value=session),
