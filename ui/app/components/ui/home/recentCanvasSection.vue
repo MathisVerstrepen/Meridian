@@ -1,21 +1,25 @@
 <script lang="ts" setup>
 import type { GraphSummary, Folder, Workspace } from '@/types/graph';
+import UiHomeTopologyPreview from '~/components/ui/home/topologyPreview.vue';
 import UiUtilsSearchBar from '~/components/ui/utils/searchBar.vue';
 
 const LOAD_MORE_THRESHOLD_PX = 300;
 
 // --- Props ---
-const props = withDefaults(defineProps<{
-    graphs: GraphSummary[];
-    folders: Folder[];
-    workspaces?: Workspace[];
-    isLoading?: boolean;
-    hasMoreGraphs?: boolean;
-}>(), {
-    workspaces: () => [],
-    isLoading: false,
-    hasMoreGraphs: false,
-});
+const props = withDefaults(
+    defineProps<{
+        graphs: GraphSummary[];
+        folders: Folder[];
+        workspaces?: Workspace[];
+        isLoading?: boolean;
+        hasMoreGraphs?: boolean;
+    }>(),
+    {
+        workspaces: () => [],
+        isLoading: false,
+        hasMoreGraphs: false,
+    },
+);
 
 // --- Emits ---
 const emit = defineEmits<{
@@ -267,7 +271,7 @@ defineExpose({
         <div
             v-if="!isLoading && displayedItems.length > 0"
             ref="scrollContainer"
-            class="custom_scroll stable-scrollbar-gutter grid h-full w-full auto-rows-[9rem]
+            class="custom_scroll stable-scrollbar-gutter grid h-full w-full auto-rows-[7rem]
                 grid-cols-4 gap-5 overflow-y-auto pb-8"
             @scroll.passive="maybeLoadMore"
         >
@@ -276,7 +280,7 @@ defineExpose({
                 <div
                     v-if="item.type === 'folder'"
                     class="bg-anthracite/30 hover:bg-anthracite/50 border-stone-gray/5 group
-                        relative h-36 w-full cursor-pointer overflow-hidden rounded-2xl border-2
+                        relative h-full w-full cursor-pointer overflow-hidden rounded-2xl border-2
                         transition-all duration-200 ease-in-out"
                     :style="
                         (item.data as Folder).color
@@ -293,22 +297,17 @@ defineExpose({
                     @click="openFolder((item.data as Folder).id)"
                 >
                     <div
-                        class="relative z-10 flex h-full w-full flex-col items-start justify-center
-                            gap-5 p-6"
+                        class="relative z-10 flex h-full w-full flex-col items-start justify-between
+                            gap-3 p-4"
                     >
-                        <div class="text-stone-gray flex items-center gap-3">
-                            <UiIcon name="MdiFolderOutline" class="h-8 w-8 shrink-0" />
-                            <span class="line-clamp-2 text-lg font-bold">
+                        <div class="text-stone-gray flex min-w-0 items-start gap-3">
+                            <UiIcon name="MdiFolderOutline" class="mt-0.5 h-6 w-6 shrink-0" />
+                            <span class="line-clamp-2 text-base leading-5 font-bold">
                                 {{ (item.data as Folder).name }}
                             </span>
                         </div>
-                        <div class="flex w-full items-center justify-between text-sm">
-                            <div
-                                class="bg-stone-gray/10 text-stone-gray/70 rounded-lg px-3 py-1
-                                    font-bold"
-                            >
-                                {{ (item as any).count }} items
-                            </div>
+                        <div class="text-stone-gray/60 text-xs font-medium">
+                            {{ (item as any).count }} items
                         </div>
                     </div>
                 </div>
@@ -317,16 +316,18 @@ defineExpose({
                 <NuxtLink
                     v-else
                     class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group
-                        relative flex h-36 w-full cursor-pointer flex-col items-start justify-center
-                        gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
-                        duration-200 ease-in-out"
+                        relative flex h-full w-full cursor-pointer flex-col items-start
+                        justify-between gap-3 overflow-hidden rounded-2xl border-2 p-4
+                        transition-colors duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: item.data.id } }"
                 >
                     <button
                         class="hover:bg-terracotta-clay/10 text-terracotta-clay absolute top-2
-                            right-2 flex items-center rounded-md p-2 text-sm font-bold opacity-0
-                            transition-all duration-200 ease-in-out group-hover:opacity-100"
+                            right-2 z-20 flex items-center rounded-md p-2 text-sm font-bold
+                            opacity-0 transition-all duration-200 ease-in-out
+                            group-hover:opacity-100 focus-visible:opacity-100"
+                        :aria-label="`Delete ${item.data.name}`"
                         @click.prevent="emit('delete', item.data.id, item.data.name)"
                     >
                         <UiIcon
@@ -336,33 +337,33 @@ defineExpose({
                         />
                     </button>
 
-                    <div class="text-stone-gray flex items-center gap-3">
-                        <UiIcon
+                    <UiHomeTopologyPreview
+                        :preview="(item.data as GraphSummary).topology_preview"
+                        class="absolute top-0 right-3 h-full w-1/2 py-2"
+                    />
+
+                    <span
+                        class="text-stone-gray relative z-10 line-clamp-2 w-full pr-10 text-base
+                            leading-5 font-bold"
+                    >
+                        {{ (item.data as GraphSummary).name }}
+                    </span>
+
+                    <div
+                        class="text-stone-gray/60 relative z-10 flex items-center gap-2 text-xs
+                            font-medium"
+                    >
+                        <span
                             v-if="(item.data as GraphSummary).pinned"
-                            name="MajesticonsPin"
-                            class="h-6 w-6 shrink-0"
-                        />
-                        <UiIcon
-                            v-else
-                            name="MaterialSymbolsFlowchartSharp"
-                            class="h-7 w-7 shrink-0"
-                        />
-
-                        <span class="line-clamp-2 text-lg font-bold">
-                            {{ (item.data as GraphSummary).name }}
-                        </span>
-                    </div>
-
-                    <div class="flex w-full items-center justify-between text-sm">
-                        <div
-                            class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1
-                                font-bold"
+                            class="flex items-center"
+                            aria-label="Pinned"
                         >
-                            {{ (item.data as GraphSummary).node_count ?? 0 }} nodes
-                        </div>
+                            <UiIcon name="MajesticonsPin" class="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <span>{{ (item.data as GraphSummary).node_count ?? 0 }} nodes</span>
+                        <span aria-hidden="true">&middot;</span>
 
                         <NuxtTime
-                            class="text-stone-gray"
                             :datetime="new Date((item.data as GraphSummary).updated_at)"
                             locale="en-US"
                             relative

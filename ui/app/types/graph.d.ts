@@ -2,6 +2,28 @@ import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
 import type { RepositoryInfo } from '@/types/github';
 
+export interface TopologyPreviewNodeV1 {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+export interface TopologyPreviewEdgeV1 {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+}
+
+export interface TopologyPreviewV1 {
+    version: 1;
+    width: 1000;
+    height: 600;
+    nodes: TopologyPreviewNodeV1[];
+    edges: TopologyPreviewEdgeV1[];
+}
+
 interface Folder {
     id: string;
     name: string;
@@ -32,6 +54,7 @@ interface Graph {
     reasoning_effort: ReasoningEffortEnum | null;
     node_count: number;
     workspace_id: string | null; // UUID
+    topology_preview?: TopologyPreviewV1;
 }
 
 export interface GraphSummary {
@@ -43,6 +66,7 @@ export interface GraphSummary {
     updated_at: string; // ISO Date string
     node_count: number;
     workspace_id?: string | null; // UUID
+    topology_preview: TopologyPreviewV1;
 }
 
 export interface GraphSummaryPage {

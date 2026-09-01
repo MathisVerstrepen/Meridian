@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from models.message import NodeTypeEnum
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
+from services.graph_topology_preview import build_topology_preview
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import attributes
@@ -112,6 +113,8 @@ async def update_graph_with_nodes_and_edges(
     for edge in edges:
         edge.graph_id = graph_uuid
 
+    topology_preview = build_topology_preview(nodes, edges).model_dump(mode="json")
+
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
             # Scope updates to the owning user. If the graph exists for another user,
@@ -157,6 +160,8 @@ async def update_graph_with_nodes_and_edges(
                     reasoning_effort=graph_update_data.reasoning_effort,
                 )
                 session.add(db_graph)
+
+            db_graph.topology_preview = topology_preview
 
             with session.no_autoflush:
                 existing_nodes_stmt = (

@@ -7,7 +7,6 @@ from database.pg.graph_ops.graph_config_crud import (
 from database.pg.graph_ops.graph_crud import (
     DEFAULT_GRAPH_PAGE_SIZE,
     CompleteGraph,
-    GraphSummaryPage,
     assert_graph_access,
     create_empty_graph,
     create_folder,
@@ -35,6 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
 from schemas.graph_response import GraphEditorResponseV1
+from schemas.graph_summary import GraphSummaryPage
 from services.auth import get_current_user_id
 from services.graph_response import encode_graph_editor_response
 from services.graph_service import migrate_graph_ids, search_graph_nodes

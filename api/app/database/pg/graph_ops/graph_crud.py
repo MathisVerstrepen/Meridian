@@ -10,6 +10,7 @@ from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel
+from schemas.graph_summary import GraphSummary, GraphSummaryPage
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import selectinload
@@ -18,23 +19,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 DEFAULT_GRAPH_PAGE_SIZE = 25
-
-
-class GraphSummary(BaseModel):
-    id: uuid.UUID
-    name: str
-    folder_id: uuid.UUID | None
-    workspace_id: uuid.UUID | None
-    temporary: bool
-    pinned: bool
-    updated_at: datetime
-    node_count: int
-
-
-class GraphSummaryPage(BaseModel):
-    items: list[GraphSummary]
-    has_more: bool
-    next_offset: int | None
 
 
 def _parse_uuid_or_400(raw_id: str, label: str) -> uuid.UUID:
@@ -173,6 +157,7 @@ async def get_all_graphs(
                 col(Graph.temporary),
                 col(Graph.pinned),
                 col(Graph.updated_at),
+                col(Graph.topology_preview),
                 func.coalesce(node_count_subquery.c.node_count, 0).label("node_count"),
             )
             .outerjoin(node_count_subquery, col(Graph.id) == node_count_subquery.c.graph_id)
@@ -197,6 +182,7 @@ async def get_all_graphs(
                 pinned=pinned,
                 updated_at=updated_at,
                 node_count=int(node_count),
+                topology_preview=topology_preview,
             )
             for (
                 graph_id,
@@ -206,6 +192,7 @@ async def get_all_graphs(
                 temporary,
                 pinned,
                 updated_at,
+                topology_preview,
                 node_count,
             ) in visible_rows
         ]

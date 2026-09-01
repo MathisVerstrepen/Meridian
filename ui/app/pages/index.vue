@@ -6,6 +6,7 @@ import type { User } from '@/types/user';
 import type { ChatInputSubmission } from '@/types/chat';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
+import { toGraphSummary } from '@/utils/graphSummary';
 import { normalizeToolSelection } from '@/utils/toolSelection';
 
 // --- Page Meta ---
@@ -149,7 +150,7 @@ const openNewFromInput = async (submission: ChatInputSubmission) => {
     }
 
     if (!newGraph.temporary) {
-        graphs.value.unshift(newGraph);
+        graphs.value.unshift(toGraphSummary(newGraph));
     }
     const moved = await placeGraphInCurrentFolder(newGraph.id);
     if (!moved) return;
@@ -215,7 +216,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     }
 
     if (!newGraph.temporary) {
-        graphs.value.unshift(newGraph);
+        graphs.value.unshift(toGraphSummary(newGraph));
     }
     if (wanted !== 'temporary') {
         const moved = await placeGraphInCurrentFolder(newGraph.id);

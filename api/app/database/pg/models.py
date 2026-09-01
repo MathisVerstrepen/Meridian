@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from models.auth import UserPass
 from pydantic import PrivateAttr, computed_field
+from schemas.topology_preview import empty_topology_preview_v1
 from services.admin_user_creation import (
     AdminUserCreationMode,
     should_create_initial_userpass_as_admin,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Index,
     PrimaryKeyConstraint,
     func,
+    literal_column,
     select,
 )
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
@@ -221,6 +223,16 @@ class Graph(SQLModel, table=True):
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # not used
     temporary: bool = Field(default=False, nullable=False)
     pinned: bool = Field(default=False, nullable=False)
+    topology_preview: dict[str, Any] = Field(
+        default_factory=empty_topology_preview_v1,
+        sa_column=Column(
+            JSONB,
+            nullable=False,
+            server_default=literal_column(
+                '\'{"version":1,"width":1000,"height":600,' '"nodes":[],"edges":[]}\'::jsonb'
+            ),
+        ),
+    )
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,

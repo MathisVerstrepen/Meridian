@@ -78,6 +78,7 @@ def test_encoder_serializes_only_version_1_editor_fields_and_omits_defaults() ->
     assert graph["created_at"] == "2026-07-15T12:30:00Z"
     assert graph["updated_at"] == "2026-07-15T12:45:00Z"
     assert "user_id" not in graph
+    assert "topology_preview" not in graph
     assert "graph_id" not in nodes[0]
     assert "graph_id" not in edges[0]
     assert "markerEnd" not in edges[0]
@@ -240,6 +241,13 @@ def test_backup_get_retains_full_unversioned_shape() -> None:
     assert body["nodes"][0]["graph_id"] == str(GRAPH_ID)
     assert body["edges"][0]["graph_id"] == str(GRAPH_ID)
     assert body["edges"][0]["markerEnd"] == {"type": "arrowclosed"}
+    assert body["graph"]["topology_preview"] == {
+        "version": 1,
+        "width": 1000,
+        "height": 600,
+        "nodes": [],
+        "edges": [],
+    }
 
 
 def test_update_still_accepts_full_graph_ids_and_marker_end() -> None:
@@ -261,8 +269,71 @@ def test_update_still_accepts_full_graph_ids_and_marker_end() -> None:
         response = TestClient(app).post(f"/graph/{GRAPH_ID}/update", json=payload)
 
     assert response.status_code == 200
+    assert response.json()["topology_preview"] == updated_graph.topology_preview
     received = update.await_args.args
     assert str(received[5][0].graph_id) == str(GRAPH_ID)
     assert str(received[6][0].graph_id) == str(GRAPH_ID)
     assert received[6][0].markerEnd == {"type": "arrowclosed"}
     validate.assert_awaited_once()
+
+
+def test_create_raw_response_includes_server_default_preview() -> None:
+    graph = build_small_graph_fixture().graph
+    app = _test_app()
+    settings = SimpleNamespace()
+
+    with (
+        patch.object(graph_router, "check_free_tier_canvas_limit", new=AsyncMock()),
+        patch.object(graph_router, "get_user_settings", new=AsyncMock(return_value=settings)),
+        patch.object(graph_router, "create_empty_graph", new=AsyncMock(return_value=graph)),
+    ):
+        response = TestClient(app).post("/graph/create")
+
+    assert response.status_code == 200
+    assert response.json()["topology_preview"] == {
+        "version": 1,
+        "width": 1000,
+        "height": 600,
+        "nodes": [],
+        "edges": [],
+    }
+
+
+def test_restore_accepts_backup_preview_but_returns_server_replacement() -> None:
+    backup = build_small_graph_fixture()
+    supplied_preview = {
+        "version": 1,
+        "width": 1000,
+        "height": 600,
+        "nodes": [{"x": 1, "y": 2, "width": 3, "height": 4}],
+        "edges": [],
+    }
+    backup.graph.topology_preview = supplied_preview
+    returned_graph = build_small_graph_fixture().graph
+    returned_graph.topology_preview = {
+        "version": 1,
+        "width": 1000,
+        "height": 600,
+        "nodes": [{"x": 100, "y": 200, "width": 30, "height": 40}],
+        "edges": [],
+    }
+    app = _test_app()
+    settings = SimpleNamespace(generationHistory=SimpleNamespace(max_saved_entries=10))
+    update = AsyncMock(return_value=returned_graph)
+
+    with (
+        patch.object(graph_router, "migrate_graph_ids", return_value=backup),
+        patch.object(
+            graph_router,
+            "resolve_workspace_id_for_user",
+            new=AsyncMock(return_value=None),
+        ),
+        patch.object(graph_router, "get_user_settings", new=AsyncMock(return_value=settings)),
+        patch.object(graph_router, "update_graph_with_nodes_and_edges", new=update),
+    ):
+        response = TestClient(app).post("/graph/backup", json=backup.model_dump(mode="json"))
+
+    assert response.status_code == 200
+    assert update.await_args.kwargs["graph_update_data"].topology_preview == supplied_preview
+    assert response.json()["topology_preview"] == returned_graph.topology_preview
+    assert response.json()["topology_preview"] != supplied_preview

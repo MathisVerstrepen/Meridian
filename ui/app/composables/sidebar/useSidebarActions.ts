@@ -1,6 +1,7 @@
 import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { useDebounceFn } from '@vueuse/core';
 import { PLAN_LIMITS } from '@/constants/limits';
+import { toGraphSummary } from '@/utils/graphSummary';
 import { normalizeToolSelection } from '@/utils/toolSelection';
 
 export const useSidebarActions = (
@@ -72,7 +73,7 @@ export const useSidebarActions = (
             const wsId = activeWorkspace.value?.id;
             const newGraph = await createGraph(false, wsId);
             if (newGraph) {
-                graphs.value.unshift(newGraph);
+                graphs.value.unshift(toGraphSummary(newGraph));
                 navigateToGraph(newGraph.id, false);
             }
         } catch (err: unknown) {
@@ -102,7 +103,7 @@ export const useSidebarActions = (
             const wsId = activeWorkspace.value?.id;
             const newGraph = await createGraph(false, wsId);
             if (newGraph) {
-                graphs.value.unshift(newGraph);
+                graphs.value.unshift(toGraphSummary(newGraph));
                 const moved = await handleMoveGraph(newGraph.id, folderId);
                 if (!moved) return;
                 expandedFolders.value.add(folderId);
