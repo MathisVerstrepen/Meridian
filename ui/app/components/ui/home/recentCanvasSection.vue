@@ -279,9 +279,10 @@ defineExpose({
                 <!-- FOLDER CARD -->
                 <div
                     v-if="item.type === 'folder'"
-                    class="bg-anthracite/30 hover:bg-anthracite/50 border-stone-gray/5 group
-                        relative h-full w-full cursor-pointer overflow-hidden rounded-2xl border-2
-                        transition-all duration-200 ease-in-out"
+                    class="bg-anthracite/55 hover:bg-anthracite/70 border-stone-gray/15
+                        hover:border-stone-gray/30 group relative h-full w-full cursor-pointer
+                        overflow-hidden rounded-xl border transition-colors duration-200
+                        ease-in-out"
                     :style="
                         (item.data as Folder).color
                             ? ({
@@ -315,10 +316,10 @@ defineExpose({
                 <!-- GRAPH CARD -->
                 <NuxtLink
                     v-else
-                    class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group
-                        relative flex h-full w-full cursor-pointer flex-col items-start
-                        justify-between gap-3 overflow-hidden rounded-2xl border-2 p-4
-                        transition-colors duration-200 ease-in-out"
+                    class="bg-anthracite/55 hover:bg-anthracite/70 border-stone-gray/15
+                        hover:border-stone-gray/30 group relative h-full w-full cursor-pointer
+                        overflow-hidden rounded-xl border transition-colors duration-200
+                        ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: item.data.id } }"
                 >
@@ -339,35 +340,44 @@ defineExpose({
 
                     <UiHomeTopologyPreview
                         :preview="(item.data as GraphSummary).topology_preview"
-                        class="absolute top-0 right-3 h-full w-1/2 py-2"
+                        class="via-anthracite/10 to-anthracite/55 absolute inset-y-0 right-0 h-full
+                            w-2/5 bg-linear-to-r from-transparent py-2 pr-3 pl-2"
                     />
 
-                    <span
-                        class="text-stone-gray relative z-10 line-clamp-2 w-full pr-10 text-base
-                            leading-5 font-bold"
-                    >
-                        {{ (item.data as GraphSummary).name }}
-                    </span>
-
                     <div
-                        class="text-stone-gray/60 relative z-10 flex items-center gap-2 text-xs
-                            font-medium"
+                        class="relative z-10 flex h-full w-3/5 min-w-0 flex-col justify-between
+                            gap-3 p-4 pr-3"
                     >
-                        <span
-                            v-if="(item.data as GraphSummary).pinned"
-                            class="flex items-center"
-                            aria-label="Pinned"
-                        >
-                            <UiIcon name="MajesticonsPin" class="h-3.5 w-3.5" aria-hidden="true" />
-                        </span>
-                        <span>{{ (item.data as GraphSummary).node_count ?? 0 }} nodes</span>
-                        <span aria-hidden="true">&middot;</span>
+                        <div class="flex min-w-0 items-start gap-1.5">
+                            <span
+                                class="text-stone-gray line-clamp-2 min-w-0 text-base leading-5
+                                    font-bold"
+                            >
+                                {{ (item.data as GraphSummary).name }}
+                            </span>
+                            <span
+                                v-if="(item.data as GraphSummary).pinned"
+                                class="text-stone-gray/55 mt-0.5 flex shrink-0 items-center"
+                                aria-label="Pinned"
+                            >
+                                <UiIcon
+                                    name="MajesticonsPin"
+                                    class="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                />
+                            </span>
+                        </div>
 
-                        <NuxtTime
-                            :datetime="new Date((item.data as GraphSummary).updated_at)"
-                            locale="en-US"
-                            relative
-                        />
+                        <div class="text-stone-gray/70 flex items-center gap-2 text-xs font-medium">
+                            <span>{{ (item.data as GraphSummary).node_count ?? 0 }} nodes</span>
+                            <span aria-hidden="true">&middot;</span>
+
+                            <NuxtTime
+                                :datetime="new Date((item.data as GraphSummary).updated_at)"
+                                locale="en-US"
+                                relative
+                            />
+                        </div>
                     </div>
                 </NuxtLink>
             </template>
