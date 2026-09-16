@@ -502,21 +502,14 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
-    hasSandboxExecution.value = hasSandboxExecutionCall(normalizedMarkdown);
-    toolActivities.value = extractToolActivities(normalizedMarkdown);
-    const extractedArtifacts = extractSandboxArtifacts(normalizedMarkdown);
-    sandboxArtifacts.value = extractedArtifacts;
-    const strippedMarkdown = stripToolIndicators(normalizedMarkdown);
+    let extractedArtifacts: ToolCallArtifact[] = [];
 
-    perfRecorder?.mark('preprocess-end');
-    perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
-    perfRecorder?.mark('markdown-processor-start');
     if (lastMessageIdentity !== props.message) {
         lastMessageIdentity = props.message;
         messageIdentityRevision += 1;
     }
     const processResult = await processMarkdown(
-        strippedMarkdown,
+        markdown,
         $markedWorker.parse,
         (responseMarkdown) => {
             const prepared = prepareMarkdownResponseContent(responseMarkdown, extractedArtifacts);
@@ -526,6 +519,17 @@ const parseContent = async (markdown: string) => {
         {
             cacheKey: `${messageIdentityRevision}:${props.message.role}:${props.message.node_id ?? ''}:${props.message.type}`,
             isStreaming: props.isStreaming,
+            preprocessCleanedMarkdown: (cleanedMarkdown) => {
+                hasSandboxExecution.value = hasSandboxExecutionCall(cleanedMarkdown);
+                toolActivities.value = extractToolActivities(cleanedMarkdown);
+                extractedArtifacts = extractSandboxArtifacts(cleanedMarkdown);
+                sandboxArtifacts.value = extractedArtifacts;
+                const strippedMarkdown = stripToolIndicators(cleanedMarkdown);
+                perfRecorder?.mark('preprocess-end');
+                perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
+                perfRecorder?.mark('markdown-processor-start');
+                return strippedMarkdown;
+            },
             responseHtmlPreparer: (html, renderKey) =>
                 prepareMarkdownResponse(html, `${markdownResponseScope}-${renderKey}`),
         },

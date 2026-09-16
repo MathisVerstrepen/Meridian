@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import re
@@ -13,6 +12,7 @@ from database.pg.token_ops.provider_token_crud import store_provider_token_if_cu
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.crypto import encrypt_api_key
+from services.providers.message_serialization import historical_tool_data, message_to_wire
 from services.sandbox_inputs import SandboxInputFileReference
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -106,10 +106,7 @@ class BaseProviderReq:
     image_inspection_enabled: bool = False
 
     def __post_init__(self) -> None:
-        self.messages = [
-            message.model_dump(exclude_none=True) if hasattr(message, "model_dump") else message
-            for message in self.messages
-        ]
+        self.messages = [message_to_wire(message) for message in self.messages]
         self.file_uuids = list(self.file_uuids or [])
         self.file_hashes = dict(self.file_hashes or {})
         self.selected_tools = normalize_selected_tools(self.selected_tools)
@@ -398,18 +395,15 @@ def build_prompt(messages: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for message in messages:
         role = str(message.get("role") or "user")
-        name = str(message.get("name") or "").strip()
+        if tool_data := historical_tool_data(message):
+            lines.append(tool_data)
+            if role == "tool":
+                continue
         content_text = extract_text_content(message.get("content"))
-        if not content_text and role == "tool":
-            try:
-                content_text = json.dumps(json.loads(str(message.get("content") or "")), indent=2)
-            except (TypeError, json.JSONDecodeError):
-                content_text = str(message.get("content") or "")
         if not content_text:
             continue
 
-        heading = f"Tool ({name})" if role == "tool" and name else role.capitalize()
-        lines.append(f"{heading}:\n{content_text}")
+        lines.append(f"{role.capitalize()}:\n{content_text}")
     return "\n\n".join(lines).strip()
 
 

@@ -34,6 +34,7 @@ export type MarkdownProcessOptions = {
     cacheKey?: string;
     isStreaming?: boolean;
     responseHtmlPreparer?: MarkdownResponseHtmlPreparer;
+    preprocessCleanedMarkdown?: (markdown: string) => string;
 };
 
 export type MarkdownProcessResult = {
@@ -199,17 +200,11 @@ export const useMarkdownProcessor = () => {
         const cacheKey = options.cacheKey ?? 'default';
         const canReuseCache = committedCacheKey === cacheKey;
 
-        if (!markdown) {
-            return commitSegments(
-                cacheKey,
-                [],
-                [],
-                { autoToolSelection: null, webSearches: [], fetchedPages: [], isError: false },
-                { parsedSegmentCount: 0, reusedSegmentCount: 0 },
-            );
-        }
-
-        const parsed = parseAssistantContent(markdown);
+        const parsed = parseAssistantContent(
+            markdown,
+            options.isStreaming ?? false,
+            options.preprocessCleanedMarkdown,
+        );
         const metadata = {
             autoToolSelection: parsed.autoToolSelection,
             webSearches: parsed.webSearches,

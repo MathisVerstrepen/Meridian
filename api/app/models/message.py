@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 IMG_EXT_TO_MIME_TYPE = {
     "png": "image/png",
@@ -15,6 +15,7 @@ class MessageRoleEnum(str, Enum):
     user = "user"
     assistant = "assistant"
     system = "system"
+    tool = "tool"
 
 
 class UsageRequest(BaseModel):
@@ -83,6 +84,17 @@ class NodeTypeEnum(str, Enum):
     CONTEXT_MERGER = "contextMerger"
 
 
+class MessageToolFunction(BaseModel):
+    name: str
+    arguments: str
+
+
+class MessageToolCall(BaseModel):
+    id: str
+    type: Literal["function"] = "function"
+    function: MessageToolFunction
+
+
 class Message(BaseModel):
     role: MessageRoleEnum
     content: list[MessageContent]
@@ -93,6 +105,11 @@ class Message(BaseModel):
     usageData: UsageData | None = None
     annotations: list | None = None
     metadata: Optional[dict[str, Any]] = None
+    tool_calls: list[MessageToolCall] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    tool_call_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    name: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class ToolEnum(str, Enum):

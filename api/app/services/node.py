@@ -10,7 +10,6 @@ from typing import Any, Coroutine
 import httpx
 from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
-from database.pg.chat_ops import get_tool_calls_by_ids
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from database.pg.repository_ops.repository_crud import get_owned_repositories
@@ -38,7 +37,7 @@ from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_d
 from services.gitlab_provider import build_gitlab_provider_key, get_gitlab_instance_url
 from services.repository_paths import build_repo_path
 from services.repository_service import canonicalize_repository_identity, pull_owned_repository
-from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
+from services.tool_history import clean_legacy_tool_context
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 _THINKING_OPEN_TAG = r"(?:\[\s*THINK\s*\]|<\s*think(?:ing)?(?:\s+[^>]*)?\s*>)"
@@ -178,37 +177,9 @@ def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
             raise ValueError(f"Unsupported clean_text option: {clean_text}")
 
 
-async def maybe_expand_tool_context(
-    text: str,
-    pg_engine: SQLAlchemyAsyncEngine | None,
-    user_id: str | None,
-    expand_tool_context: bool,
-) -> str:
-    if not expand_tool_context or not text or pg_engine is None or user_id is None:
-        return text
-
-    tool_call_ids = extract_tool_call_ids(text)
-    if not tool_call_ids:
-        return text
-
-    tool_calls_by_id = await get_tool_calls_by_ids(
-        pg_engine,
-        tool_call_ids=tool_call_ids,
-        user_id=user_id,
-    )
-    if not tool_calls_by_id:
-        return text
-
-    return expand_tool_context_in_text(text, tool_calls_by_id)
-
-
 async def text_to_text_message_builder(
     node: Node,
     clean_text: CleanTextOption,
-    *,
-    pg_engine: SQLAlchemyAsyncEngine | None = None,
-    user_id: str | None = None,
-    expand_tool_context: bool = False,
 ) -> Message:
     """
     Builds a message object from a text-to-text node.
@@ -228,7 +199,7 @@ async def text_to_text_message_builder(
         reply = str(node.data.get("reply", ""))
         model = node.data.get("model")
         usage_data = node.data.get("usageData", None)
-    reply = await maybe_expand_tool_context(reply, pg_engine, user_id, expand_tool_context)
+    reply = clean_legacy_tool_context(reply)
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
@@ -247,10 +218,6 @@ async def text_to_text_message_builder(
 async def parallelization_message_builder(
     node: Node,
     clean_text: CleanTextOption,
-    *,
-    pg_engine: SQLAlchemyAsyncEngine | None = None,
-    user_id: str | None = None,
-    expand_tool_context: bool = False,
 ) -> Message:
     """
     Builds a message object from a parallelization node.
@@ -267,12 +234,7 @@ async def parallelization_message_builder(
 
     aggregator = node.data.get("aggregator", {})
     aggregatorUsageData = aggregator.get("usageData", None)
-    aggregator_reply = await maybe_expand_tool_context(
-        aggregator.get("reply", ""),
-        pg_engine,
-        user_id,
-        expand_tool_context,
-    )
+    aggregator_reply = clean_legacy_tool_context(aggregator.get("reply") or "")
 
     return Message(
         role=MessageRoleEnum.assistant,
@@ -293,10 +255,6 @@ async def parallelization_message_builder(
 async def node_to_message(
     node: Node,
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
-    *,
-    pg_engine: SQLAlchemyAsyncEngine | None = None,
-    user_id: str | None = None,
-    expand_tool_context: bool = False,
 ) -> Message | None:
     """
     Convert a node to a message format.
@@ -314,17 +272,11 @@ async def node_to_message(
             return await text_to_text_message_builder(
                 node,
                 clean_text,
-                pg_engine=pg_engine,
-                user_id=user_id,
-                expand_tool_context=expand_tool_context,
             )
         case NodeTypeEnum.PARALLELIZATION:
             return await parallelization_message_builder(
                 node,
                 clean_text,
-                pg_engine=pg_engine,
-                user_id=user_id,
-                expand_tool_context=expand_tool_context,
             )
         case NodeTypeEnum.FILE_PROMPT | NodeTypeEnum.GITHUB | NodeTypeEnum.PROMPT:
             return None
