@@ -172,7 +172,7 @@ if (isStreamingMode) {
         :data-parsed-segment-count="perfSummary?.parsedSegmentCount ?? ''"
         :data-reused-segment-count="perfSummary?.reusedSegmentCount ?? ''"
         :data-enhanced-segment-count="perfSummary?.enhancedSegmentCount ?? ''"
-        class="bg-obsidian min-h-screen p-8"
+        class="bg-obsidian h-screen w-full overflow-y-auto p-8"
     >
         <div id="fullscreen-mountpoint" data-testid="fullscreen-mountpoint" />
         <div class="mx-auto flex max-w-5xl flex-col gap-6">

@@ -1,3 +1,6 @@
+import { MARKDOWN_TABLE_SAMPLE } from './markdownTableSample';
+import { MARKDOWN_FINANCE_TABLE } from './markdownFinanceTable';
+
 export const GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE = '/auth/markdown-renderer-fixture';
 export const ONE_PIXEL_PNG_BASE64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WZyQAAAAASUVORK5CYII=';
@@ -710,6 +713,16 @@ The key security considerations here:
 
 export const MARKDOWN_RENDERER_FIXTURE_CASES = {
     ...BASE_MARKDOWN_RENDERER_FIXTURE_CASES,
+    financeTable: {
+        key: 'financeTable',
+        nodeId: 'fixture-node-finance-table',
+        rawMessage: MARKDOWN_FINANCE_TABLE,
+    },
+    tables: {
+        key: 'tables',
+        nodeId: 'fixture-node-tables',
+        rawMessage: `${MARKDOWN_TABLE_SAMPLE}\n\n| Link | Count | Status |\n| :--- | ---: | :---: |\n| [Docs](https://example.com/docs) | **2** | *Ready* |\n\n| Literal |\n| --- |\n| \`<img src=x onerror=alert(1)>\` |`,
+    },
     heavyStreaming: {
         key: 'heavyStreaming',
         nodeId: HEAVY_STREAMING_CASE_NODE_ID,
