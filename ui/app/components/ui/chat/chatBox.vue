@@ -47,7 +47,7 @@ const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
-const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToBottom } =
+const { goBackToBottom, triggerScroll, handleScroll, isLockedToBottom } =
     useChatScroll(chatContainer);
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
@@ -222,7 +222,7 @@ watch(renderedMessageCount, (count) => {
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
         nextTick(() => {
-            scrollToBottom();
+            triggerScroll();
         });
     }
 });
