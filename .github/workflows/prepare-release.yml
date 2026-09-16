@@ -36,6 +36,11 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
       - name: Create or update release PR
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}

@@ -1,8 +1,8 @@
 # Meridian API - Developer README
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
 
-This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.11**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
+This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.14**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
 
 ## Table of Contents
 
@@ -43,7 +43,7 @@ This folder contains the **complete backend API** for Meridian, built with **Fas
 | Category | Technologies |
 |----------|--------------|
 | **Framework** | FastAPI (async) |
-| **Language** | Python 3.11 (asyncio) |
+| **Language** | Python 3.14 (asyncio) |
 | **Databases** | PostgreSQL (SQLModel/Alembic), Neo4j (async driver), Redis (annotations) |
 | **AI Provider** | OpenRouter.ai (streaming, tools, reasoning) |
 | **Auth** | JWT (PyJWT), OAuth2, bcrypt |
@@ -92,6 +92,8 @@ cd docker
 
 From the repository root, `make install-api` installs only API Python and Node dependencies. Crawlee, Camoufox, Playwright, browser native libraries, and browser caches live exclusively in the separately built `browser_service` image.
 
+Python 3.14 is required. Install targets use `python3.14` and reject older existing virtualenvs without changing them. Move an old `api/venv` aside yourself, or pass a fresh absolute `API_VENV` path to install and subsequent Make commands. Direct scripts also accept `API_VENV` or `API_PYTHON` pointing to a Python 3.14 environment.
+
 ```bash
 cd ..
 make install-api
@@ -101,7 +103,7 @@ For a manual API-only setup:
 
 ```bash
 cd api
-python -m venv venv
+bash ../scripts/python-env.sh create "$PWD/venv" python3.14
 source venv/bin/activate
 pip install -r requirements.txt
 cd app/gemini_cli_runtime && npm install --omit=dev --ignore-scripts && cd ../..

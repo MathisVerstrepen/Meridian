@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS nsjail-builder
+FROM python:3.14-slim-bookworm AS nsjail-builder
 
 ARG NSJAIL_REF=master
 
@@ -23,7 +23,7 @@ RUN git clone --depth 1 --branch "${NSJAIL_REF}" --recurse-submodules --shallow-
 WORKDIR /src/nsjail
 RUN make
 
-FROM python:3.11-slim
+FROM python:3.14-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

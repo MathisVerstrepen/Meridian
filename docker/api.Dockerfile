@@ -1,5 +1,5 @@
 # ---- Stage 1: Build Environment ----
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim-trixie AS builder
 
 # Prevent python from writing pyc files and bufferring stdout
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -27,7 +27,7 @@ COPY ./api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Stage 2: Production Environment ----
-FROM python:3.11-slim
+FROM python:3.14-slim-trixie
 
 # Prevent python from writing pyc files and bufferring stdout
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -84,5 +84,8 @@ ENV MERMAID_VALIDATOR_SCRIPT=/app/ui/shared/mermaid/validate.mjs
 EXPOSE 8000
 
 USER appuser
+
+# Fail the image build if its Node runtime cannot load the production Gemini bridge.
+RUN npm --prefix /app/gemini_cli_runtime run smoke:bridge-imports
 
 CMD ["sh", "-c", "alembic upgrade head && exec gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}"]

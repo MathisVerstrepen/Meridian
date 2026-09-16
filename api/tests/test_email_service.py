@@ -98,6 +98,20 @@ def test_smtp_default_and_explicit_selection(
     assert "123456" in client.message.get_payload()[0].get_payload(decode=True).decode()
 
 
+def test_unset_smtp_sender_preserves_none_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    FakeSmtp.instances.clear()
+    configure_smtp(monkeypatch)
+    monkeypatch.delenv("SMTP_FROM_EMAIL")
+    monkeypatch.setattr(email_service.aiosmtplib, "SMTP", FakeSmtp)
+
+    asyncio.run(EmailService.send_verification_email("recipient@example.test", "123456"))
+
+    message = FakeSmtp.instances[-1].message
+    assert message is not None
+    # Do not turn an absent sender into an explicit empty SMTP reverse path.
+    assert message["From"] is None
+
+
 @pytest.mark.parametrize("configuration_set", [None, "transactional"])
 def test_ses_request_and_default_credential_chain(
     monkeypatch: pytest.MonkeyPatch, configuration_set: str | None

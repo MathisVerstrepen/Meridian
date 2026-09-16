@@ -39,6 +39,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+source "$ROOT_DIR/scripts/python-env.sh"
+require_project_python "${API_PYTHON:-${API_VENV:-$API_DIR/venv}/bin/python}"
+
 log() { printf '\n==> %s\n' "$*"; }
 ok()  { printf '  \xe2\x9c\x93 %s\n' "$*"; }
 err() { printf '  \xe2\x9c\x97 %s\n' "$*" >&2; }
@@ -209,7 +212,7 @@ fi
 
 # --- 3. Database migrations ---
 log "Running database migrations..."
-(cd "$API_DIR" && ./venv/bin/alembic upgrade head)
+(cd "$API_DIR" && ./run-dev.sh upgrade)
 ok "Migrations complete"
 
 # --- 4. Start backend ---

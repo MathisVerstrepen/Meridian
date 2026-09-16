@@ -26,6 +26,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -55,18 +60,13 @@ jobs:
       - name: Validate GitHub Actions workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Cache Python dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt', 'api/requirements-dev.txt', 'browser_service/requirements.txt', 'browser_service/requirements-dev.txt', 'sandbox_manager/requirements.txt', 'sandbox_manager/requirements-dev.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('.python-version') }}-${{ hashFiles('api/requirements.txt', 'api/requirements-dev.txt', 'browser_service/requirements.txt', 'browser_service/requirements-dev.txt', 'sandbox_manager/requirements.txt', 'sandbox_manager/requirements-dev.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-pip-${{ hashFiles('.python-version') }}-
 
       - name: Install Python dependencies
         run: |
@@ -78,10 +78,17 @@ jobs:
       - name: Test Docker workflow policy
         run: python -m unittest discover -s scripts/tests -p 'test_docker_publish.py'
 
+      - name: Test Python runtime policy
+        run: python -m unittest discover -s scripts/tests -p 'test_python_runtime.py'
+
       - name: Run backend linters
+        env:
+          API_PYTHON: python3.14
         run: ./api/run-linter.sh
 
       - name: Run sandbox manager checks
+        env:
+          SANDBOX_PYTHON: python3.14
         run: ./sandbox_manager/run-checks.sh
 
       - name: Run browser service checks
@@ -295,6 +302,11 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -355,6 +367,11 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
 
       - name: Wait for and promote GitHub Release
         env:

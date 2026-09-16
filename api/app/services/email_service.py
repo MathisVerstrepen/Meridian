@@ -51,7 +51,8 @@ class EmailService:
         assert smtp_password is not None
 
         msg = MIMEMultipart()
-        msg["From"] = smtp_from
+        # Compat32 accepts None; preserve missing-sender handling in aiosmtplib.
+        msg["From"] = smtp_from  # type: ignore[assignment]
         msg["To"] = to_email
         msg["Subject"] = subject
         msg.attach(MIMEText(html_content, "html"))

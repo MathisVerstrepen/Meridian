@@ -27,6 +27,11 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
       - name: Create tag and prerelease
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}

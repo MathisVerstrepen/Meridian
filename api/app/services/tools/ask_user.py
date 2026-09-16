@@ -114,7 +114,10 @@ def normalize_single_ask_user_answer(
         answer_value = raw_answer.get("value") if isinstance(raw_answer, dict) else raw_answer
         if not isinstance(answer_value, bool):
             raise ValueError("Answer must be a boolean.")
-        answer_payload = {"value": answer_value, "label": "Yes" if answer_value else "No"}
+        answer_payload: dict[str, Any] = {
+            "value": answer_value,
+            "label": "Yes" if answer_value else "No",
+        }
         if note:
             answer_payload["note"] = note
         return answer_payload
