@@ -5,41 +5,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VENV_BIN="$SCRIPT_DIR/../api/venv/bin"
-TOOLS=(black isort flake8 mypy pytest)
+source "$SCRIPT_DIR/../scripts/python-env.sh"
+SANDBOX_PYTHON="${SANDBOX_PYTHON:-${SANDBOX_VENV:-$SCRIPT_DIR/venv}/bin/python}"
+require_project_python "$SANDBOX_PYTHON"
 PYTHON_TARGETS=(
     "app"
     "tests"
     "worker"
 )
 
-resolve_tool() {
-    local tool="$1"
-
-    if [[ -x "$VENV_BIN/$tool" ]]; then
-        printf '%s\n' "$VENV_BIN/$tool"
-        return 0
-    fi
-
-    if command -v "$tool" >/dev/null 2>&1; then
-        command -v "$tool"
-        return 0
-    fi
-
-    return 1
-}
-
-declare -A TOOL_PATHS=()
-for tool in "${TOOLS[@]}"; do
-    if ! TOOL_PATHS["$tool"]="$(resolve_tool "$tool")"; then
-        echo "Missing tool: $tool" >&2
-        echo "Install sandbox manager development dependencies in api/venv or make them available on PATH." >&2
-        exit 1
-    fi
-done
-
-"${TOOL_PATHS[black]}" --check "${PYTHON_TARGETS[@]}"
-"${TOOL_PATHS[isort]}" --check-only "${PYTHON_TARGETS[@]}"
-"${TOOL_PATHS[flake8]}" --jobs=1 "${PYTHON_TARGETS[@]}"
-"${TOOL_PATHS[mypy]}" "${PYTHON_TARGETS[@]}"
-"${TOOL_PATHS[pytest]}" tests
+"$SANDBOX_PYTHON" -m black --check "${PYTHON_TARGETS[@]}"
+"$SANDBOX_PYTHON" -m isort --check-only "${PYTHON_TARGETS[@]}"
+"$SANDBOX_PYTHON" -m flake8 --jobs=1 "${PYTHON_TARGETS[@]}"
+"$SANDBOX_PYTHON" -m mypy "${PYTHON_TARGETS[@]}"
+"$SANDBOX_PYTHON" -m pytest tests

@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -16,7 +16,7 @@ RUN PYTHONPATH=/build python -m app.install_browser \
     && PYTHONPATH=/build python -c "from pathlib import Path; from app.artifacts import build_cache_manifest; Path('/build/app/camoufox_cache_manifest.sha256').write_text('\n'.join(build_cache_manifest()) + '\n')" \
     && chmod -R a-w /home/browseruser/.cache/camoufox
 
-FROM python:3.11-slim
+FROM python:3.14-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

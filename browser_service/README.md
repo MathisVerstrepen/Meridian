@@ -30,4 +30,4 @@ Generate `LINK_EXTRACTION_BROWSER_SERVICE_TOKEN` with `python -c "import secrets
 
 Restarting only `browser_service` clears active work, queue, cookies, and crawler state; callers receive typed failures and the API does not retry. Complete rollback is all-at-once: stop the new API/sidecar, restore the previous API image and previous Compose/config that supplied the browser proxy to API, restart, then remove the unused sidecar. There is no database or persisted crawler migration.
 
-Checks are `make test-browser-service`, `make lint-browser-service`, and `make typecheck-browser-service`. Runtime browser bytes are built into the image, not installed into the API environment.
+Local development requires Python 3.14. Run `make install-browser-service`, then `make test-browser-service`, `make lint-browser-service`, and `make typecheck-browser-service`. Older virtualenvs are rejected without modification; move them aside yourself or pass a fresh absolute `BROWSER_SERVICE_VENV` path to installation and checks. Runtime browser bytes are built into the `python:3.14-slim-bookworm` image, not installed into the API environment.

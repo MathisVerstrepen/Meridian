@@ -1,6 +1,6 @@
 # Meridian Sandbox Manager - Developer README
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Docker-24+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![NSJail](https://img.shields.io/badge/NSJail-required-111827)](https://github.com/google/nsjail)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Docker-24+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![NSJail](https://img.shields.io/badge/NSJail-required-111827)](https://github.com/google/nsjail)
 
 This folder contains the **sandbox execution service** for Meridian. It exposes a small FastAPI API that runs untrusted Python code inside isolated Docker worker containers, enforces execution limits, captures stdout/stderr, harvests generated files, and returns structured execution results back to the backend tool layer.
 
@@ -55,7 +55,7 @@ It is intentionally narrow in scope:
 | Category | Technologies |
 |----------|--------------|
 | **Framework** | FastAPI |
-| **Language** | Python 3.11 |
+| **Language** | Python 3.14 |
 | **Container Control** | Docker SDK for Python |
 | **Isolation** | Docker + NSJail layered isolation |
 | **Validation** | Pydantic v2 / pydantic-settings |
@@ -94,7 +94,7 @@ Related Docker files live outside this folder:
 
 ### Prerequisites
 
-- Python **3.11+**
+- Python **3.14**
 - Docker with access to the local daemon
 - A built worker image
 - If using Docker Compose: the `sandbox_manager` service must have access to `/var/run/docker.sock`
@@ -128,9 +128,9 @@ If you want to run the FastAPI app directly instead of through Compose:
 
 ```bash
 cd sandbox_manager
-python -m venv venv
+bash ../scripts/python-env.sh create "$PWD/venv" python3.14
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --host 0.0.0.0 --port 5000
 ```
 
@@ -139,19 +139,18 @@ In that mode you still need:
 - Docker daemon access
 - a valid `SANDBOX_WORKER_IMAGE`
 
+Older virtualenvs are rejected without modification. Move an old environment aside yourself or create a new one at a separate path. `run-checks.sh` defaults to `sandbox_manager/venv`; set `SANDBOX_VENV` to an absolute path or `SANDBOX_PYTHON` to its Python 3.14 interpreter to check an isolated environment.
+
 ### Development Commands
 
 ```bash
 cd sandbox_manager
 
-# Run tests
-../api/venv/bin/pytest tests/test_main.py
-
-# Lint
-../api/venv/bin/flake8 .
+# Formatting, lint, types, and tests
+./run-checks.sh
 
 # Optional syntax verification
-python -m py_compile app/config.py app/executor.py app/main.py app/models.py worker/bootstrap.py
+venv/bin/python -m py_compile app/config.py app/executor.py app/main.py app/models.py worker/bootstrap.py
 ```
 
 ## HTTP API
@@ -431,7 +430,7 @@ The worker image is built from [sandbox-python.Dockerfile](/home/mathis/Document
 
 Highlights:
 
-- based on `python:3.11-slim`
+- based on `python:3.14-slim-bookworm`
 - builds NSJail from source in a dedicated builder stage
 - installs scientific/data libraries from `sandbox-requirements.txt`
 - bakes the worker bootstrap script into `/payload/bootstrap.py`
