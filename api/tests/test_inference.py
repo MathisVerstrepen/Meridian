@@ -108,6 +108,7 @@ from services.providers.github_copilot_catalog import normalize_github_copilot_m
 from services.providers.models_dev import reduce_models_dev_catalog
 from services.providers.openai_codex_catalog import (
     build_openai_codex_models_from_models_dev,
+    is_models_dev_openai_codex_model,
     normalize_openai_codex_model,
 )
 from services.providers.opencode_go_catalog import (
@@ -2287,6 +2288,57 @@ def test_openai_codex_models_dev_catalog_filters_codex_models():
     assert "openai-codex/gpt-5.4" in model_ids
     assert "openai-codex/gpt-5.4-nano" not in model_ids
     assert "openai-codex/gpt-4.1" not in model_ids
+
+
+@pytest.mark.parametrize(
+    ("model_id", "expected"),
+    [
+        ("gpt-6-astra", True),
+        ("gpt-6", True),
+        ("gpt-6.1", True),
+        ("gpt-5.10", True),
+        ("gpt-5.4", True),
+        ("gpt-5.3-codex", True),
+        ("gpt-5.3", False),
+        ("gpt-5", False),
+        ("gpt-4.1", False),
+        ("gpt-6-nano", False),
+        ("gpt-5.4-nano", False),
+        ("gpt-6astra", False),
+        ("gpt-astra", False),
+        ("", False),
+    ],
+)
+def test_openai_codex_model_filter_supports_integer_versions(model_id, expected):
+    assert is_models_dev_openai_codex_model(model_id) is expected
+
+
+def test_openai_codex_models_dev_catalog_includes_gpt_6_astra():
+    models = build_openai_codex_models_from_models_dev(
+        {
+            "openai": {
+                "models": {
+                    "gpt-6-astra": {
+                        "id": "gpt-6-astra",
+                        "name": "GPT-6 Astra",
+                        "modalities": {"input": ["text", "image", "pdf"], "output": ["text"]},
+                        "limit": {"context": 1050000},
+                    },
+                }
+            }
+        }
+    )
+
+    model = next(model for model in models if model.id == "openai-codex/gpt-6-astra")
+    assert model.name == "GPT-6 Astra"
+    assert model.context_length == 1050000
+    assert model.architecture.input_modalities == ["text", "image", "pdf"]
+    assert model.provider == InferenceProviderEnum.OPENAI_CODEX
+    assert model.billingType == BillingTypeEnum.SUBSCRIPTION
+    assert model.requiresConnection is True
+    assert model.toolsSupport is True
+    assert model.supportsStructuredOutputs is True
+    assert models[0].id == "openai-codex/gpt-6-astra:image-generation"
 
 
 def test_openai_codex_validation_forces_refresh_and_probes_auth():
