@@ -15,6 +15,7 @@ Usage: ./scripts/run-tests.sh [--e2e]
 Runs the repository test protocol:
   - Layered deployment configuration tests
   - Release automation unit tests
+  - Docker workflow policy and cache benchmark unit tests (no builds)
   - Backend pytest suite
   - Backend lint/type checks
   - Frontend lint
@@ -60,8 +61,16 @@ else
     API_PYTHON="python"
 fi
 
+if [[ -x "$BROWSER_SERVICE_DIR/venv/bin/python" ]]; then
+    WORKFLOW_PYTHON="$BROWSER_SERVICE_DIR/venv/bin/python"
+else
+    WORKFLOW_PYTHON="python"
+fi
+
 run_step "Layered deployment configuration tests" "$ROOT_DIR/docker/tests/test_config.sh"
 run_step "Release automation unit tests" "$API_PYTHON" -m unittest discover -s "$ROOT_DIR/scripts/tests" -p 'test_release_automation.py'
+run_step "Docker cache benchmark unit tests" "$API_PYTHON" -m unittest discover -s "$ROOT_DIR/scripts/tests" -p 'test_benchmark_docker_cache.py'
+run_step "Docker workflow policy tests" "$WORKFLOW_PYTHON" -m unittest discover -s "$ROOT_DIR/scripts/tests" -p 'test_docker_publish.py'
 run_step "Backend tests" bash -c "cd '$API_DIR' && '$API_PYTHON' -m pytest tests"
 run_step "Backend lint/type checks" bash -c "cd '$API_DIR' && ./run-linter.sh"
 run_step "Browser service tests and checks" "$BROWSER_SERVICE_DIR/run-checks.sh"

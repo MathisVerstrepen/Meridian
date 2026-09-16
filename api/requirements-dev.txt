@@ -3,3 +3,4 @@ flake8==7.1.0
 isort==5.13.2
 mypy==1.10.0
 types-python-dateutil
+pytest==9.0.3
