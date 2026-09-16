@@ -2,54 +2,43 @@
 import { MessageRoleEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
 
-// --- Props ---
 const props = defineProps<{
-    roleToFind: MessageRoleEnum;
     messages: Message[];
     chatContainer: HTMLElement | null;
-    isAtTop: boolean;
-    isAtBottom: boolean;
-    shortcutModifier: 'ALT' | 'CTRL';
 }>();
 
-// --- Emits ---
-const emit = defineEmits(['teleport']);
+const emit = defineEmits<{
+    teleport: [];
+}>();
 
-// --- Local State ---
 const scrollEndTimer = ref<ReturnType<typeof setTimeout> | null>(null);
-const isMac = ref(false);
+const activePreviewIndex = ref<number | null>(null);
+const { getTextFromMessageFast } = useMessage();
 
-// --- Computed ---
-const roleName = computed(() => (props.roleToFind === MessageRoleEnum.user ? 'user' : 'assistant'));
-const modifierSymbol = computed(() => {
-    if (props.shortcutModifier === 'CTRL') {
-        return isMac.value ? '⌘' : 'CTRL';
-    }
-    if (props.shortcutModifier === 'ALT') {
-        return isMac.value ? '⌥' : 'ALT';
-    }
-    return props.shortcutModifier;
-});
-const relevantIndices = computed(() =>
-    props.messages
-        .map((msg, index) => (msg.role === props.roleToFind ? index : -1))
-        .filter((index) => index !== -1),
-);
+const PREVIEW_LENGTH = 80;
+const TELEPORT_TOP_INSET = 16;
+const FALLBACK_PREVIEW = 'User message';
+const NODE_ID_MARKER_REGEX = /--- Node ID: [a-f0-9-]+ ---/g;
 
-// --- Methods ---
-const findCurrentMessageIndex = (): number => {
-    if (!props.chatContainer) return -1;
-    const { scrollTop } = props.chatContainer;
-
-    // Find the first message that is at least partially in view from the top
-    for (let i = 0; i < props.messages.length; i++) {
-        const el = props.chatContainer.querySelector<HTMLElement>(`[data-message-index="${i}"]`);
-        if (el && el.offsetTop + el.offsetHeight > scrollTop) {
-            return i;
-        }
-    }
-    return props.messages.length - 1;
+const getPreview = (message: Message): string => {
+    const normalizedText = getTextFromMessageFast(message)
+        .replace(NODE_ID_MARKER_REGEX, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!normalizedText) return FALLBACK_PREVIEW;
+    if (normalizedText.length <= PREVIEW_LENGTH) return normalizedText;
+    return `${normalizedText.slice(0, PREVIEW_LENGTH).trimEnd()}…`;
 };
+
+const userMessages = computed(() =>
+    props.messages
+        .map((message, index) => ({ message, index }))
+        .filter(({ message }) => message.role === MessageRoleEnum.user)
+        .map(({ message, index }) => ({
+            index,
+            preview: getPreview(message),
+        })),
+);
 
 const scrollToIndex = (index: number) => {
     if (!props.chatContainer) return;
@@ -72,9 +61,8 @@ const scrollToIndex = (index: number) => {
             }, 100);
         };
 
-        // Check if already centered to handle cases where no scroll event will be fired.
-        const elCenter = el.offsetTop + el.offsetHeight / 2;
-        const desiredScrollTop = elCenter - container.clientHeight / 2;
+        // Check if already inset from the top to handle cases where no scroll event will be fired.
+        const desiredScrollTop = Math.max(0, el.offsetTop - TELEPORT_TOP_INSET);
 
         if (Math.abs(container.scrollTop - desiredScrollTop) < 2) {
             highlight();
@@ -82,110 +70,59 @@ const scrollToIndex = (index: number) => {
         }
 
         container.addEventListener('scroll', scrollEndListener);
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        container.scrollTo({ top: desiredScrollTop, behavior: 'smooth' });
     }
 };
 
-const teleport = (direction: 'up' | 'down') => {
-    if (relevantIndices.value.length === 0) return;
-
+const teleport = (index: number) => {
     emit('teleport');
-
-    const currentIndex = findCurrentMessageIndex();
-    let targetIndex = -1;
-
-    if (direction === 'up') {
-        if (props.isAtTop) return;
-        // Find the last relevant index that is strictly smaller than the current index.
-        const candidates = relevantIndices.value.filter((i) => i < currentIndex);
-        if (candidates.length > 0) {
-            targetIndex = candidates[candidates.length - 1];
-        }
-    } else {
-        if (props.isAtBottom) return;
-        // Find the first relevant index that is strictly larger than the current index.
-        const candidates = relevantIndices.value.filter((i) => i - 1 > currentIndex);
-        if (candidates.length > 0) {
-            targetIndex = candidates[0];
-        }
-    }
-
-    if (targetIndex !== -1) {
-        scrollToIndex(targetIndex);
-    }
+    scrollToIndex(index);
 };
-
-const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.shiftKey) return;
-
-    const isMacPlatform = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-    let modifierMatch = false;
-
-    if (props.shortcutModifier === 'CTRL') {
-        if (isMacPlatform) {
-            if (e.metaKey && !e.ctrlKey && !e.altKey) {
-                modifierMatch = true;
-            }
-        } else {
-            if (e.ctrlKey && !e.metaKey && !e.altKey) {
-                modifierMatch = true;
-            }
-        }
-    } else if (props.shortcutModifier === 'ALT') {
-        if (e.altKey && !e.ctrlKey && !e.metaKey) {
-            modifierMatch = true;
-        }
-    }
-
-    if (modifierMatch) {
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            teleport('up');
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            teleport('down');
-        }
-    }
-};
-
-onMounted(() => {
-    isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-    document.addEventListener('keydown', handleKeyDown);
-});
-
-// --- Lifecycle ---
-onMounted(() => {
-    document.addEventListener('keydown', handleKeyDown);
-});
 
 onUnmounted(() => {
-    document.removeEventListener('keydown', handleKeyDown);
+    if (scrollEndTimer.value) clearTimeout(scrollEndTimer.value);
 });
 </script>
 
 <template>
-    <div
-        class="bg-obsidian/50 text-soft-silk/60 absolute bottom-20 flex flex-col rounded-xl p-1 backdrop-blur-sm"
+    <nav
+        v-if="userMessages.length > 0"
+        aria-label="User message navigator"
+        class="absolute top-1/2 left-2 z-20 flex -translate-y-1/2 flex-col items-start py-2"
     >
-        <button
-            :title="`Previous ${roleName} message (${modifierSymbol} + ↑)`"
-            :disabled="isAtTop"
-            class="hover:bg-soft-silk/5 rounded-[8px] bg-transparent p-1 duration-200 ease-in-out"
-            :class="{ 'cursor-pointer': !isAtTop, 'cursor-not-allowed opacity-50': isAtTop }"
-            @click="teleport('up')"
+        <div
+            v-for="(entry, position) in userMessages"
+            :key="entry.index"
+            class="relative flex items-center"
         >
-            <UiIcon name="LineMdChevronSmallUp" class="h-8 w-8" />
-        </button>
-        <button
-            :title="`Next ${roleName} message (${modifierSymbol} + ↓)`"
-            :disabled="isAtBottom"
-            class="hover:bg-soft-silk/5 rounded-[8px] bg-transparent p-1 duration-200 ease-in-out"
-            :class="{ 'cursor-pointer': !isAtBottom, 'cursor-not-allowed opacity-50': isAtBottom }"
-            @click="teleport('down')"
-        >
-            <UiIcon name="LineMdChevronSmallUp" class="h-8 w-8 rotate-180" />
-        </button>
-    </div>
+            <button
+                type="button"
+                :aria-label="`Go to user message ${position + 1}: ${entry.preview}`"
+                class="group flex h-3 w-8 cursor-pointer items-center rounded-sm focus-visible:outline-2
+                    focus-visible:outline-offset-2 focus-visible:outline-soft-silk/70"
+                @mouseenter="activePreviewIndex = entry.index"
+                @mouseleave="activePreviewIndex = null"
+                @focus="activePreviewIndex = entry.index"
+                @blur="activePreviewIndex = null"
+                @click="teleport(entry.index)"
+            >
+                <span
+                    aria-hidden="true"
+                    class="bg-soft-silk/35 group-hover:bg-soft-silk/80
+                        group-focus-visible:bg-soft-silk/80 h-0.5 w-3 rounded-full transition-all
+                        duration-150 group-hover:w-6 group-focus-visible:w-6"
+                />
+            </button>
+            <div
+                v-if="activePreviewIndex === entry.index"
+                class="bg-obsidian/95 text-soft-silk pointer-events-none absolute top-1/2 left-full
+                    ml-3 w-max max-w-72 -translate-y-1/2 rounded-lg px-3 py-2 text-xs leading-5
+                    font-medium whitespace-normal shadow-lg backdrop-blur-sm"
+            >
+                {{ entry.preview }}
+            </div>
+        </div>
+    </nav>
 </template>
 
 <style>

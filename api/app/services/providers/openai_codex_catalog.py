@@ -131,11 +131,12 @@ def is_models_dev_openai_codex_model(model_id: str) -> bool:
     if "codex" in model_id:
         return True
 
-    match = re.match(r"^gpt-(\d+\.\d+)", model_id)
+    match = re.match(r"^gpt-(\d+)(?:\.(\d+))?(?:-|$)", model_id)
     if not match:
         return False
     try:
-        return float(match.group(1)) >= 5.4 and not model_id.endswith("-nano")
+        version = (int(match.group(1)), int(match.group(2) or 0))
+        return version >= (5, 4) and not model_id.endswith("-nano")
     except ValueError:
         return False
 

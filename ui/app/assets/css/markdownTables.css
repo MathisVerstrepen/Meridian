@@ -1,0 +1,114 @@
+/* Intrinsic widths keep short columns compact; cell caps wrap descriptions, not every word. */
+.markdown-table table {
+    width: max-content;
+    max-width: none;
+    margin: 0;
+    table-layout: auto;
+}
+
+.markdown-table .markdown-table-cell {
+    width: max-content;
+    max-width: 24rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.markdown-table :is(th, td) {
+    padding: 0.65em 1em;
+    vertical-align: top;
+}
+
+.markdown-table [align='left'] {
+    text-align: left;
+}
+
+.markdown-table [align='right'] {
+    text-align: right;
+}
+
+.markdown-table [align='right'] > .markdown-table-cell {
+    margin-left: auto;
+}
+
+.markdown-table [align='center'] {
+    text-align: center;
+}
+
+.markdown-table [align='center'] > .markdown-table-cell {
+    margin-inline: auto;
+}
+
+.markdown-table-scroll:focus-visible,
+.markdown-table-expanded:focus-visible {
+    outline: 2px solid var(--color-stone-gray);
+    outline-offset: -2px;
+}
+
+.markdown-table-expanded {
+    --tw-prose-body: color-mix(in srgb, var(--color-soft-silk) 90%, var(--color-obsidian));
+    --tw-prose-headings: var(--color-soft-silk);
+    --tw-prose-bold: var(--color-soft-silk);
+    --tw-prose-links: var(--color-soft-silk);
+    --tw-prose-code: var(--color-soft-silk);
+    --table-divider: color-mix(in srgb, var(--color-stone-gray) 28%, transparent);
+}
+
+.markdown-table-expanded table {
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+.markdown-table-expanded :is(th, td) {
+    padding: 0.875rem 1rem;
+}
+
+.markdown-table-expanded thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-obsidian);
+}
+
+/* Opaque pinned cells cover horizontally scrolled content without losing row shading. */
+.markdown-table-expanded tr > :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--table-row-background, var(--color-obsidian));
+}
+
+.markdown-table-expanded th {
+    border-bottom: 1px solid var(--table-divider);
+    color: var(--color-soft-silk);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.markdown-table-expanded th .markdown-table-cell {
+    max-width: 12rem;
+}
+
+.markdown-table-expanded td {
+    border-bottom: 1px solid var(--table-divider);
+}
+
+.markdown-table-expanded tbody tr {
+    --table-row-background: var(--color-obsidian);
+    background: var(--table-row-background);
+}
+
+.markdown-table-expanded tbody tr:nth-child(even) {
+    --table-row-background: color-mix(in srgb, var(--color-soft-silk) 3%, var(--color-obsidian));
+}
+
+.markdown-table-expanded tbody tr:hover {
+    --table-row-background: color-mix(in srgb, var(--color-soft-silk) 7%, var(--color-obsidian));
+}
+
+.markdown-table-expanded tbody tr:last-child td {
+    border-bottom: 0;
+}

@@ -23,6 +23,40 @@ const createSegment = (html: string): RenderedMarkdownSegment => {
 };
 
 describe('MarkdownResponse', () => {
+    it('expands only the selected rendered table and keeps its snapshot through streaming replacement', async () => {
+        const segment = createSegment('<table><tr><td><strong>First</strong></td></tr></table><table><tr><td><code>&lt;b&gt;Second&lt;/b&gt;</code></td></tr></table>');
+        const wrapper = mount(MarkdownResponse, {
+            attachTo: document.body,
+            props: { segments: [segment], renderMermaidCharts: vi.fn() },
+            global: {
+                stubs: {
+                    UiIcon: true,
+                    Dialog: { props: ['open'], template: '<div v-if="open" role="dialog"><slot /></div>' },
+                    DialogPanel: { template: '<div><slot /></div>' },
+                    DialogTitle: { template: '<h2><slot /></h2>' },
+                },
+            },
+        });
+        try {
+            const original = wrapper.findAll('table')[1]!.element;
+            await wrapper.findAll('button[aria-label="Expand table"]')[1]!.trigger('click');
+            const dialog = wrapper.get('[role="dialog"]');
+            expect(dialog.text()).toContain('<b>Second</b>');
+            expect(dialog.find('b').exists()).toBe(false);
+            expect(dialog.find('table').element).not.toBe(original);
+            expect(original.isConnected).toBe(true);
+            const next = { ...createSegment('<table><tr><td>Updated</td></tr></table>'), renderKey: 'response-1:1' };
+            await wrapper.setProps({ segments: [next] });
+            expect(wrapper.findAll('button[aria-label="Expand table"]')).toHaveLength(1);
+            expect(dialog.text()).toContain('<b>Second</b>');
+            await wrapper.get('button[aria-label="Close expanded table"]').trigger('click');
+            expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+            expect(wrapper.findAll('table')).toHaveLength(1);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('renders token components through Vue-owned deferred Teleports', () => {
         const segment = createSegment(
             '<div class="sandbox-download-placeholder" data-file-id="file-1" data-label="Report" data-filename="report.txt"></div>',

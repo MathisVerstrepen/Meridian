@@ -39,8 +39,6 @@ const COLLAPSE_THRESHOLD = 500;
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
 const session = ref(getSession(openChatId.value || ''));
-const isAtTop = ref(false);
-const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
 const highlightedNodeId = ref<string | null>(null);
@@ -49,7 +47,7 @@ const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
-const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToBottom } =
+const { goBackToBottom, triggerScroll, handleScroll, isLockedToBottom } =
     useChatScroll(chatContainer);
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
@@ -85,7 +83,7 @@ const toggleMessageExpansion = (index: number) => {
 };
 
 const setMessageRendererRef = (index: number, component: RuntimeValue) => {
-    const submitEdit = isRuntimeObject(component) && 'submitEdit' in component
+    const submitEdit = component !== null && isRuntimeObject(component) && 'submitEdit' in component
         ? component.submitEdit
         : undefined;
     if (isRuntimeFunction(submitEdit)) {
@@ -148,18 +146,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
 };
 
-const updateScrollState = () => {
-    if (!chatContainer.value) {
-        isAtTop.value = true;
-        isAtBottom.value = true;
-        return;
-    }
-    const { scrollTop, scrollHeight, clientHeight } = chatContainer.value;
-    const threshold = 2;
-    isAtTop.value = scrollTop <= threshold;
-    isAtBottom.value = scrollHeight - scrollTop <= clientHeight + threshold;
-};
-
 const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
@@ -211,7 +197,6 @@ watch(
         ) {
             triggerScroll('smooth');
         }
-        nextTick(updateScrollState);
     },
     { immediate: true },
 );
@@ -237,7 +222,7 @@ watch(renderedMessageCount, (count) => {
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
         nextTick(() => {
-            scrollToBottom();
+            triggerScroll();
         });
     }
 });
@@ -258,12 +243,9 @@ watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
         oldEl.removeEventListener('wheel', handleScroll);
-        oldEl.removeEventListener('scroll', updateScrollState);
     }
     if (newEl) {
         newEl.addEventListener('wheel', handleScroll, { passive: true });
-        newEl.addEventListener('scroll', updateScrollState, { passive: true });
-        nextTick(updateScrollState);
     }
 });
 
@@ -505,24 +487,8 @@ onUnmounted(() => {
 
             <UiChatUtilsMessageTeleport
                 v-if="session.messages.length > 0 && chatContainer"
-                class="left-8"
-                :role-to-find="MessageRoleEnum.user"
                 :messages="session.messages"
                 :chat-container="chatContainer"
-                :is-at-top="isAtTop"
-                :is-at-bottom="isAtBottom"
-                shortcut-modifier="CTRL"
-                @teleport="isLockedToBottom = false"
-            />
-            <UiChatUtilsMessageTeleport
-                v-if="session.messages.length > 0 && chatContainer"
-                class="right-8"
-                :role-to-find="MessageRoleEnum.assistant"
-                :messages="session.messages"
-                :chat-container="chatContainer"
-                :is-at-top="isAtTop"
-                :is-at-bottom="isAtBottom"
-                shortcut-modifier="ALT"
                 @teleport="isLockedToBottom = false"
             />
         </div>

@@ -1,4 +1,5 @@
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ChatBox from '@/components/ui/chat/chatBox.vue';
@@ -12,6 +13,7 @@ interface ChatBoxTestStubs {
     generateNew: ReturnType<typeof vi.fn>;
     graphEmit: ReturnType<typeof vi.fn>;
     initialOpenChatId: string;
+    isStreaming: Ref<boolean> | null;
     openChatId: Ref<string | null> | null;
     session: ChatSession;
     sessionRef: Ref<ChatSession> | null;
@@ -22,6 +24,7 @@ const stubs = vi.hoisted((): ChatBoxTestStubs => ({
     generateNew: vi.fn(),
     graphEmit: vi.fn(),
     initialOpenChatId: 'chat-id',
+    isStreaming: null,
     openChatId: null,
     session: {
         fromNodeId: 'chat-id',
@@ -32,8 +35,9 @@ const stubs = vi.hoisted((): ChatBoxTestStubs => ({
 
 mockNuxtImport('useChatGenerator', () => (session: Ref<ChatSession>) => {
     stubs.sessionRef = session;
+    stubs.isStreaming = ref(false);
     return {
-        isStreaming: ref(false),
+        isStreaming: stubs.isStreaming,
         streamingSession: ref(null),
         generationError: ref(null),
         selectedNodeType: ref(NodeTypeEnum.STREAMING),
@@ -86,13 +90,6 @@ mockNuxtImport('useWebSocket', () => () => ({
     connect: vi.fn(),
 }));
 mockNuxtImport('useGraphChat', () => () => ({ isCanvasEmpty: vi.fn(() => false) }));
-mockNuxtImport('useChatScroll', () => () => ({
-    goBackToBottom: vi.fn(),
-    scrollToBottom: vi.fn(),
-    triggerScroll: vi.fn(),
-    handleScroll: vi.fn(),
-    isLockedToBottom: ref(true),
-}));
 mockNuxtImport('useAPI', () => () => ({ persistGraph: vi.fn() }));
 mockNuxtImport('useGraphEvents', () => () => ({
     emit: stubs.graphEmit,
@@ -107,7 +104,7 @@ mockNuxtImport('useHydratedMediaQuery', () => () => ref(false));
 
 const TextInputStub = defineComponent({
     name: 'UiChatTextInput',
-    emits: ['generate'],
+    emits: ['generate', 'go-back-to-bottom'],
     setup() {
         return () => h('div');
     },
@@ -115,6 +112,18 @@ const TextInputStub = defineComponent({
 
 const MarkdownRendererStub = (props: { message: Message }) =>
     h('span', { class: 'message-text' }, props.message.content[0]?.text ?? '');
+
+const StatefulMarkdownRendererStub = defineComponent(
+    (props: { message: Message; isStreaming?: boolean }, { expose }) => {
+        expose({ submitEdit: () => undefined });
+        return () => h('span', { class: 'message-text' }, props.message.content[0]?.text ?? '');
+    },
+    {
+        name: 'UiChatMarkdownRenderer',
+        props: ['message', 'isStreaming'],
+        emits: ['rendered', 'trigger-scroll'],
+    },
+);
 
 const NodeTypeIndicatorStub = defineComponent({
     name: 'UiChatNodeTypeIndicator',
@@ -134,6 +143,7 @@ describe('chatBox manual message generation', () => {
         stubs.callOrder.length = 0;
         stubs.initialOpenChatId = 'chat-id';
         stubs.openChatId = null;
+        stubs.isStreaming = null;
         stubs.session.fromNodeId = 'chat-id';
         stubs.session.messages.splice(0);
         stubs.sessionRef = null;
@@ -225,5 +235,124 @@ describe('chatBox manual message generation', () => {
         await nextTick();
 
         expect(wrapper.text()).toContain('First streamed chunk');
+    });
+
+    it.each(['scrolled up', 'following bottom', 'returned to bottom'] as const)(
+        'respects scroll intent on stream completion when %s',
+        async (position) => {
+            stubs.session.messages.push({
+                role: MessageRoleEnum.user,
+                content: [{ type: MessageContentTypeEnum.TEXT, text: 'Previous message' }],
+                model: null,
+                node_id: 'user-node-id',
+                type: NodeTypeEnum.TEXT_TO_TEXT,
+                data: null,
+                usageData: null,
+            });
+            const wrapper = await mountSuspended(ChatBox, {
+                shallow: true,
+                global: {
+                    stubs: {
+                        UiChatMarkdownRenderer: StatefulMarkdownRendererStub,
+                        UiChatNodeTypeIndicator: NodeTypeIndicatorStub,
+                        UiChatTextInput: TextInputStub,
+                    },
+                },
+            });
+
+            try {
+                const container = wrapper.get<HTMLElement>('.chat-panel__messages');
+                const element = container.element;
+                Object.defineProperties(element, {
+                    scrollHeight: { configurable: true, value: 2000 },
+                    clientHeight: { configurable: true, value: 500 },
+                });
+                const scrollTo = vi.spyOn(element, 'scrollTo').mockImplementation(() => {
+                    element.scrollTop = 1500;
+                });
+
+                wrapper.getComponent(StatefulMarkdownRendererStub).vm.$emit('rendered');
+                await flushPromises();
+                expect(scrollTo).toHaveBeenCalledWith({ top: 3000, behavior: 'auto' });
+                expect(element.scrollTop).toBe(1500);
+
+                const activeSession = stubs.sessionRef!;
+                const isStreaming = stubs.isStreaming!;
+                isStreaming.value = true;
+                activeSession.value.messages.push({
+                    ...activeSession.value.messages[0]!,
+                    role: MessageRoleEnum.assistant,
+                    node_id: 'assistant-node-id',
+                    content: [{ type: MessageContentTypeEnum.TEXT, text: 'Streaming response' }],
+                });
+                await flushPromises();
+                const renderer = wrapper.findAllComponents(StatefulMarkdownRendererStub)[1]!;
+                expect(renderer.props('isStreaming')).toBe(true);
+                await container.trigger('wheel');
+                if (position !== 'following bottom') {
+                    element.scrollTop = 700;
+                    await container.trigger('wheel');
+                }
+                if (position === 'returned to bottom') {
+                    wrapper.getComponent(TextInputStub).vm.$emit('go-back-to-bottom');
+                    await flushPromises();
+                }
+                scrollTo.mockClear();
+
+                renderer.vm.$emit('trigger-scroll');
+                isStreaming.value = false;
+                await nextTick();
+                expect(renderer.props('isStreaming')).toBe(false);
+                renderer.vm.$emit('rendered');
+                await flushPromises();
+
+                if (position === 'scrolled up') {
+                    expect(scrollTo).not.toHaveBeenCalled();
+                    expect(element.scrollTop).toBe(700);
+                } else {
+                    expect(scrollTo).toHaveBeenCalledWith({ top: 3000, behavior: 'auto' });
+                    expect(element.scrollTop).toBe(1500);
+                }
+            } finally {
+                wrapper.unmount();
+            }
+        },
+    );
+
+    it('clears stateful renderer refs without Vue teardown errors', async () => {
+        stubs.session.messages.push({
+            role: MessageRoleEnum.user,
+            content: [{ type: MessageContentTypeEnum.TEXT, text: 'Message to tear down' }],
+            model: null,
+            node_id: 'user-node-id',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: null,
+            usageData: null,
+        });
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        try {
+            const wrapper = await mountSuspended(ChatBox, {
+                shallow: true,
+                global: {
+                    stubs: {
+                        UiChatMarkdownRenderer: StatefulMarkdownRendererStub,
+                        UiChatTextInput: TextInputStub,
+                    },
+                },
+            });
+
+            expect(wrapper.findComponent(StatefulMarkdownRendererStub).exists()).toBe(true);
+            expect(() => wrapper.unmount()).not.toThrow();
+
+            const warnings = warnSpy.mock.calls
+                .flatMap(call => call.map(String))
+                .join('\n');
+            expect(warnings).not.toMatch(
+                /\[Vue warn\]: Unhandled error during execution of (?:ref function|component update)/,
+            );
+        } finally {
+            warnSpy.mockRestore();
+        }
     });
 });
