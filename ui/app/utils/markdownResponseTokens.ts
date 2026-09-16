@@ -135,6 +135,30 @@ export const prepareMarkdownResponse = (
         }
     }
 
+    // Keep tables in the prepared DOM so links and nested enhancement targets retain ownership.
+    for (const table of Array.from(root.querySelectorAll('table'))) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'markdown-table my-5 min-w-0 max-w-full';
+        const target = createTarget('table-expand');
+        target.className = 'not-prose mb-1 flex justify-end';
+        const scroll = document.createElement('div');
+        scroll.id = `${target.id}-scroll`;
+        scroll.className = 'markdown-table-scroll custom_scroll max-w-full overflow-x-auto';
+        scroll.tabIndex = 0;
+        scroll.setAttribute('role', 'region');
+        scroll.setAttribute('aria-label', 'Scrollable table');
+        for (const cell of Array.from(table.querySelectorAll('th, td'))) {
+            const content = document.createElement('div');
+            content.className = 'markdown-table-cell';
+            content.append(...Array.from(cell.childNodes));
+            cell.append(content);
+        }
+        addToken(target, { kind: 'table-expand', scrollId: scroll.id });
+        table.replaceWith(wrapper);
+        scroll.append(table);
+        wrapper.append(target, scroll);
+    }
+
     return Object.freeze({
         html: template.innerHTML,
         tokens: Object.freeze(tokens),

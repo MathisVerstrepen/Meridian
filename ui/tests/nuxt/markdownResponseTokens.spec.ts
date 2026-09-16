@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { prepareMarkdownResponse } from '@/utils/markdownResponseTokens';
 
 describe('prepareMarkdownResponse', () => {
+    it('wraps each table independently without changing alignment, inline HTML or nested targets', () => {
+        const prepared = prepareMarkdownResponse(
+            '<table><thead><tr><th align="right">Count</th></tr></thead><tbody><tr><td align="right"><strong>2</strong> <code>&lt;img onerror=alert(1)&gt;</code> <a href="https://example.com">Link</a><div class="sandbox-download-placeholder" data-file-id="file-1" data-label="Report"></div></td></tr></tbody></table><table><tr><td>Small</td></tr></table>',
+            'tables',
+        );
+        const root = document.createElement('div');
+        root.innerHTML = prepared.html;
+        const tokens = prepared.tokens.filter((token) => token.kind === 'table-expand');
+        expect(tokens).toHaveLength(2);
+        expect(new Set(tokens.map((token) => token.scrollId)).size).toBe(2);
+        expect(root.querySelectorAll('.markdown-table-scroll[tabindex="0"]')).toHaveLength(2);
+        expect(root.querySelector('th')?.getAttribute('align')).toBe('right');
+        expect(root.querySelector('td strong')?.textContent).toBe('2');
+        expect(root.querySelector('td code')?.textContent).toBe('<img onerror=alert(1)>');
+        expect(root.querySelector('td img[onerror]')).toBeNull();
+        expect(root.querySelector('td a')?.getAttribute('href')).toBe('https://example.com');
+        expect(root.querySelector('td [data-markdown-token-target="sandbox-download"]')).not.toBeNull();
+    });
+
     it('prepares all special nodes and response favicons in one detached document', () => {
         const prepared = prepareMarkdownResponse(
             [

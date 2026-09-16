@@ -6,6 +6,11 @@ export type MarkdownRenderTokenBase = Readonly<{
 export type MarkdownResponseRenderToken =
     | (MarkdownRenderTokenBase &
           Readonly<{
+              kind: 'table-expand';
+              scrollId: string;
+          }>)
+    | (MarkdownRenderTokenBase &
+          Readonly<{
               kind: 'generated-image';
               prompt: string;
               imageUrl: string;

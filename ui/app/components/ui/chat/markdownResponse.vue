@@ -8,6 +8,9 @@ import SandboxHtmlArtifactCard from '@/components/ui/chat/utils/sandboxHtmlArtif
 import ToolQuestionCard from '@/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '@/components/ui/chat/utils/visualiseArtifactEmbed.vue';
 import CopyButton from '@/components/ui/chat/utils/copyButton.vue';
+import MarkdownTableExpandButton from '@/components/ui/chat/utils/markdownTableExpandButton.vue';
+import MarkdownTableDialog from '@/components/ui/chat/utils/markdownTableDialog.vue';
+import '@/assets/css/markdownTables.css';
 
 const FullScreenButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
@@ -24,6 +27,7 @@ const emit = defineEmits<{
 }>();
 
 const responseRoot = ref<HTMLElement | null>(null);
+const expandedTable = shallowRef<HTMLTableElement | null>(null);
 const renderedMermaidElements = shallowRef<Map<string, HTMLElement>>(new Map());
 const HTML_EMBED_CACHE_BUSTER = 'storage-shim-v1';
 const CONTROL_CLASS =
@@ -165,7 +169,13 @@ defineExpose({ finalizePendingMermaid });
                     :raw-mermaid-element="token.rawMermaidElement"
                     :class="CONTROL_CLASS"
                 />
+                <MarkdownTableExpandButton
+                    v-else-if="token.kind === 'table-expand'"
+                    :scroll-id="token.scrollId"
+                    @expand="expandedTable = $event"
+                />
             </Teleport>
         </div>
+        <MarkdownTableDialog :table="expandedTable" @close="expandedTable = null" />
     </div>
 </template>
