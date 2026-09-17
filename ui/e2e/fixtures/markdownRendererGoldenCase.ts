@@ -1,5 +1,6 @@
 import { MARKDOWN_TABLE_SAMPLE } from './markdownTableSample';
 import { MARKDOWN_FINANCE_TABLE } from './markdownFinanceTable';
+import { TOOL_CONTEXT_CASE } from './toolContextCase';
 
 export const GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE = '/auth/markdown-renderer-fixture';
 export const ONE_PIXEL_PNG_BASE64 =
@@ -713,6 +714,7 @@ The key security considerations here:
 
 export const MARKDOWN_RENDERER_FIXTURE_CASES = {
     ...BASE_MARKDOWN_RENDERER_FIXTURE_CASES,
+    toolContext: TOOL_CONTEXT_CASE,
     financeTable: {
         key: 'financeTable',
         nodeId: 'fixture-node-finance-table',

@@ -1,5 +1,6 @@
 from database.pg.chat_ops.tool_call_crud import (
     create_tool_call,
+    get_completed_tool_calls_for_history,
     get_successful_inspect_image_calls_for_node,
     get_tool_call_by_id,
     get_tool_calls_by_ids,
@@ -8,6 +9,7 @@ from database.pg.chat_ops.tool_call_crud import (
 
 __all__ = [
     "create_tool_call",
+    "get_completed_tool_calls_for_history",
     "get_tool_call_by_id",
     "get_tool_calls_by_ids",
     "get_successful_inspect_image_calls_for_node",

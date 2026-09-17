@@ -1,9 +1,8 @@
-import json
 from dataclasses import dataclass
 from html import escape
 from typing import Any, Awaitable, Callable
 
-from database.pg.models import ToolCall, ToolCallStatusEnum
+from database.pg.models import ToolCallStatusEnum
 from models.message import ToolEnum
 from services.tools.ask_user import ASK_USER_TOOL, ask_user
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
@@ -39,18 +38,6 @@ class ToolRuntimeDefinition:
     handler: ToolHandler
     tag_names: tuple[str, ...]
     summary_renderer: Callable[[str, dict[str, Any], Any, int | None], str]
-
-    def render_context(self, tool_call: ToolCall) -> str:
-        arguments = json.dumps(tool_call.arguments, indent=2, ensure_ascii=True, sort_keys=True)
-        result = json.dumps(tool_call.result, indent=2, ensure_ascii=True, sort_keys=True)
-        return (
-            f'\n<tool_call_context id="{tool_call.id}" name="{tool_call.tool_name}" '
-            f'status="{tool_call.status}">\n'
-            f"Arguments:\n{arguments}\n"
-            f"Result:\n{result}\n"
-            f"Model context payload:\n{tool_call.model_context_payload}\n"
-            "</tool_call_context>\n"
-        )
 
 
 def resolve_tool_status(tool_result: Any) -> ToolCallStatusEnum:

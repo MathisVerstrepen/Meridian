@@ -108,7 +108,7 @@ async def test_image_inspection_provenance_is_added_during_history_reconstructio
             new=AsyncMock(
                 return_value=[
                     SimpleNamespace(id="prompt-1"),
-                    SimpleNamespace(id="generator-1"),
+                    SimpleNamespace(id="generator-1", data={}, type="textToText"),
                 ]
             ),
         ),

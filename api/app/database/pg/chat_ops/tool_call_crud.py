@@ -100,6 +100,37 @@ async def get_tool_calls_by_ids(
         }
 
 
+async def get_completed_tool_calls_for_history(
+    pg_engine: SQLAlchemyAsyncEngine,
+    *,
+    user_id: str,
+    graph_id: str,
+    node_id: str,
+    tool_call_ids: list[str],
+    model_id: str | None = None,
+) -> list[ToolCall]:
+    """Read only referenced completed calls in one generator/model-entry scope."""
+    if not tool_call_ids:
+        return []
+    async with AsyncSession(pg_engine) as session:
+        stmt = (
+            select(ToolCall)
+            .where(
+                cast(Any, ToolCall.id).in_([uuid.UUID(value) for value in tool_call_ids]),
+                cast(Any, ToolCall.user_id) == uuid.UUID(user_id),
+                cast(Any, ToolCall.graph_id) == uuid.UUID(graph_id),
+                cast(Any, ToolCall.node_id) == node_id,
+                cast(Any, ToolCall.model_id) == model_id,
+                cast(Any, ToolCall.status).in_(
+                    [ToolCallStatusEnum.SUCCESS, ToolCallStatusEnum.ERROR]
+                ),
+            )
+            .order_by(cast(Any, ToolCall.created_at).asc(), cast(Any, ToolCall.id).asc())
+        )
+        result = await session.exec(stmt)  # type: ignore
+        return list(result.scalars().all())
+
+
 async def get_successful_inspect_image_calls_for_node(
     pg_engine: SQLAlchemyAsyncEngine,
     *,

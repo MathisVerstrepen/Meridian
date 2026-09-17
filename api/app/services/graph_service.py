@@ -40,6 +40,7 @@ from services.node import (
     system_message_builder,
 )
 from services.settings import concat_system_prompts, get_user_settings
+from services.tool_history import build_tool_history, clean_legacy_tool_context
 from services.tools.image_inspection_provenance import enrich_message_with_inspection_provenance
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -94,7 +95,8 @@ async def construct_message_history(
     Returns:
         list[Message]:
             A list of Message objects representing the conversation history.
-            Each message contains a role (user or assistant) and the corresponding content.
+            Full history may include paired assistant calls and tool results; reduced history
+            contains presentation messages only.
     """
     with sentry_sdk.start_span(
         op="chat.history.build", description="Build message history"
@@ -156,7 +158,7 @@ async def construct_message_history(
                 available_models,
             )
             messages = await merger_service.construct_merged_history(
-                merger_node.id, system_prompt, github_auto_pull
+                merger_node.id, system_prompt, github_auto_pull, view=view
             )
 
             # Process any nodes that come after the merger.
@@ -284,21 +286,35 @@ async def construct_message_from_generator_node(
 
         messages = [user_message]
         if add_assistant_message:
+            node = next(n for n in nodes_data if n.id == generator_node_id)
             message = await node_to_message(
-                node=next((n for n in nodes_data if n.id == generator_node_id)),
+                node=node,
                 clean_text=clean_text,
-                pg_engine=pg_engine,
-                user_id=user_id,
-                expand_tool_context=view == "full",
             )
             if message:
-                message = await enrich_message_with_inspection_provenance(
-                    message,
-                    pg_engine=pg_engine,
-                    user_id=user_id,
-                    graph_id=graph_id,
-                    node_id=generator_node_id,
-                )
+                if view == "full":
+                    data = node.data if isinstance(node.data, dict) else {}
+                    reply_data = (
+                        data.get("aggregator", {})
+                        if node.type == NodeTypeEnum.PARALLELIZATION
+                        else data
+                    )
+                    messages.extend(
+                        await build_tool_history(
+                            reply_data.get("reply") or "",
+                            pg_engine=pg_engine,
+                            user_id=user_id,
+                            graph_id=graph_id,
+                            node_id=generator_node_id,
+                        )
+                    )
+                    message = await enrich_message_with_inspection_provenance(
+                        message,
+                        pg_engine=pg_engine,
+                        user_id=user_id,
+                        graph_id=graph_id,
+                        node_id=generator_node_id,
+                    )
                 messages.append(message)
         return messages
 
@@ -317,10 +333,8 @@ async def construct_parallelization_aggregator_prompt(
     Assembles a list of messages for an aggregator prompt by collecting model replies and
     formatting them for parallelization.
 
-    This function retrieves the parent prompt node, gathers the current node's data, and constructs
-    an aggregator prompt by appending each model's reply. It then creates a list of `Message`
-    objects, including a system message with the constructed prompt and a user message with
-    the parent prompt content.
+    Configured prompts remain system instructions. The parent prompt and numbered child answers
+    are user context, with each child's eligible persisted tool pairs immediately before its answer.
 
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
@@ -349,15 +363,6 @@ async def construct_parallelization_aggregator_prompt(
     models = node.data.get("models", [])
 
     aggregator_prompt = node.data.get("aggregator", {}).get("prompt", "")
-    for idx, model in enumerate(models):
-        reply = model.get("reply")
-
-        aggregator_prompt += f"""\n
-            === Answer {idx + 1} ===
-            {reply}
-            \n
-        """
-
     system_message = system_message_builder(f"{system_prompt}\n{aggregator_prompt}")
     constructed_messages = await construct_message_from_generator_node(
         pg_engine=pg_engine,
@@ -377,6 +382,29 @@ async def construct_parallelization_aggregator_prompt(
         messages.append(system_message)
     if constructed_messages and len(constructed_messages):
         messages.extend(constructed_messages)
+    for idx, model in enumerate(models):
+        reply = clean_legacy_tool_context(model.get("reply") or "")
+        if model.get("id"):
+            messages.extend(
+                await build_tool_history(
+                    reply,
+                    pg_engine=pg_engine,
+                    user_id=user_id,
+                    graph_id=graph_id,
+                    node_id=node_id,
+                    model_id=model["id"],
+                )
+            )
+        messages.append(
+            Message(
+                role=MessageRoleEnum.user,
+                content=[
+                    MessageContent(
+                        type=MessageContentTypeEnum.text, text=f"=== Answer {idx + 1} ===\n{reply}"
+                    )
+                ],
+            )
+        )
 
     return messages
 

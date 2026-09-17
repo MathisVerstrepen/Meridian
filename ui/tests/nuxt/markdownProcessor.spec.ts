@@ -18,6 +18,66 @@ const deferred = <T>(): Deferred<T> => {
 };
 
 describe('useMarkdownProcessor processMarkdown', () => {
+    it('runs tool preprocessing on cleaned text exactly once, without filtering newly adjacent prose', async () => {
+        const processor = useMarkdownProcessor();
+        const parser = (markdown: string) => Promise.resolve(markdown);
+        const preprocessCleanedMarkdown = vi.fn((markdown: string) => markdown);
+        const input = 'Before <tool_call_context<tool_call_context>PRIVATE</tool_call_context>> After';
+        await processor.processMarkdown(input, parser, undefined, { preprocessCleanedMarkdown });
+        expect(preprocessCleanedMarkdown).toHaveBeenCalledExactlyOnceWith('Before <tool_call_context> After');
+        expect(processor.responseHtml.value).toBe('Before <tool_call_context> After');
+        await processor.processMarkdown('', parser, undefined, { preprocessCleanedMarkdown });
+        expect(preprocessCleanedMarkdown).toHaveBeenLastCalledWith('');
+        expect(processor.responseHtml.value).toBe('');
+    });
+
+    it('filters every streaming prefix before parsing either channel without mutating input', async () => {
+        const processor = useMarkdownProcessor();
+        const parser = vi.fn((markdown: string) => Promise.resolve(markdown));
+        const before = '[THINK]Visible thought';
+        const hidden = '<tool_call_context id="old">[ERROR]PRIVATE[!ERROR]<search_query>PRIVATE</search_query></tool_call_context>';
+        const after = ' continues[!THINK]\n\n**Visible answer**';
+        const input = { text: `${before}${hidden}${after}` };
+        const original = input.text;
+        for (let end = before.length; end <= input.text.length; end += 1) {
+            await processor.processMarkdown(input.text.slice(0, end), parser, undefined, {
+                cacheKey: 'legacy-stream', isStreaming: true,
+            });
+            expect(processor.isError.value).toBe(false);
+            expect(processor.webSearches.value).toEqual([]);
+            expect(processor.thinkingHtml.value).not.toMatch(/PRIVATE|tool_call_context/);
+            expect(processor.responseHtml.value).not.toMatch(/PRIVATE|tool_call_context/);
+        }
+        const incremental = [processor.thinkingHtml.value, processor.responseHtml.value];
+        await processor.processMarkdown(input.text, parser, undefined, {
+            cacheKey: 'legacy-stream', isStreaming: false,
+        });
+        expect([processor.thinkingHtml.value, processor.responseHtml.value]).toEqual(incremental);
+        expect(processor.thinkingHtml.value).toBe('Visible thought continues');
+        expect(processor.responseHtml.value).toBe('**Visible answer**');
+        expect(parser.mock.calls.flat().join('')).not.toContain('PRIVATE');
+        expect(input.text).toBe(original);
+    });
+
+    it.each(['<', '<tool_call_con', '<tool_call_context'])('restores %s when streaming stops with unchanged input', async (tail) => {
+        const processor = useMarkdownProcessor();
+        const parser = (markdown: string) => Promise.resolve(markdown);
+        const input = `Visible ${tail}`;
+        await processor.processMarkdown(input, parser, undefined, { isStreaming: true });
+        expect(processor.responseHtml.value).toBe('Visible');
+        await processor.processMarkdown(input, parser, undefined, { isStreaming: false });
+        expect(processor.responseHtml.value).toBe(input);
+    });
+
+    it('keeps a recognized unfinished block hidden on cancellation', async () => {
+        const processor = useMarkdownProcessor();
+        const parser = (markdown: string) => Promise.resolve(markdown);
+        const input = 'Visible <tool_call_context id="old">PRIVATE';
+        await processor.processMarkdown(input, parser, undefined, { isStreaming: true });
+        await processor.processMarkdown(input, parser, undefined, { isStreaming: false });
+        expect(processor.responseHtml.value).toBe('Visible');
+    });
+
     it('does not let an older successful parse overwrite the newest response', async () => {
         const older = deferred<string>();
         const parser = vi.fn((markdown: string) =>

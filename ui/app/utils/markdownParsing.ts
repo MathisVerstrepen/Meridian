@@ -1,5 +1,6 @@
 import { ToolEnum } from '@/types/enums';
 import type { FetchedPage, WebSearch } from '@/types/webSearch';
+import { stripToolCallContext } from '@/utils/toolContextCleanup';
 
 export type ParsedAutoToolSelection = {
     selectedTools: ToolEnum[];
@@ -326,8 +327,13 @@ const splitThinkingAndResponse = (
     };
 };
 
-export const parseAssistantContent = (markdown: string): ParsedAssistantContent => {
-    const rawText = markdown.trim();
+export const parseAssistantContent = (
+    markdown: string,
+    isStreaming = false,
+    preprocessCleanedMarkdown?: (markdown: string) => string,
+): ParsedAssistantContent => {
+    const cleaned = stripToolCallContext(markdown, isStreaming);
+    const rawText = (preprocessCleanedMarkdown ? preprocessCleanedMarkdown(cleaned) : cleaned).trim();
     if (!rawText) {
         return {
             errorText: null,
