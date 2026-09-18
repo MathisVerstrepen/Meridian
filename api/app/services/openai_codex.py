@@ -42,6 +42,7 @@ from services.providers.common import (
     strip_model_prefix,
     write_private_file,
 )
+from services.providers.message_serialization import responses_function_calls
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
     OPENAI_CODEX_PROVIDER_KEY,
@@ -925,30 +926,6 @@ def _extract_image_urls(content: Any) -> list[str]:
         if image_url:
             image_urls.append(image_url)
     return image_urls
-
-
-def _summarize_tool_calls(tool_calls: Any) -> str:
-    if not isinstance(tool_calls, list) or not tool_calls:
-        return ""
-
-    normalized_tool_calls: list[str] = []
-    for tool_call in tool_calls:
-        if not isinstance(tool_call, dict):
-            continue
-
-        function_payload = tool_call.get("function")
-        if not isinstance(function_payload, dict):
-            continue
-
-        function_name = str(function_payload.get("name") or "tool").strip() or "tool"
-        arguments = function_payload.get("arguments")
-        if isinstance(arguments, str):
-            arguments_text = arguments.strip() or "{}"
-        else:
-            arguments_text = json.dumps(arguments or {}, indent=2)
-        normalized_tool_calls.append(f"- {function_name}: {arguments_text}")
-
-    return "\n".join(normalized_tool_calls)
 
 
 def _extract_reasoning_item_text(item: Any) -> str:
@@ -1875,18 +1852,14 @@ def _build_openai_codex_direct_input(req: OpenAICodexReqChat) -> list[dict[str, 
             continue
 
         if role == "tool":
-            tool_name = str(message.get("name") or "tool").strip() or "tool"
             tool_text = extract_text_content(message.get("content"))
-            if not tool_text and message.get("content") is not None:
-                tool_text = str(message.get("content") or "").strip()
-            if tool_text:
+            call_id = message.get("tool_call_id")
+            if call_id:
                 input_items.append(
                     {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": f"Tool ({tool_name}):\n{tool_text}"}
-                        ],
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": tool_text,
                     }
                 )
             continue
@@ -1895,17 +1868,10 @@ def _build_openai_codex_direct_input(req: OpenAICodexReqChat) -> list[dict[str, 
             message.get("content"),
             assistant=role == "assistant",
         )
-        tool_calls_text = _summarize_tool_calls(message.get("tool_calls"))
-        if tool_calls_text:
-            content_items.append(
-                {
-                    "type": "output_text" if role == "assistant" else "input_text",
-                    "text": f"Tool calls:\n{tool_calls_text}",
-                }
-            )
-        if not content_items:
-            continue
-        input_items.append({"type": "message", "role": role, "content": content_items})
+        if content_items:
+            input_items.append({"type": "message", "role": role, "content": content_items})
+        if role == "assistant":
+            input_items.extend(responses_function_calls(message.get("tool_calls")))
 
     if input_items:
         return input_items

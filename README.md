@@ -276,11 +276,13 @@ Set up Meridian for local development with hot reloading, debugging capabilities
 
 *   **Docker and Docker Compose** installed on your machine
 *   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** v4, or `curl`/`wget` so the renderer can install its pinned copy
-*   **Python 3.11 or higher** for the backend
+*   **Python 3.14** for all Python services (declared in `.python-version`)
 *   **Node.js 22.19+ on Node 22, 24.11+ on Node 24, or 26+, and pnpm/npm** for the frontend (CI and containers use Node 24)
 *   **Git** (for cloning the repository)
 
 ### Development Setup
+
+Install Python 3.14 before running `make install-api` or `make install-browser-service`. These targets explicitly use `python3.14` (override with `PYTHON=/path/to/python3.14`). Existing environments on older Python versions are rejected, never deleted or upgraded in place. Move them aside yourself, or choose fresh absolute paths with `API_VENV=/path/to/api-py314` and `BROWSER_SERVICE_VENV=/path/to/browser-py314`; pass the same overrides to subsequent Make commands. The API container uses Debian Trixie to retain its Node runtime compatibility; browser and sandbox containers use Bookworm for their existing native libraries. API image builds run the Gemini bridge import smoke check as the runtime user.
 
 #### 1. Clone and Configure
 
@@ -354,7 +356,7 @@ Open a new terminal for the backend:
 cd Meridian/api
 
 # Create Python virtual environment
-python3 -m venv venv
+bash ../scripts/python-env.sh create "$PWD/venv" python3.14
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies

@@ -214,7 +214,7 @@ def _format_comment_thread(comment_node: dict, depth: int) -> str:
     indent = "> " * (depth + 1)
 
     # Format the current comment
-    comment_md = f"{indent}**u/{author}** ({score} points)\n"
+    comment_md: str = f"{indent}**u/{author}** ({score} points)\n"
     # Ensure all lines in the comment body are indented
     comment_md += f"{indent}" + body.replace("\n", f"\n{indent}") + "\n\n"
 

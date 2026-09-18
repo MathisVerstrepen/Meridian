@@ -25,6 +25,52 @@ Finalization creates lightweight non-`v` `<version>` tag at merge commit and Git
 
 Prepare, publish, and tag workflows share repository-scoped, non-cancelling release concurrency. Pull-request image workflows remain ref-scoped and cancel superseded runs. Every tag run must be current numeric maximum among authoritative strict non-`v` `X.Y.Z-beta` GitHub tags. First check occurs in lint before beta image writes. Image promotion repeats check after all five manifest reads and immediately before first `latest` write. Release promotion checks before lookup and again immediately before Release edit. Malformed tags, stale historic reruns, missing tags, and GitHub API failures fail rather than skip promotion or move either meaning of `latest` backward.
 
+## Docker build cache
+
+Both image matrices allow five concurrent builds after lint succeeds (`max-parallel: 5`, `fail-fast: false`). Actual scheduling still depends on available hosted-runner concurrency. PR check names remain `Build <image> image`; guarded tag jobs display `Publish <image> image`. Confirm required-check settings against the next normal PR run after this job split.
+
+Each image imports `ghcr.io/<lowercase-owner>/<lowercase-repository>/<image>:buildcache` from the base repository's existing public package. The shared tag is independent of branches and release versions. PR jobs use read-only contents/packages permissions, do not retain checkout credentials, never log in to GHCR, and publish neither images nor caches. Only tag publications passing lint, strict beta validation and newest-release checks can log in and export, using `mode=max,oci-mediatypes=true,image-manifest=true`. Non-cancelling release concurrency serializes those writers. Pip and pnpm caches are unchanged.
+
+`buildcache` is a mutable performance artifact, not an immutable beta image, release-completion marker or reproducible-build attestation. One successful matrix image can refresh its cache even when another image fails; all-five manifest prevalidation and both promotion jobs remain unchanged. Max-mode caches include intermediate build layers and are publicly readable in these package namespaces. Do not put credentials or private data in copied build inputs, build arguments or intermediate layers; no build secrets are added by this workflow.
+
+Missing or unavailable cache imports use BuildKit's normal cold-build fallback, including PRs before the first trusted cache seed. Export errors remain fatal; they are not hidden with `ignore-error`. The first authorized tag publication seeds each cache. Observe a later release and a fork PR to confirm cross-release/anonymous reuse and Actions package-write access. Local validation cannot establish hosted cache permissions or transfer performance, and does not dispatch workflows or publish caches to test them.
+
+Removing the cache inputs or changing the cache ref restores cold builds without changing beta images or promotion. Cache-policy rollback needs no remote cache deletion.
+
+### Local min/max comparison
+
+Run `python scripts/benchmark_docker_cache.py --help` for prerequisites, then `python scripts/benchmark_docker_cache.py` when Docker resources are available. The standard-library CLI snapshots only committed HEAD inputs under `/tmp/opencode`, retains `.dockerignore`, and rejects dirty or untracked representative inputs. It never copies the developer working tree, logs in, pushes, uses registry caches or prunes shared Docker state. Normal external base-image pulls and dependency downloads still require network access.
+
+The fixed comparison covers only `frontend` and `sandbox-python`: min and max each get a cold local export, unchanged import, and release-like changed import. All 12 builds run sequentially with a fresh named docker-container builder per build; import probes do not export and cannot reuse internal builder state. Each build is bounded to 900 seconds, the run to 3600 seconds plus bounded cleanup. Failure, interrupt or budget exhaustion stops without retry. Only owned builders and temporary files are removed.
+
+Frontend changed probes add a temporary JavaScript comment and change `NUXT_PUBLIC_VERSION` from `0.0.0-beta` to `0.0.1-beta`; sandbox changed probes append a temporary Python comment to the worker bootstrap. Production files remain untouched. Terminal output includes raw plain BuildKit logs, commit/tool/platform versions, elapsed time, identifiable cache-export duration, unique exported blob bytes, expensive-step reuse and exit status. Unknown measurements remain explicit. No repository result files are produced.
+
+### Measured local results
+
+On 2026-09-16, all 12 builds completed successfully against source commit `7871e27cc25d0bcf1eabc80337dd30455ba5b4d1`, using Docker Engine 29.8.0, Buildx v0.37.1 and fresh docker-container BuildKit v0.32.2 builders on Linux amd64. The sum of measured build durations was 774.024 seconds, excluding builder setup/cleanup. Every builder was removed; no images were published or loaded and temporary contexts/caches were removed.
+
+| Image | Mode | Cold build (s) | Cold export (s) | Exported blob bytes | Unchanged import (s) | Changed import (s) |
+|---|---|---:|---:|---:|---:|---:|
+| frontend | min | 70.517 | 17.4 | 251,164,529 | 12.635 | 57.525 |
+| frontend | max | 91.865 | 38.7 | 471,746,016 | 13.844 | 53.576 |
+| sandbox-python | min | 194.378 | 48.1 | 977,345,767 | 21.284 | 20.098 |
+| sandbox-python | max | 202.165 | 58.2 | 1,124,716,577 | 16.241 | 19.896 |
+
+Cold build time includes export. Blob counts sum unique SHA-256 blob-file sizes, not registry transfer bytes or unpacked storage. Both import probes reuse their mode's cold export without writing another cache; their export duration is not applicable, not zero. All tabled probes exited 0.
+
+| Image | Probe | Expensive steps reported cached | Expensive steps executed |
+|---|---|---|---|
+| frontend, both modes | cold | None | Builder dependency install, Nuxt build, production dependency install |
+| frontend, both modes | unchanged | All three | None |
+| frontend, both modes | changed | None | All three |
+| sandbox-python, both modes | cold | None | Both apt installs, nsjail clone/compile, pip install, NLTK download, matplotlib warming |
+| sandbox-python, both modes | unchanged | All seven | None |
+| sandbox-python, both modes | changed | Both apt installs, nsjail clone/compile, pip install | NLTK download, matplotlib warming |
+
+Min exported 46.76% fewer blob bytes for frontend and 13.10% fewer for sandbox-python, with shorter local cold-export durations in these samples. Both modes avoided expensive execution on unchanged imports. The frontend release-like version ARG change invalidated all three measured expensive steps in both modes, so max's additional layers did not prevent that rebuild. The late sandbox bootstrap edit reused expensive upstream work in both modes and reran only downstream NLTK/matplotlib steps. BuildKit's `CACHED` labels show avoided execution for these contexts; they do not prove min retained every intermediate layer needed by other edits.
+
+Trusted exports retain `mode=max`. Min is worth a future hosted per-image experiment, but this narrow comparison does not establish safety for edits to dependencies or intermediate stages. PR export removal already eliminates PR cache writes without that tradeoff. Evaluate blob size and layer reuse separately from wall time: base images/nsjail inputs remain mutable, local host/network caches can affect sequential samples, and one sample per case provides no statistical significance. Local disk exports cannot predict GHCR network economics, runner contention or five-way end-to-end speedup. No min/max claims apply to unsampled backend, browser-service or sandbox-manager images. Any future export-mode change needs hosted evidence and an explicit policy decision.
+
 ## Failure and recovery
 
 Failures before tag creation are fail-closed. Correct changelog, PR, branch, token, or version issue, then rerun preparation or failed publish workflow. Repeated preparation updates one matching open PR; multiple matching open PRs stop automation without mutation.

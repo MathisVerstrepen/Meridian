@@ -6,6 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${SCRIPT_DIR}/app"
 USER_FILES_DIR="data/user_files"
 CLONED_REPOS_DIR="data/cloned_repos"
+source "$SCRIPT_DIR/../scripts/python-env.sh"
+API_PYTHON="${API_PYTHON:-${API_VENV:-$SCRIPT_DIR/venv}/bin/python}"
+require_project_python "$API_PYTHON"
 
 case "${1:-dev}" in
     dev|serve)
@@ -21,7 +24,7 @@ case "${1:-dev}" in
         fi
 
         cd "${SCRIPT_DIR}"
-        exec "${SCRIPT_DIR}/venv/bin/alembic" upgrade "${2:-head}"
+        exec "$API_PYTHON" -m alembic upgrade "${2:-head}"
         ;;
     downgrade)
         if [ "$#" -ne 2 ]; then
@@ -30,7 +33,7 @@ case "${1:-dev}" in
         fi
 
         cd "${SCRIPT_DIR}"
-        exec "${SCRIPT_DIR}/venv/bin/alembic" downgrade "$2"
+        exec "$API_PYTHON" -m alembic downgrade "$2"
         ;;
     *)
         echo "Usage: $0 [dev|serve|upgrade [revision]|downgrade <revision>]" >&2
@@ -40,7 +43,7 @@ esac
 
 cd "${APP_DIR}"
 
-exec "${SCRIPT_DIR}/venv/bin/uvicorn" \
+exec "$API_PYTHON" -m uvicorn \
     --env-file "${SCRIPT_DIR}/../docker/env/.env.local" \
     main:app \
     --host 0.0.0.0 \

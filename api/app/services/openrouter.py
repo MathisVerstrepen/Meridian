@@ -21,6 +21,7 @@ from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
 from services.openrouter_schema import build_openrouter_response_format
+from services.providers.message_serialization import message_to_wire
 from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.reasoning_effort import reasoning_efforts_mask_from_catalog, resolve_reasoning_effort
 from services.sandbox_inputs import SandboxInputFileReference
@@ -114,10 +115,7 @@ class OpenRouterReqChat(OpenRouterReq):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.model_id = model_id
-        self.messages = [
-            mess.model_dump(exclude_none=True) if isinstance(mess, Message) else mess
-            for mess in messages
-        ]
+        self.messages = [message_to_wire(mess) for mess in messages]
         self.config = config
         self.user_id = user_id
         self.pg_engine = pg_engine

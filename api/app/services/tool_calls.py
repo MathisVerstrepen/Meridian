@@ -1,6 +1,6 @@
 import re
+from uuid import UUID
 
-from database.pg.models import ToolCall
 from services.tools import get_tool_runtime_by_tag_name
 
 TOOL_TAG_PATTERN = re.compile(
@@ -9,41 +9,18 @@ TOOL_TAG_PATTERN = re.compile(
 
 
 def extract_tool_call_ids(text: str) -> list[str]:
-    ids: list[str] = []
-    seen_ids: set[str] = set()
+    return list(extract_tool_call_references(text))
 
+
+def extract_tool_call_references(text: str) -> dict[str, set[str]]:
+    references: dict[str, set[str]] = {}
     for match in TOOL_TAG_PATTERN.finditer(text):
-        tag_name = match.group("tag")
-        if not get_tool_runtime_by_tag_name(tag_name):
+        runtime = get_tool_runtime_by_tag_name(match.group("tag"))
+        if runtime is None or runtime.name == "inspect_image":
             continue
-
-        tool_call_id = match.group("id")
-        if tool_call_id not in seen_ids:
-            ids.append(tool_call_id)
-            seen_ids.add(tool_call_id)
-
-    return ids
-
-
-def expand_tool_context_in_text(text: str, tool_calls_by_id: dict[str, ToolCall]) -> str:
-    expanded_tool_call_ids: set[str] = set()
-
-    def replace(match: re.Match[str]) -> str:
-        tag_name = match.group("tag")
-        runtime = get_tool_runtime_by_tag_name(tag_name)
-        if not runtime:
-            return match.group(0)
-
-        tool_call_id = match.group("id")
-        tool_call = tool_calls_by_id.get(tool_call_id)
-        if not tool_call:
-            return match.group(0)
-
-        if tool_call_id in expanded_tool_call_ids:
-            return match.group(0)
-
-        context = runtime.render_context(tool_call)
-        expanded_tool_call_ids.add(tool_call_id)
-        return f"{match.group(0)}{context}"
-
-    return TOOL_TAG_PATTERN.sub(replace, text)
+        try:
+            public_id = str(UUID(match.group("id")))
+        except ValueError:
+            continue
+        references.setdefault(public_id, set()).add(runtime.name)
+    return references

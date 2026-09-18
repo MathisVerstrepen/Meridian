@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+PYTHON_VERSION := $(shell cat "$(ROOT_DIR)/.python-version")
+PYTHON ?= python$(PYTHON_VERSION)
 API_DIR := $(ROOT_DIR)/api
 API_VENV := $(API_DIR)/venv
 API_BIN := $(API_VENV)/bin
@@ -9,6 +11,7 @@ BROWSER_SERVICE_VENV := $(BROWSER_SERVICE_DIR)/venv
 BROWSER_SERVICE_BIN := $(BROWSER_SERVICE_VENV)/bin
 UI_DIR := $(ROOT_DIR)/ui
 DOCKER_DIR := $(ROOT_DIR)/docker
+export API_VENV BROWSER_SERVICE_VENV
 
 PYTHON_TARGETS := app migrations
 
@@ -21,7 +24,7 @@ PYTHON_TARGETS := app migrations
 	dev dev-api dev-ui infra-up infra-down migrate migration \
 	lint lint-api lint-browser-service lint-ui format format-api format-ui typecheck typecheck-api typecheck-browser-service typecheck-ui \
 	test test-api test-browser-service test-docker-config test-e2e test-ui-unit test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full test-ui-e2e-performance \
-	build
+	build check-api-python check-browser-service-python
 
 help: ## Show available targets.
 	@awk 'BEGIN { FS = ":.*##"; printf "Usage: make <target>\n\nTargets:\n" } /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -29,14 +32,14 @@ help: ## Show available targets.
 install: install-api install-browser-service install-ui ## Install all local development dependencies.
 
 install-api: ## Create the API virtualenv and install its Python and runtime dependencies.
-	@test -x "$(API_BIN)/python" || python3 -m venv "$(API_VENV)"
-	"$(API_BIN)/pip" install -r "$(API_DIR)/requirements.txt" -r "$(API_DIR)/requirements-dev.txt"
+	bash "$(ROOT_DIR)/scripts/python-env.sh" create "$(API_VENV)" "$(PYTHON)"
+	"$(API_BIN)/python" -m pip install -r "$(API_DIR)/requirements.txt" -r "$(API_DIR)/requirements-dev.txt"
 	cd "$(API_DIR)/app/gemini_cli_runtime" && npm install --omit=dev --ignore-scripts
 	cd "$(API_DIR)/app/openai_codex_runtime" && npm install --omit=dev --ignore-scripts
 
 install-browser-service: ## Install browser-service Python checks in its own virtualenv (runtime browser bytes stay in Docker).
-	@test -x "$(BROWSER_SERVICE_BIN)/python" || python3 -m venv "$(BROWSER_SERVICE_VENV)"
-	"$(BROWSER_SERVICE_BIN)/pip" install -r "$(BROWSER_SERVICE_DIR)/requirements.txt" -r "$(BROWSER_SERVICE_DIR)/requirements-dev.txt"
+	bash "$(ROOT_DIR)/scripts/python-env.sh" create "$(BROWSER_SERVICE_VENV)" "$(PYTHON)"
+	"$(BROWSER_SERVICE_BIN)/python" -m pip install -r "$(BROWSER_SERVICE_DIR)/requirements.txt" -r "$(BROWSER_SERVICE_DIR)/requirements-dev.txt"
 
 install-ui: ## Install UI dependencies with pnpm.
 	cd "$(UI_DIR)" && pnpm install
@@ -102,6 +105,15 @@ dev: infra-up migrate ## Start local infrastructure, migrate, then run the API a
 		(cd "$(UI_DIR)" && pnpm dev) & ui_pid=$$!; \
 		wait -n "$$api_pid" "$$ui_pid"; status=$$?; \
 		exit "$$status"
+
+check-api-python:
+	@bash "$(ROOT_DIR)/scripts/python-env.sh" check "$(API_BIN)/python"
+
+check-browser-service-python:
+	@bash "$(ROOT_DIR)/scripts/python-env.sh" check "$(BROWSER_SERVICE_BIN)/python"
+
+dev-api migrate migration lint-api format-api typecheck-api test-api: check-api-python
+lint-browser-service typecheck-browser-service test-browser-service: check-browser-service-python
 
 dev-api: ## Run the API development server.
 	cd "$(API_DIR)" && ./run-dev.sh

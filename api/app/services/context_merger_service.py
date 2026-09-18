@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import os
 from asyncio import Semaphore
+from typing import Literal
 from xml.sax.saxutils import escape
 
 import httpx
@@ -24,6 +26,7 @@ from services.inference_requests import (
 )
 from services.node import CleanTextOption, system_message_builder
 from services.reasoning_effort import get_model_reasoning_efforts
+from services.tool_history import clean_legacy_tool_context
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -104,7 +107,10 @@ class ContextMergerService:
             return f"Error: Could not generate summary. {e}"
 
     async def _get_branch_histories(
-        self, parent_branch_heads: list[NodeRecord], github_auto_pull: bool
+        self,
+        parent_branch_heads: list[NodeRecord],
+        github_auto_pull: bool,
+        view: Literal["reduce", "full"] = "full",
     ) -> list[list[Message]]:
         """Fetches conversation histories for all parent branches in parallel."""
         from services.graph_service import construct_message_history
@@ -123,7 +129,7 @@ class ContextMergerService:
                     git_http_client=self.git_http_client,
                     system_prompt="",
                     add_current_node=True,
-                    view="full",
+                    view=view,
                     clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
                     github_auto_pull=github_auto_pull,
                     available_models=self.available_models,
@@ -135,21 +141,10 @@ class ContextMergerService:
 
     def _format_branch_for_summarization(self, history: list[Message], branch_index: int) -> str:
         """Formats the text content of a branch for summarization LLM input."""
-        parts = [
-            "<title>Merged Context from Previous Conversation Branch</title>",
-            f'<branch index="{branch_index + 1}">',
-        ]
-        for message in history:
-            parts.append(f'<message role="{message.role.value}">')
-            content_parts = [
-                item.text.strip()
-                for item in message.content
-                if item.type == MessageContentTypeEnum.text and item.text
-            ]
-            parts.append(f"<content>{' '.join(content_parts)}</content>")
-            parts.append("</message>")
-        parts.append("</branch>")
-        return "".join(parts)
+        return (
+            "<title>Merged Context from Previous Conversation Branch</title>"
+            + self._format_branch_text(history, branch_index, True)
+        )
 
     def _format_branch_text(
         self, history: list[Message], branch_index: int, include_user_messages: bool
@@ -167,6 +162,22 @@ class ContextMergerService:
                 if item.type == MessageContentTypeEnum.text and item.text
             ]
             raw_content = " ".join(content_parts)
+            if message.role == MessageRoleEnum.assistant:
+                raw_content = clean_legacy_tool_context(raw_content)
+            if message.tool_calls:
+                raw_content = json.dumps(
+                    {"calls": [call.model_dump(mode="json") for call in message.tool_calls]},
+                    ensure_ascii=False,
+                )
+            elif message.role == MessageRoleEnum.tool:
+                raw_content = json.dumps(
+                    {
+                        "call_id": message.tool_call_id,
+                        "name": message.name,
+                        "model_payload": raw_content,
+                    },
+                    ensure_ascii=False,
+                )
 
             # If the message comes from a ContextMerger, its content is already
             # XML-formatted and should not be escaped again.
@@ -188,7 +199,7 @@ class ContextMergerService:
         ]
         for i, summary in enumerate(summaries):
             parts.append(f'<branch index="{i + 1}">')
-            parts.append(f"<summary>{escape(summary)}</summary>")
+            parts.append(f"<summary>{escape(clean_legacy_tool_context(summary))}</summary>")
             parts.append("</branch>")
         parts.append("</merged-context>")
         return "".join(parts)
@@ -243,18 +254,18 @@ class ContextMergerService:
             if config.mode == ContextMergerMode.LAST_N and config.last_n and config.last_n > 0:
                 # Find the indices of assistant messages from generator nodes
                 generator_message_indices = [
-                    idx for idx, msg in enumerate(history) if msg.type in generator_types
+                    idx
+                    for idx, msg in enumerate(history)
+                    if msg.type in generator_types
+                    and not msg.tool_calls
+                    and msg.role == MessageRoleEnum.assistant
                 ]
 
                 # If we have more generator messages than last_n, slice the history
                 if len(generator_message_indices) > config.last_n:
-                    # Get the index of the Nth-to-last generator message
-                    start_assistant_index = generator_message_indices[-config.last_n]
-
-                    # The turn starts with the user message preceding this assistant message.
-                    start_index = start_assistant_index
-                    if start_index > 0 and history[start_index - 1].role == MessageRoleEnum.user:
-                        start_index -= 1
+                    # Keep the entire turn, including user and synthetic tool messages.
+                    previous_answer = generator_message_indices[-config.last_n - 1]
+                    start_index = previous_answer + 1
 
                     history = history[start_index:]
             parts.append(self._format_branch_text(history, i, config.include_user_messages))
@@ -263,7 +274,11 @@ class ContextMergerService:
         return "".join(parts)
 
     async def construct_merged_history(
-        self, merger_node_id: str, system_prompt: str, github_auto_pull: bool
+        self,
+        merger_node_id: str,
+        system_prompt: str,
+        github_auto_pull: bool,
+        view: Literal["reduce", "full"] = "full",
     ) -> list[Message]:
         """
         Main entry point to construct a merged message history from multiple branches.
@@ -279,7 +294,7 @@ class ContextMergerService:
         node_data = merger_nodes[0].data
         config = ContextMergerConfig.from_node_data(node_data)  # type: ignore
         parent_heads = await get_immediate_parents(self.neo4j_driver, self.graph_id, merger_node_id)
-        branch_histories = await self._get_branch_histories(parent_heads, github_auto_pull)
+        branch_histories = await self._get_branch_histories(parent_heads, github_auto_pull, view)
 
         # 3. Merge histories according to the specified mode
         final_text, metadata = "", {}

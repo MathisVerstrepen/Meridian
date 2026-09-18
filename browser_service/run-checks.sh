@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="$ROOT/venv/bin/python"
+source "$ROOT/../scripts/python-env.sh"
+PYTHON="${BROWSER_SERVICE_PYTHON:-${BROWSER_SERVICE_VENV:-$ROOT/venv}/bin/python}"
+require_project_python "$PYTHON"
 cd "$(dirname "$ROOT")"
 
 "$PYTHON" -m black --config "$ROOT/pyproject.toml" --check "$ROOT/app" "$ROOT/tests"

@@ -13,6 +13,7 @@ from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, TimeoutException
 from services.openrouter import _process_tool_calls_and_continue
 from services.providers.common import extract_reasoning_text_delta
+from services.providers.message_serialization import responses_function_calls
 from services.usage_data import (
     append_usage_request_breakdown,
     build_usage_request_breakdown,
@@ -51,7 +52,7 @@ def build_openai_responses_payload(chat_payload: dict[str, Any]) -> dict[str, An
                         }
                     )
                 if role == "assistant":
-                    input_items.extend(_convert_chat_tool_calls(message.get("tool_calls")))
+                    input_items.extend(responses_function_calls(message.get("tool_calls")))
                 continue
             if role == "tool":
                 call_id = str(message.get("tool_call_id") or "").strip()
@@ -110,30 +111,6 @@ def _json_arguments(arguments: Any) -> str:
     if isinstance(arguments, str):
         return arguments
     return json.dumps(arguments or {}, separators=(",", ":"))
-
-
-def _convert_chat_tool_calls(tool_calls: Any) -> list[dict[str, Any]]:
-    converted: list[dict[str, Any]] = []
-    if not isinstance(tool_calls, list):
-        return converted
-    for tool_call in tool_calls:
-        if not isinstance(tool_call, dict):
-            continue
-        function = tool_call.get("function")
-        if not isinstance(function, dict):
-            continue
-        call_id = str(tool_call.get("id") or "").strip()
-        name = str(function.get("name") or "").strip()
-        if call_id and name:
-            converted.append(
-                {
-                    "type": "function_call",
-                    "call_id": call_id,
-                    "name": name,
-                    "arguments": _json_arguments(function.get("arguments")),
-                }
-            )
-    return converted
 
 
 def _flatten_chat_tools(tools: Any) -> list[dict[str, Any]]:

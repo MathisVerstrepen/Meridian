@@ -1,8 +1,8 @@
 # Meridian API - Developer README
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
 
-This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.11**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
+This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.14**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
 
 ## Table of Contents
 
@@ -16,6 +16,7 @@ This folder contains the **complete backend API** for Meridian, built with **Fas
 - [Core Concepts](#core-concepts)
   - [Graph Engine](#graph-engine)
   - [Streaming & Execution](#streaming--execution)
+  - [Historical Tool Context](#historical-tool-context)
   - [Authentication](#authentication)
   - [Tooling & Integrations](#tooling--integrations)
   - [Caching & Annotations](#caching--annotations)
@@ -43,7 +44,7 @@ This folder contains the **complete backend API** for Meridian, built with **Fas
 | Category | Technologies |
 |----------|--------------|
 | **Framework** | FastAPI (async) |
-| **Language** | Python 3.11 (asyncio) |
+| **Language** | Python 3.14 (asyncio) |
 | **Databases** | PostgreSQL (SQLModel/Alembic), Neo4j (async driver), Redis (annotations) |
 | **AI Provider** | OpenRouter.ai (streaming, tools, reasoning) |
 | **Auth** | JWT (PyJWT), OAuth2, bcrypt |
@@ -92,6 +93,8 @@ cd docker
 
 From the repository root, `make install-api` installs only API Python and Node dependencies. Crawlee, Camoufox, Playwright, browser native libraries, and browser caches live exclusively in the separately built `browser_service` image.
 
+Python 3.14 is required. Install targets use `python3.14` and reject older existing virtualenvs without changing them. Move an old `api/venv` aside yourself, or pass a fresh absolute `API_VENV` path to install and subsequent Make commands. Direct scripts also accept `API_VENV` or `API_PYTHON` pointing to a Python 3.14 environment.
+
 ```bash
 cd ..
 make install-api
@@ -101,7 +104,7 @@ For a manual API-only setup:
 
 ```bash
 cd api
-python -m venv venv
+bash ../scripts/python-env.sh create "$PWD/venv" python3.14
 source venv/bin/activate
 pip install -r requirements.txt
 cd app/gemini_cli_runtime && npm install --omit=dev --ignore-scripts && cd ../..
@@ -352,6 +355,20 @@ Additional enforcement:
 
 - Free users: max 5 non-temporary canvases.
 - Free users: cannot use `github` premium node type.
+
+## Historical Tool Context
+
+Full model history reconstructs completed persisted tools as paired assistant calls and tool results, before the corresponding final answer. Eligibility requires a recognized summary-tag UUID in the cleaned reply, matching persisted tool name, owner, graph, generator node, and model-entry scope. Ordinary and aggregator replies use a null model-entry scope; parallel child replies use the child's entry ID, not its provider model slug. Pending, missing, unreferenced, mismatched, or malformed records are omitted, without executing tools or rebuilding missing facts from model-written markup.
+
+Pairs use deterministic `hist_<UUID hex>` IDs and database `created_at, id` order. Only persisted JSON-object arguments and nonempty `model_context_payload` are replayed. Raw `result`, internal storage metadata, and ORM objects are not serialized into history. `inspect_image` is excluded: its existing bounded UUID-only provenance remains full-history-only, without retrieving historical pixels. Current-turn execution, provider call IDs, and native reasoning/signatures remain separate and unchanged. History does not enable tools disabled for the current request.
+
+OpenRouter, Alibaba, Z.AI, and OpenCode Go OpenAI use native call/result messages. OpenCode Go Anthropic uses `tool_use`/`tool_result`; OpenCode Go Responses and OpenAI Codex use `function_call`/`function_call_output`. Gemini CLI maps historical pairs to `functionCall`/`functionResponse` before the newest user turn, without inventing thought signatures. Stored rows cannot recover original reasoning, round grouping, or exact prose interleaving. Offline mapping tests do not guarantee acceptance by every subscription backend or model variant.
+
+The pinned Claude Agent and GitHub Copilot SDK interfaces accept a user-prompt transcript, not native historical message arrays. For these providers, replay is explicitly labeled historical tool data with JSON-encoded calls and results, separate from assistant prose and never added to system instructions. This preserves facts but has limited role fidelity; it is not native session reconstruction. Context mergers similarly escape calls/results as user-role branch data, and last-N selection retains whole generator turns. Parallel aggregators receive numbered child answers as user context, not system instructions.
+
+Reduced chat history remains presentation-only: existing user/assistant/system messages, summary cards, and node metadata, without synthetic tool pairs or inspection provenance. Derived assistant replies and reused raw summaries remove reserved literal `<tool_call_context ...>...</tool_call_context>` spans, preserving surrounding text. An opened but unfinished span is suppressed through EOF; unrelated tags, ordinary JSON, standalone `Arguments:`/`Result:` prose, and HTML-escaped examples are untouched. Cleanup never rewrites saved replies, tool records, or cached summaries, and does not claim to prevent arbitrary model echoes.
+
+Offline regressions live in `api/tests/test_tool_history*.py`. The provider tests run `node --test api/app/gemini_cli_runtime/message-mapping.test.mjs` through pytest, so Node is a required test prerequisite even without live Gemini access.
 
 ## Tools and Integrations
 
