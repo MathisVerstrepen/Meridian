@@ -302,6 +302,7 @@ test('keeps filtered model rows consecutive after activation and scrolling', asy
     const list = panel.locator('.custom_scroll');
     const lingOption = panel.getByRole('option', { name: /Ling-3\.0-flash/ });
     const githubJump = panel.getByRole('button', { name: /GitHub Copilot 1/ });
+    const openRouterJump = panel.getByRole('button', { name: /OpenRouter \d+/ });
 
     await expect
         .poll(() =>
@@ -311,6 +312,9 @@ test('keeps filtered model rows consecutive after activation and scrolling', asy
             }),
         )
         .toBeCloseTo(0.8, 2);
+
+    await openRouterJump.click();
+    await expect(await expectActiveOptionVisible(page, input)).toContainText('All Models');
 
     await githubJump.click();
     await expect(

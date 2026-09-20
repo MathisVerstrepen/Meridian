@@ -207,6 +207,7 @@ const rowData = computed(() => {
             headerTooltip?: string;
             includeJumpButton?: boolean;
             icon?: string;
+            jumpLabel?: string;
         },
     ) => {
         if (!modelsForSection.length) {
@@ -219,7 +220,7 @@ const rowData = computed(() => {
             subscriptionSections.push({
                 id: sectionId,
                 icon: options.icon,
-                label: options.headerTitle,
+                label: options.jumpLabel ?? options.headerTitle,
                 count: modelsForSection.length,
             });
         }
@@ -255,6 +256,9 @@ const rowData = computed(() => {
             appendRows(sectionId, allModels.value, {
                 headerTitle: 'All Models',
                 headerMeta: meteredHeaderMeta.value,
+                includeJumpButton: true,
+                icon: 'models/openrouter',
+                jumpLabel: 'OpenRouter',
             });
             continue;
         }
