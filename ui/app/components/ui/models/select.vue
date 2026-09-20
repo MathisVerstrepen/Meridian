@@ -10,16 +10,7 @@ import {
 } from '@/constants/modelDropdownSections';
 import { SavingStatus } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
-
-type ModelRow = {
-    id: string;
-    model: ModelInfo;
-    headerMeta?: string;
-    headerTitle?: string;
-    headerTooltip?: string;
-    warningLabel?: string;
-    sectionId: string;
-};
+import { useModelSelectCombobox, type ModelSelectRow } from './useModelSelectCombobox';
 
 type SubscriptionSectionButton = {
     id: string;
@@ -71,7 +62,6 @@ const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
 const buttonRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
-const scrollerRef = ref<HTMLElement | null>(null);
 const menuPosition = ref({ top: 0, left: 0, zoom: 1 });
 const activeJumpSection = ref<string | null>(null);
 
@@ -82,15 +72,9 @@ let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
 let panelResizeObserver: ResizeObserver | null = null;
 
-type CompatibilityOptions = NonNullable<
-    Parameters<typeof modelStore.filterCompatibleModels>[1]
->;
+type CompatibilityOptions = NonNullable<Parameters<typeof modelStore.filterCompatibleModels>[1]>;
 const compatibilityOptions = computed<CompatibilityOptions>(() => ({
-    outputModality: props.onlyImageModels
-        ? 'image'
-        : props.onlyVideoModels
-          ? 'video'
-          : 'text',
+    outputModality: props.onlyImageModels ? 'image' : props.onlyVideoModels ? 'video' : 'text',
     requireStructuredOutputs: props.requireStructuredOutputs,
     requireMeridianTools: props.requireMeridianTools,
     requiredToolNames: props.requiredToolNames,
@@ -210,7 +194,7 @@ const subscriptionModelsByProvider = computed(() => {
 });
 
 const rowData = computed(() => {
-    const rows: ModelRow[] = [];
+    const rows: ModelSelectRow[] = [];
     const sectionStartIndices: Record<string, number> = {};
     const subscriptionSections: SubscriptionSectionButton[] = [];
 
@@ -297,6 +281,35 @@ const rowData = computed(() => {
 
 const modelRows = computed(() => rowData.value.rows);
 const subscriptionSectionButtons = computed(() => rowData.value.subscriptionSections);
+const {
+    inputRef,
+    inputValue,
+    open,
+    activeIndex,
+    activeOption,
+    activeDescendant,
+    listId,
+    optionId,
+    renderedRows,
+    layout,
+    viewportHeight,
+    scrollerRef,
+    onScroll,
+    show,
+    close,
+    activate,
+    select,
+    onInput,
+    onKeydown,
+    jumpTo,
+} = useModelSelectCombobox({
+    rows: modelRows,
+    selected,
+    query,
+    disabled: () => props.disabled,
+    trigger: buttonRef,
+    panel: panelRef,
+});
 
 // --- Methods ---
 const getTransformationPaneZoom = () => {
@@ -341,8 +354,7 @@ const updatePanelPosition = () => {
     const zoom = getTransformationPaneZoom();
     const scaledMenuWidth = TELEPORTED_MENU_WIDTH * zoom;
     const renderedMenuHeight = panelRef.value?.offsetHeight ?? 0;
-    const scaledMenuHeight =
-        (renderedMenuHeight || TELEPORTED_MENU_FALLBACK_HEIGHT) * zoom;
+    const scaledMenuHeight = (renderedMenuHeight || TELEPORTED_MENU_FALLBACK_HEIGHT) * zoom;
     const scaledMenuOffset = TELEPORTED_MENU_OFFSET * zoom;
     const belowTop = rect.bottom + scaledMenuOffset;
     const opensAbove = props.from === 'top' || belowTop + scaledMenuHeight > window.innerHeight;
@@ -371,6 +383,7 @@ const clearPositionTracking = () => {
 const startPositionTracking = async () => {
     clearPositionTracking();
     await nextTick();
+    if (!open.value) return;
     updatePanelPosition();
 
     const transformationPane = buttonRef.value?.closest('.vue-flow__transformationpane');
@@ -397,62 +410,17 @@ const startPositionTracking = async () => {
     window.addEventListener('scroll', updatePanelPosition, true);
 };
 
-const resetQueryAndTracking = () => {
-    query.value = '';
-    activeJumpSection.value = null;
-    clearPositionTracking();
-};
-
 const handleTriggerClick = (event: MouseEvent) => {
-    startPositionTracking();
-
-    if (props.disabled) {
-        return;
-    }
-
-    const triggerEl = buttonRef.value;
-    if (!triggerEl) {
-        return;
-    }
-
-    const target = elementOrNull(event.target, HTMLElement);
-    const chevronButton = triggerEl.querySelector('button');
-    if (!chevronButton || !target) {
-        return;
-    }
-
-    if (chevronButton.contains(target)) {
-        return;
-    }
-
-    const isOpen = chevronButton.getAttribute('aria-expanded') === 'true';
-    const input = triggerEl.querySelector('input');
-
-    if (input && input.contains(target)) {
-        if (!isOpen) {
-            chevronButton.click();
-        }
-        return;
-    }
-
-    chevronButton.click();
+    if (props.disabled) return;
+    if (event.target === inputRef.value || !open.value) void show();
+    else close(true);
 };
 
 const jumpToSubscriptionSection = (sectionId: string) => {
     const targetIndex = rowData.value.sectionStartIndices[sectionId];
-    const list = scrollerRef.value;
-
-    if (targetIndex === undefined || !list) {
-        return;
-    }
-
-    const target = list.querySelector(`[data-model-row-index="${targetIndex}"]`);
-    if (!(target instanceof HTMLElement)) {
-        return;
-    }
-
+    if (targetIndex === undefined) return;
     activeJumpSection.value = sectionId;
-    list.scrollTop = target.offsetTop;
+    void jumpTo(targetIndex);
 };
 
 const getPinShortcutTargetModel = (activeOption: RuntimeValue) => {
@@ -538,6 +506,14 @@ function initializeSelectedModel() {
 }
 
 // --- Watchers ---
+watch(open, (isOpen) => {
+    if (isOpen) void startPositionTracking();
+    else {
+        activeJumpSection.value = null;
+        clearPositionTracking();
+    }
+});
+
 watchEffect(() => {
     if (!isReady.value) {
         return;
@@ -594,233 +570,244 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <HeadlessCombobox v-slot="{ activeOption }" v-model="selected">
-        <div class="relative">
-            <!-- Trigger -->
-            <div
-                ref="buttonRef"
-                class="ui-models-trigger group/trigger relative h-full w-full cursor-default
-                    overflow-hidden rounded-2xl border-2 text-left transition-all
-                    focus:outline-none"
-                :class="{
-                    [`bg-soft-silk/15 border-olive-grove-dark dark:text-olive-grove-dark
-                    text-anthracite`]: variant === 'green',
-                    'bg-obsidian/20 dark:border-stone-gray/20 border-soft-silk/20 text-soft-silk/80':
-                        variant === 'grey',
-                    [`dark:bg-soft-silk/50 border-terracotta-clay-dark
-                    dark:text-terracotta-clay-dark text-anthracite bg-[#612411]/50`]:
-                        variant === 'terracotta',
-                    'cursor-not-allowed opacity-50': disabled,
-                    'cursor-pointer': !disabled,
-                }"
-                @click="handleTriggerClick"
-            >
-                <div class="flex items-center">
-                    <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
-                        <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
-                    </span>
+    <div class="relative">
+        <!-- Trigger -->
+        <div
+            ref="buttonRef"
+            class="ui-models-trigger group/trigger focus-within:ring-ember-glow/60 relative h-full
+                w-full cursor-default overflow-hidden rounded-2xl border-2 text-left transition-all
+                focus-within:ring-2 focus:outline-none"
+            :class="{
+                [`bg-soft-silk/15 border-olive-grove-dark dark:text-olive-grove-dark
+                text-anthracite`]: variant === 'green',
+                'bg-obsidian/20 dark:border-stone-gray/20 border-soft-silk/20 text-soft-silk/80':
+                    variant === 'grey',
+                [`dark:bg-soft-silk/50 border-terracotta-clay-dark dark:text-terracotta-clay-dark
+                text-anthracite bg-[#612411]/50`]: variant === 'terracotta',
+                'cursor-not-allowed opacity-50': disabled,
+                'cursor-pointer': !disabled,
+            }"
+            @click="handleTriggerClick"
+        >
+            <div class="flex items-center">
+                <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
+                    <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
+                </span>
 
-                    <HeadlessComboboxInput
-                        class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold
-                            tracking-tight focus:ring-0 focus:outline-none"
-                        :display-value="(model: unknown) => (model as ModelInfo).name"
-                        :class="{
-                            'py-1': variant === 'green' || variant === 'terracotta',
-                            'py-2': variant === 'grey',
-                            'cursor-not-allowed': disabled,
-                        }"
-                        @change="query = $event.target.value"
-                        @keydown="handlePinShortcut($event, activeOption)"
-                    />
-                </div>
-                <HeadlessComboboxButton
-                    v-if="!disabled"
-                    class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1.5"
-                >
-                    <UiIcon
-                        name="FlowbiteChevronDownOutline"
-                        class="h-6 w-6 transition-transform duration-300
-                            group-focus-within/trigger:rotate-180"
-                    />
-                </HeadlessComboboxButton>
+                <input
+                    ref="inputRef"
+                    role="combobox"
+                    aria-label="Model"
+                    aria-autocomplete="list"
+                    autocomplete="off"
+                    :aria-expanded="open"
+                    :aria-controls="open ? listId : undefined"
+                    :aria-activedescendant="activeDescendant"
+                    :disabled="disabled"
+                    class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold
+                        tracking-tight focus:ring-0 focus:outline-none"
+                    :value="inputValue"
+                    :class="{
+                        'py-1': variant === 'green' || variant === 'terracotta',
+                        'py-2': variant === 'grey',
+                        'cursor-not-allowed': disabled,
+                    }"
+                    @input="onInput"
+                    @keydown="
+                        handlePinShortcut($event, activeOption);
+                        onKeydown($event);
+                    "
+                />
             </div>
-
-            <!-- Dropdown -->
-            <HeadlessTransitionRoot
-                enter="transition ease-out duration-150"
-                enter-from="opacity-0 -translate-y-1"
-                enter-to="opacity-100 translate-y-0"
-                leave="transition ease-in duration-100"
-                leave-from="opacity-100"
-                leave-to="opacity-0"
-                @after-leave="resetQueryAndTracking"
+            <button
+                v-if="!disabled"
+                type="button"
+                tabindex="-1"
+                aria-label="Choose model"
+                :aria-expanded="open"
+                :aria-controls="open ? listId : undefined"
+                class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1.5"
             >
-                <Teleport to="body">
-                    <HeadlessComboboxOptions
-                        v-if="!disabled"
-                        :ref="setPanelRef"
-                        static
-                        class="ui-models-panel fixed z-40 h-fit w-160 overflow-hidden rounded-2xl
-                            border text-base focus:outline-none"
-                        :style="{
-                            top: `${menuPosition.top}px`,
-                            left: `${menuPosition.left}px`,
-                            transform: `scale(${menuPosition.zoom})`,
-                            transformOrigin: 'top left',
-                        }"
-                    >
-                        <!-- Subscription quick-jump pills -->
-                        <div
-                            v-if="subscriptionSectionButtons.length"
-                            class="border-stone-gray/10 flex flex-wrap items-center gap-1.5 border-b
-                                px-3 py-2.5"
-                        >
-                            <span
-                                class="text-stone-gray/50 mr-1 text-[9px] font-bold tracking-[0.2em]
-                                    uppercase"
-                            >
-                                Jump
-                            </span>
-                            <button
-                                v-for="section in subscriptionSectionButtons"
-                                :key="section.id"
-                                type="button"
-                                class="group/pill border-stone-gray/10 text-soft-silk/80
-                                    hover:border-ember-glow/40 hover:text-soft-silk
-                                    hover:bg-ember-glow/5 inline-flex shrink-0 items-center gap-1.5
-                                    rounded-lg border px-2.5 py-1 text-xs font-semibold
-                                    transition-all duration-150"
-                                :class="{
-                                    [`border-ember-glow/50 bg-ember-glow/10 text-soft-silk
-                                    shadow-[0_0_0_1px_rgba(235,94,40,0.15)]`]:
-                                        activeJumpSection === section.id,
-                                    'bg-anthracite/40': activeJumpSection !== section.id,
-                                }"
-                                @click.stop="jumpToSubscriptionSection(section.id)"
-                            >
-                                <UiIcon :name="section.icon" class="h-3.5 w-3.5" />
-                                <span>{{ section.label }}</span>
-                                <span
-                                    class="bg-stone-gray/10 text-stone-gray/80
-                                        group-hover/pill:bg-ember-glow/15
-                                        group-hover/pill:text-ember-glow rounded px-1 text-[10px]
-                                        font-bold tabular-nums transition-colors"
-                                >
-                                    {{ section.count }}
-                                </span>
-                            </button>
-                        </div>
-
-                        <!-- List -->
-                        <div
-                            v-if="modelRows.length"
-                            ref="scrollerRef"
-                            class="nowheel custom_scroll relative max-h-64 overflow-y-auto px-1.5
-                                py-1"
-                        >
-                            <HeadlessComboboxOption
-                                v-for="(modelRow, index) in modelRows"
-                                :key="modelRow.id"
-                                v-slot="{ selected: isSelected, active: isActive }"
-                                :value="modelRow.model"
-                                as="template"
-                            >
-                                <UiModelsSelectItem
-                                    :data-model-row-index="index"
-                                    :model="modelRow.model"
-                                    :active="isActive"
-                                    :selected="isSelected"
-                                    :header-title="modelRow.headerTitle"
-                                    :header-meta="modelRow.headerMeta"
-                                    :header-tooltip="modelRow.headerTooltip"
-                                    :hide-tool="hideTool"
-                                    :warning-label="modelRow.warningLabel"
-                                />
-                            </HeadlessComboboxOption>
-                        </div>
-
-                        <!-- Empty state -->
-                        <div
-                            v-else
-                            class="relative flex flex-col items-center justify-center gap-3 px-6
-                                py-10 text-center select-none"
-                        >
-                            <div
-                                class="border-stone-gray/15 bg-anthracite/50 relative flex h-12 w-12
-                                    items-center justify-center rounded-2xl border"
-                            >
-                                <UiIcon name="MdiMagnify" class="text-stone-gray/40 h-6 w-6" />
-                                <span
-                                    aria-hidden="true"
-                                    class="bg-ember-glow/60 absolute -top-1 -right-1 h-2 w-2
-                                        rounded-full"
-                                />
-                            </div>
-                            <div class="flex flex-col gap-0.5">
-                                <p class="text-soft-silk/90 text-sm font-semibold">
-                                    No models match that query
-                                </p>
-                                <p class="text-stone-gray/60 text-xs">
-                                    Try a different keyword or clear the search.
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Footer: keyboard hints -->
-                        <div
-                            class="border-stone-gray/10 text-stone-gray/60 flex items-center
-                                justify-between gap-3 border-t px-4 py-2 text-[10px]"
-                        >
-                            <div class="flex items-center gap-3">
-                                <span class="flex items-center gap-1.5">
-                                    <kbd
-                                        class="border-stone-gray/20 bg-anthracite/60
-                                            text-soft-silk/80 inline-flex items-center
-                                            justify-center rounded border px-1.5 py-0.5 pt-1
-                                            font-mono text-[9px] leading-none font-bold"
-                                        >↑↓</kbd
-                                    >
-                                    <span class="tracking-wide uppercase">navigate</span>
-                                </span>
-                                <span class="flex items-center gap-1.5">
-                                    <kbd
-                                        class="border-stone-gray/20 bg-anthracite/60
-                                            text-soft-silk/80 inline-flex items-center
-                                            justify-center rounded border px-1.5 py-0.5 pt-1
-                                            font-mono text-[9px] leading-none font-bold"
-                                        >↵</kbd
-                                    >
-                                    <span class="tracking-wide uppercase">select</span>
-                                </span>
-                                <span class="flex items-center gap-1.5">
-                                    <kbd
-                                        class="border-stone-gray/20 bg-anthracite/60
-                                            text-soft-silk/80 inline-flex items-center
-                                            justify-center rounded border px-1.5 py-0.5 pt-1
-                                            font-mono text-[9px] leading-none font-bold"
-                                        >ESC</kbd
-                                    >
-                                    <span class="tracking-wide uppercase">close</span>
-                                </span>
-                                <span class="flex items-center gap-1.5">
-                                    <kbd
-                                        class="border-stone-gray/20 bg-anthracite/60
-                                            text-soft-silk/80 inline-flex items-center
-                                            justify-center rounded border px-1.5 py-0.5 pt-1
-                                            font-mono text-[9px] leading-none font-bold"
-                                        >{{ PIN_SHORTCUT_LABEL }}</kbd
-                                    >
-                                    <span class="tracking-wide uppercase">
-                                        {{ getPinShortcutActionLabel(activeOption) }}
-                                    </span>
-                                </span>
-                            </div>
-                        </div>
-                    </HeadlessComboboxOptions>
-                </Teleport>
-            </HeadlessTransitionRoot>
+                <UiIcon
+                    name="FlowbiteChevronDownOutline"
+                    class="h-6 w-6 transition-transform duration-300
+                        group-focus-within/trigger:rotate-180"
+                />
+            </button>
         </div>
-    </HeadlessCombobox>
+
+        <!-- Dropdown -->
+        <Teleport to="body">
+            <div
+                v-if="open && !disabled"
+                :ref="setPanelRef"
+                class="ui-models-panel fixed z-40 h-fit w-160 overflow-hidden rounded-2xl border
+                    text-base focus:outline-none"
+                :style="{
+                    top: `${menuPosition.top}px`,
+                    left: `${menuPosition.left}px`,
+                    transform: `scale(${menuPosition.zoom})`,
+                    transformOrigin: 'top left',
+                }"
+                @keydown.esc.prevent.stop="close(true)"
+            >
+                <!-- Subscription quick-jump pills -->
+                <div
+                    v-if="subscriptionSectionButtons.length"
+                    class="border-stone-gray/10 flex flex-wrap items-center gap-1.5 border-b px-3
+                        py-2.5"
+                >
+                    <span
+                        class="text-stone-gray/50 mr-1 text-[9px] font-bold tracking-[0.2em]
+                            uppercase"
+                    >
+                        Jump
+                    </span>
+                    <button
+                        v-for="section in subscriptionSectionButtons"
+                        :key="section.id"
+                        type="button"
+                        class="group/pill border-stone-gray/10 text-soft-silk/80
+                            hover:border-ember-glow/40 hover:text-soft-silk hover:bg-ember-glow/5
+                            inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1
+                            text-xs font-semibold transition-all duration-150"
+                        :class="{
+                            [`border-ember-glow/50 bg-ember-glow/10 text-soft-silk
+                            shadow-[0_0_0_1px_rgba(235,94,40,0.15)]`]:
+                                activeJumpSection === section.id,
+                            'bg-anthracite/40': activeJumpSection !== section.id,
+                        }"
+                        @click.stop="jumpToSubscriptionSection(section.id)"
+                    >
+                        <UiIcon :name="section.icon" class="h-3.5 w-3.5" />
+                        <span>{{ section.label }}</span>
+                        <span
+                            class="bg-stone-gray/10 text-stone-gray/80
+                                group-hover/pill:bg-ember-glow/15 group-hover/pill:text-ember-glow
+                                rounded px-1 text-[10px] font-bold tabular-nums transition-colors"
+                        >
+                            {{ section.count }}
+                        </span>
+                    </button>
+                </div>
+
+                <!-- List -->
+                <div
+                    :id="listId"
+                    ref="scrollerRef"
+                    role="listbox"
+                    aria-label="Models"
+                    class="nowheel custom_scroll relative overflow-y-auto px-1.5 py-1"
+                    :style="{ height: `${viewportHeight}px` }"
+                    @scroll="onScroll"
+                >
+                    <div
+                        role="presentation"
+                        class="relative"
+                        :style="{ height: `${layout.height}px` }"
+                    >
+                        <UiModelsSelectItem
+                            v-for="entry in renderedRows"
+                            :id="optionId(entry.index)"
+                            :key="entry.row.id"
+                            role="option"
+                            :aria-selected="selected?.id === entry.row.model.id"
+                            :aria-posinset="entry.index + 1"
+                            :aria-setsize="modelRows.length"
+                            class="absolute inset-x-0 list-none"
+                            :style="{ top: `${entry.top}px`, height: `${entry.height}px` }"
+                            :data-model-row-index="entry.index"
+                            :model="entry.row.model"
+                            :active="activeIndex === entry.index"
+                            :selected="selected?.id === entry.row.model.id"
+                            :header-title="entry.row.headerTitle"
+                            :header-meta="entry.row.headerMeta"
+                            :header-tooltip="entry.row.headerTooltip"
+                            :hide-tool="hideTool"
+                            :warning-label="entry.row.warningLabel"
+                            @pointermove="activate(entry.index, false)"
+                            @mousedown.prevent
+                            @click="select(entry.index)"
+                        />
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div
+                    v-if="!modelRows.length"
+                    role="status"
+                    class="relative flex flex-col items-center justify-center gap-3 px-6 py-10
+                        text-center select-none"
+                >
+                    <div
+                        class="border-stone-gray/15 bg-anthracite/50 relative flex h-12 w-12
+                            items-center justify-center rounded-2xl border"
+                    >
+                        <UiIcon name="MdiMagnify" class="text-stone-gray/40 h-6 w-6" />
+                        <span
+                            aria-hidden="true"
+                            class="bg-ember-glow/60 absolute -top-1 -right-1 h-2 w-2 rounded-full"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        <p class="text-soft-silk/90 text-sm font-semibold">
+                            No models match that query
+                        </p>
+                        <p class="text-stone-gray/60 text-xs">
+                            Try a different keyword or clear the search.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Footer: keyboard hints -->
+                <div
+                    class="border-stone-gray/10 text-stone-gray/60 flex items-center justify-between
+                        gap-3 border-t px-4 py-2 text-[10px]"
+                >
+                    <div class="flex items-center gap-3">
+                        <span class="flex items-center gap-1.5">
+                            <kbd
+                                class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                    inline-flex items-center justify-center rounded border px-1.5
+                                    py-0.5 pt-1 font-mono text-[9px] leading-none font-bold"
+                                >↑↓</kbd
+                            >
+                            <span class="tracking-wide uppercase">navigate</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <kbd
+                                class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                    inline-flex items-center justify-center rounded border px-1.5
+                                    py-0.5 pt-1 font-mono text-[9px] leading-none font-bold"
+                                >↵</kbd
+                            >
+                            <span class="tracking-wide uppercase">select</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <kbd
+                                class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                    inline-flex items-center justify-center rounded border px-1.5
+                                    py-0.5 pt-1 font-mono text-[9px] leading-none font-bold"
+                                >ESC</kbd
+                            >
+                            <span class="tracking-wide uppercase">close</span>
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <kbd
+                                class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                    inline-flex items-center justify-center rounded border px-1.5
+                                    py-0.5 pt-1 font-mono text-[9px] leading-none font-bold"
+                                >{{ PIN_SHORTCUT_LABEL }}</kbd
+                            >
+                            <span class="tracking-wide uppercase">
+                                {{ getPinShortcutActionLabel(activeOption) }}
+                            </span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+    </div>
 </template>
 
 <style scoped>
