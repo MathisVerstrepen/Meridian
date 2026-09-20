@@ -2,6 +2,7 @@
 import { ModelsDropdownSortBy } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
 import { decodeModelCatalog } from '@/utils/modelCatalog';
+import { createNodePresetFixtureSettings } from '~~/e2e/fixtures/nodePresetsFixture';
 import {
     MODEL_CATALOG_FIXTURE_RESPONSE,
     MODEL_CATALOG_MODALITY_EXPECTATIONS,
@@ -19,6 +20,8 @@ if (!import.meta.dev) {
 }
 
 const modelStore = useModelStore();
+// Pin shortcuts mutate real reactive settings, just as on the canvas.
+useSettingsStore().setUserSettings(createNodePresetFixtureSettings());
 const { getAvailableModels } = useAPI();
 const decoded = import.meta.client
     ? await getAvailableModels()
@@ -88,7 +91,9 @@ const summary = {
             }),
         ),
     },
-    paid: Object.fromEntries(fixtureModels.map((model) => [model.id, modelStore.isModelPaid(model)])),
+    paid: Object.fromEntries(
+        fixtureModels.map((model) => [model.id, modelStore.isModelPaid(model)]),
+    ),
     selection: modelStore.getModel('fixture-all-capabilities').id,
     allCapabilities: {
         provider: allCapabilitiesModel.provider,
@@ -157,7 +162,7 @@ const renderedSummary = {
             </div>
         </ClientOnly>
         <ClientOnly>
-            <pre data-testid="model-catalog-summary" class="mt-4 whitespace-pre-wrap text-xs">{{
+            <pre data-testid="model-catalog-summary" class="mt-4 text-xs whitespace-pre-wrap">{{
                 JSON.stringify(renderedSummary)
             }}</pre>
         </ClientOnly>
