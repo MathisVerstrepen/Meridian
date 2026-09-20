@@ -3,7 +3,7 @@ import type { CompactModelCatalogResponse, CompactModelInfo } from '../../app/ty
 export const MODEL_CATALOG_FIXTURE_ROUTE = '/auth/model-catalog-fixture';
 export const MODEL_CATALOG_PERFORMANCE_FIXTURE_ROUTE =
     '/auth/model-catalog-performance-fixture';
-export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 25;
+export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 27;
 export const MODEL_CATALOG_PERFORMANCE_MODEL_COUNT = 500;
 
 const namedModels: CompactModelInfo[] = [
@@ -202,6 +202,22 @@ const selectorSpacingModels: CompactModelInfo[] = [
         supportedTools: 1,
         icon: 'openrouter',
         contextLength: 2000000,
+    },
+    {
+        id: 'spacing-duplicate-laguna',
+        name: 'Poolside: Laguna XS 2.1 (free)',
+        pricing: { prompt: '0', completion: '0' },
+        capabilities: 17,
+        supportedTools: 1,
+        contextLength: 262144,
+    },
+    {
+        id: 'spacing-duplicate-laguna',
+        name: 'Poolside: Laguna XS 2.1',
+        pricing: { prompt: '0.00000004', completion: '0.00000012' },
+        capabilities: 17,
+        supportedTools: 1,
+        contextLength: 262144,
     },
     {
         id: 'spacing-github-subscription',

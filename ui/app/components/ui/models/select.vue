@@ -226,7 +226,7 @@ const rowData = computed(() => {
 
         for (const [index, model] of modelsForSection.entries()) {
             rows.push({
-                id: `${sectionId}:${model.id}`,
+                id: `${sectionId}:${index}:${model.id}`,
                 model,
                 headerTitle: index === 0 ? options.headerTitle : undefined,
                 headerMeta: index === 0 ? options.headerMeta : undefined,
@@ -709,7 +709,7 @@ onUnmounted(() => {
                         <UiModelsSelectItem
                             v-for="entry in renderedRows"
                             :id="optionId(entry.index)"
-                            :key="entry.row.id"
+                            :key="entry.index"
                             role="option"
                             :aria-selected="selected?.id === entry.row.model.id"
                             :aria-posinset="entry.index + 1"

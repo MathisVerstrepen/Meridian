@@ -317,6 +317,30 @@ test('keeps filtered model rows consecutive after activation and scrolling', asy
         panel.getByRole('option', { name: /GitHub Copilot.*GitHub Subscription Text/ }),
     ).toBeVisible();
 
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+        await input.fill('Flash');
+        await input.fill('Laguna XS 2.1');
+    }
+    const duplicateIdOptions = panel.getByRole('option', { name: /Poolside: Laguna XS 2\.1/ });
+    await expect(duplicateIdOptions).toHaveCount(2);
+    const duplicateGeometry = await duplicateIdOptions.evaluateAll((elements) =>
+        elements.map((element) => {
+            const bounds = element.getBoundingClientRect();
+            return {
+                id: element.id,
+                rowIndex: element.getAttribute('data-model-row-index'),
+                top: bounds.top,
+                bottom: bounds.bottom,
+            };
+        }),
+    );
+    expect(new Set(duplicateGeometry.map((row) => row.id)).size).toBe(2);
+    expect(new Set(duplicateGeometry.map((row) => row.rowIndex)).size).toBe(2);
+    const orderedDuplicateRows = duplicateGeometry.toSorted((left, right) => left.top - right.top);
+    expect(orderedDuplicateRows[1].top).toBeGreaterThanOrEqual(
+        orderedDuplicateRows[0].bottom - 1,
+    );
+
     await input.fill('Flash');
     await expect(lingOption).toBeVisible();
     await expect(lingOption).toHaveAttribute('aria-selected', 'true');
