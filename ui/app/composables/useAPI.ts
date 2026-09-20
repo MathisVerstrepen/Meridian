@@ -39,7 +39,10 @@ import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 import type { ToolCallDetail } from '@/types/toolCall';
-import { decodeModelCatalog } from '@/utils/modelCatalog';
+import {
+    decodeAndCacheModelCatalog,
+    readCachedModelCatalog,
+} from '@/utils/modelCatalogCache';
 import { decodeGraphEditorResponse } from '@/utils/graphResponse';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -416,10 +419,13 @@ export const useAPI = () => {
     /**
      * Fetches available models for the current user.
      */
-    const getAvailableModels = async (): Promise<ResponseModel> => {
+    const getAvailableModels = async (userId?: string | null): Promise<ResponseModel> => {
         const catalog = await apiFetch<unknown>('/api/models', { method: 'GET' });
-        return decodeModelCatalog(catalog);
+        return decodeAndCacheModelCatalog(catalog, userId);
     };
+
+    const getCachedAvailableModels = (userId?: string | null): ResponseModel | null =>
+        readCachedModelCatalog(userId);
 
     const getInferenceProviderStatuses = () =>
         apiFetch<InferenceProviderStatusResponse>('/api/inference/providers/status', {
@@ -1264,6 +1270,7 @@ export const useAPI = () => {
         getGenerationHistoryDetail,
         restoreGenerationHistory,
         getAvailableModels,
+        getCachedAvailableModels,
         getInferenceProviderStatuses,
         connectClaudeAgentToken,
         disconnectClaudeAgentToken,

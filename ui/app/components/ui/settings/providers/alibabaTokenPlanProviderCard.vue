@@ -17,6 +17,7 @@ const isSubmitting = ref(false);
 
 const modelStore = useModelStore();
 const settingsStore = useSettingsStore();
+const { user } = useUserSession();
 const { modelsDropdownSettings } = storeToRefs(settingsStore);
 const { setModels, sortModels, triggerFilter } = modelStore;
 const { success, error } = useToast();
@@ -32,7 +33,7 @@ const providerStatus = computed<InferenceProviderStatus | null>(() =>
 );
 
 const refreshAvailableModels = async () => {
-    const modelList = await getAvailableModels();
+    const modelList = await getAvailableModels(user.value?.id);
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();

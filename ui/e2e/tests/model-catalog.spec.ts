@@ -194,6 +194,57 @@ test('decodes version 1 once at the API boundary and preserves every output comb
     expect(summary.modalities['fixture-unknown-bits-only']).toEqual([]);
 });
 
+test('shows the cached model catalog while a fresh catalog is loading', async ({ page }) => {
+    const cachedCatalog = {
+        version: 1,
+        data: [
+            {
+                id: 'cached-model',
+                name: 'Cached Model',
+                pricing: { prompt: '0', completion: '0' },
+                capabilities: 1,
+            },
+        ],
+    };
+    const freshCatalog = {
+        version: 1,
+        data: [
+            {
+                id: 'fresh-model',
+                name: 'Fresh Model',
+                pricing: { prompt: '0', completion: '0' },
+                capabilities: 1,
+            },
+        ],
+    };
+    let releaseFreshCatalog: (() => void) | undefined;
+    const freshCatalogGate = new Promise<void>((resolve) => {
+        releaseFreshCatalog = resolve;
+    });
+
+    await page.addInitScript((catalog) => {
+        localStorage.setItem('meridian:model-catalog:v1:anonymous', JSON.stringify(catalog));
+    }, cachedCatalog);
+    await page.route('**/api/models', async (route) => {
+        await freshCatalogGate;
+        await route.fulfill({ json: freshCatalog });
+    });
+    await page.route('**/api/user/settings', (route) => route.fulfill({ json: {} }));
+    await page.route('**/api/inference/providers/status', (route) =>
+        route.fulfill({ json: { providers: [] } }),
+    );
+    await page.route('**/api/auth/github/status', (route) =>
+        route.fulfill({ json: { isConnected: false } }),
+    );
+
+    await page.goto('/auth/model-cache-fixture');
+    const entries = page.getByTestId('model-cache-entry');
+    await expect(entries).toHaveText('Cached Model');
+
+    releaseFreshCatalog?.();
+    await expect(entries).toHaveText('Fresh Model');
+});
+
 test(
     'preserves store filtering, pricing, selection, sorting, provider, and capability behavior',
     {
