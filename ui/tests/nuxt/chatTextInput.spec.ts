@@ -5,6 +5,7 @@ import AttachmentChipListItem from '@/components/ui/chat/attachment/chipListItem
 import TextInput from '@/components/ui/chat/textInput.vue';
 import { NodeTypeEnum } from '@/types/enums';
 import type { RepoContent } from '@/types/github';
+import type { ChatInputSubmission } from '@/types/chat';
 
 const stubs = vi.hoisted(() => {
     type AttachmentHandler = (payload: {
@@ -255,6 +256,58 @@ describe('chat text input clipboard paste', () => {
         }
     });
 
+    it.each([false, true])('restores failed attachments and text without replacing newer drafts (%s)', async (hasNewDraft) => {
+        const wrapper = await mountInput();
+        const attachment: FileSystemObject = {
+            id: 'document', name: 'notes.txt', type: 'file', created_at: '', updated_at: '', cached: false,
+        };
+        try {
+            selectCloudAttachments([attachment]);
+            const input = wrapper.get<HTMLElement>('[contenteditable]');
+            input.element.innerText = 'Original draft';
+            await input.trigger('input');
+            await input.trigger('keydown', { key: 'Enter' });
+            expect(input.element.innerText).toBe('');
+            expect(wrapper.find('[data-attachment-grid]').exists()).toBe(false);
+            const restore = wrapper.emitted<[ChatInputSubmission, () => void]>('generate')?.[0]?.[1];
+            if (!restore) throw new Error('Missing restore callback');
+
+            if (hasNewDraft) {
+                input.element.innerText = 'Newer draft';
+                await input.trigger('input');
+            }
+            restore();
+            await flushPromises();
+
+            expect(input.element.innerText).toBe(hasNewDraft ? 'Newer draft' : 'Original draft');
+            expect(wrapper.find('[data-attachment-grid]').exists()).toBe(!hasNewDraft);
+            await input.trigger('keydown', { key: 'Enter' });
+            expect(wrapper.emitted('generate')?.[1]?.[0]).toEqual({
+                message: hasNewDraft ? 'Newer draft' : 'Original draft',
+                files: hasNewDraft ? [] : [attachment],
+                githubContext: null,
+            });
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('preserves pending input and suppresses Enter and button submission while submitting', async () => {
+        const wrapper = await mountInput();
+        try {
+            await wrapper.setProps({ isSubmitting: true });
+            const input = wrapper.get<HTMLElement>('[contenteditable]');
+            input.element.innerText = 'Next message';
+            await input.trigger('input');
+            await input.trigger('keydown', { key: 'Enter' });
+            wrapper.getComponent({ name: 'UiChatUtilsSendChatButton' }).vm.$emit('send');
+            expect(wrapper.emitted('generate')).toBeUndefined();
+            expect(input.element.innerText).toBe('Next message');
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it.each(['home', 'chat'] as const)(
         'renders a sharp 56px authenticated image preview from the %s input',
         async (from) => {
@@ -481,10 +534,17 @@ describe('chat Git context', () => {
         wrapper.getComponent({ name: 'UiChatUtilsSendChatButton' }).vm.$emit('send');
 
         expect(wrapper.emitted('generate')).toEqual([
-            [{ message: 'Use this context', files: [], githubContext: context }],
+            [{ message: 'Use this context', files: [], githubContext: context }, expect.any(Function)],
         ]);
         await flushPromises();
         expect(wrapper.text()).not.toContain('meridian/test');
+
+        const restore = wrapper.emitted<[ChatInputSubmission, () => void]>('generate')?.[0]?.[1];
+        if (!restore) throw new Error('Missing restore callback');
+        restore();
+        await flushPromises();
+        expect(wrapper.text()).toContain('meridian/test');
+        expect(wrapper.get<HTMLElement>('[contenteditable]').element.innerText).toBe('Use this context');
 
         wrapper.unmount();
     });

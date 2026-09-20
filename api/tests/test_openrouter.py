@@ -41,6 +41,7 @@ def _load_openrouter_model_mapping_functions():
         "_get_openrouter_brand_icon",
         "_normalize_openrouter_pricing",
         "_build_openrouter_modality",
+        "_is_openrouter_batch_model",
         "_map_frontend_openrouter_model",
         "_map_frontend_openrouter_models",
         "_map_v1_openrouter_models",
@@ -155,6 +156,16 @@ def test_frontend_openrouter_model_mapper_skips_unavailable_models():
                     "endpoint": {"is_disabled": True},
                 },
                 {
+                    "slug": "google/gemini-flash:batch",
+                    "name": "Google: Gemini Flash",
+                    "endpoint": {"pricing": {"prompt": "0.5", "completion": "1"}},
+                },
+                {
+                    "slug": "anthropic/claude-batch",
+                    "name": "Anthropic: Claude (batch)",
+                    "endpoint": {"pricing": {"prompt": "0.5", "completion": "1"}},
+                },
+                {
                     "slug": "google/available",
                     "name": "Available",
                     "input_modalities": ["text"],
@@ -183,11 +194,36 @@ def test_v1_openrouter_model_mapper_preserves_existing_enrichment():
                     },
                     "pricing": {"prompt": "0.1", "completion": "0.2"},
                     "supported_parameters": ["tools"],
-                }
+                },
+                {
+                    "id": "google/gemini-2.5-flash:batch",
+                    "name": "Google: Gemini 2.5 Flash",
+                    "architecture": {
+                        "input_modalities": ["text"],
+                        "modality": "text->text",
+                        "output_modalities": ["text"],
+                        "tokenizer": "Gemini",
+                    },
+                    "pricing": {"prompt": "0.05", "completion": "0.1"},
+                    "supported_parameters": ["tools"],
+                },
+                {
+                    "id": "anthropic/claude-batch",
+                    "name": "Anthropic: Claude (batch)",
+                    "architecture": {
+                        "input_modalities": ["text"],
+                        "modality": "text->text",
+                        "output_modalities": ["text"],
+                        "tokenizer": "Claude",
+                    },
+                    "pricing": {"prompt": "0.5", "completion": "1"},
+                    "supported_parameters": ["tools"],
+                },
             ]
         }
     )
 
+    assert [model.id for model in models.data] == ["google/gemini-2.5-flash"]
     model = models.data[0]
     assert model.icon == "google"
     assert model.toolsSupport is True

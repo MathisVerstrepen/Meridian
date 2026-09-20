@@ -12,6 +12,7 @@ const { modelsDropdownSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { success, error, warning } = useToast();
+const { user } = useUserSession();
 const { getProviderStatus, refreshInferenceProviderStatuses } = useInferenceProviderStatuses();
 const {
     connectClaudeAgentToken,
@@ -85,7 +86,7 @@ const toggleProvider = (id: string) => {
 
 // --- Helpers ---
 const refreshAvailableModels = async () => {
-    const modelList = await getAvailableModels();
+    const modelList = await getAvailableModels(user.value?.id);
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();

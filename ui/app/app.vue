@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-const { getAvailableModels, getUserSettings } = useAPI();
+const { getAvailableModels, getCachedAvailableModels, getUserSettings } = useAPI();
 const { refreshInferenceProviderStatuses } = useInferenceProviderStatuses();
 
 const route = useRoute();
+const { user } = useUserSession();
 
 // --- Stores ---
 const githubStore = useGithubStore();
@@ -11,7 +12,6 @@ const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { modelsDropdownSettings, appearanceSettings } = storeToRefs(settingsStore);
-const { isReady } = storeToRefs(modelStore);
 
 // --- Actions/Methods from Stores ---
 const { checkGitHubStatus } = githubStore;
@@ -95,9 +95,39 @@ watch(
     },
 );
 
+let essentialsLoaded = false;
+let essentialsPromise: Promise<void> | null = null;
+
+const loadEssentials = async () => {
+    const cachedModelList = getCachedAvailableModels(user.value?.id);
+    if (cachedModelList) {
+        setModels(cachedModelList.data);
+        sortModels(modelsDropdownSettings.value.sortBy);
+        triggerFilter();
+    }
+
+    const modelListPromise = getAvailableModels(user.value?.id);
+    const providerStatusesPromise = refreshInferenceProviderStatuses();
+    const userSettings = await getUserSettings();
+
+    settingsStore.setUserSettings(userSettings);
+    if (cachedModelList) {
+        sortModels(modelsDropdownSettings.value.sortBy);
+        triggerFilter();
+    }
+
+    const [modelList] = await Promise.all([modelListPromise, providerStatusesPromise]);
+
+    setModels(modelList.data);
+    showModelDiscoveryWarnings(modelList.warnings ?? []);
+    sortModels(modelsDropdownSettings.value.sortBy);
+    triggerFilter();
+};
+
 const fetchEssentials = async () => {
     if (
         route.path.startsWith('/auth/login') ||
+        route.path.startsWith('/auth/model-catalog-fixture') ||
         route.path.startsWith('/auth/markdown-renderer-fixture') ||
         route.path.startsWith('/auth/reasoning-effort-fixture') ||
         route.path.startsWith('/auth/quick-workflow-wheel-fixture') ||
@@ -105,7 +135,8 @@ const fetchEssentials = async () => {
     ) {
         return;
     }
-    if (isReady.value) return;
+    if (essentialsLoaded) return;
+    if (essentialsPromise) return essentialsPromise;
 
     // Start fetching repositories in the background
     setTimeout(() => {
@@ -114,18 +145,13 @@ const fetchEssentials = async () => {
         });
     }, 10);
 
-    const modelListPromise = getAvailableModels();
-    const providerStatusesPromise = refreshInferenceProviderStatuses();
-    const userSettings = await getUserSettings();
-
-    settingsStore.setUserSettings(userSettings);
-
-    const [modelList] = await Promise.all([modelListPromise, providerStatusesPromise]);
-
-    setModels(modelList.data);
-    showModelDiscoveryWarnings(modelList.warnings ?? []);
-    sortModels(modelsDropdownSettings.value.sortBy);
-    triggerFilter();
+    essentialsPromise = loadEssentials();
+    try {
+        await essentialsPromise;
+        essentialsLoaded = true;
+    } finally {
+        essentialsPromise = null;
+    }
 };
 
 onMounted(fetchEssentials);
