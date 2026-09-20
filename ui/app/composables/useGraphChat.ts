@@ -2,6 +2,7 @@ import { type GraphNode } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
+import { useGraphRenderReady } from '@/composables/useGraphRenderReady';
 import { NodeTypeEnum } from '@/types/enums';
 import type { ChatInputSubmission } from '@/types/chat';
 import type { RepoContent } from '@/types/github';
@@ -18,6 +19,7 @@ type CreatedChatNodes = {
 export const useGraphChat = () => {
     const route = useRoute();
     const graphId = computed(() => firstRouteString(route.params.id) ?? '');
+    const { waitForRender } = useGraphRenderReady(graphId);
 
     const chatStore = useChatStore();
     const { error } = useToast();
@@ -389,23 +391,6 @@ export const useGraphChat = () => {
             generatorNodeId: newNodeId,
             promptNodeId,
         };
-    };
-
-    /**
-     * Waits for the Vue Flow graph to render completely.
-     * This is useful when you need to ensure that all nodes are initialized before performing actions.
-     * @returns A promise that resolves when the graph is rendered.
-     */
-    const waitForRender = async () => {
-        const { onNodesInitialized } = useGraphFlow('main-graph-' + graphId.value);
-
-        return new Promise<void>((resolve) => {
-            const unsubscribe = onNodesInitialized(async () => {
-                await nextTick();
-                resolve();
-                unsubscribe.off();
-            });
-        });
     };
 
     return {

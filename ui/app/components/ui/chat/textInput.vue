@@ -5,15 +5,16 @@ import type { BlockDefinition } from '@/types/graph';
 
 const emit = defineEmits<{
     (e: 'triggerScroll'): void;
-    (e: 'generate', submission: ChatInputSubmission): void;
+    (e: 'generate', submission: ChatInputSubmission, restoreInput: () => void): void;
     (e: 'goBackToBottom'): void;
     (e: 'cancelStream'): void;
     (e: 'selectNodeType', nodeType: BlockDefinition): void;
 }>();
 
-defineProps<{
+const props = defineProps<{
     isLockedToBottom: boolean;
     isStreaming: boolean;
+    isSubmitting?: boolean;
     nodeType: NodeTypeEnum;
     from: 'home' | 'chat';
 }>();
@@ -26,6 +27,7 @@ const usageStore = useUsageStore();
 const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
 const { error } = useToast();
 const graphEvents = useGraphEvents();
+const { isImageAttachment } = useFiles();
 const { githubContext, openGithubContext, removeGithubContext } = useChatGithubContext();
 
 // --- Local State ---
@@ -38,15 +40,6 @@ const isDraggingOver = ref(false);
 type UploadStatus = 'uploading' | 'complete' | 'error';
 const uploads = ref<Record<string, { status: UploadStatus }>>({});
 const isUploading = computed(() => Object.keys(uploads.value).length > 0);
-
-const isImageAttachment = (file: FileSystemObject) => {
-    if (file.type !== 'file') return false;
-
-    const contentType = file.content_type?.toLowerCase().split(';')[0]?.trim();
-    if (contentType?.startsWith('image/')) return true;
-
-    return /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name);
-};
 
 const imageAttachments = computed(() => files.value.filter(isImageAttachment));
 const nonImageAttachments = computed(() => files.value.filter((file) => !isImageAttachment(file)));
@@ -77,19 +70,29 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    emit('generate', {
+    if (props.isSubmitting || props.isStreaming || isUploading.value) return;
+    const submission: ChatInputSubmission = {
         message: message.value,
-        files: files.value,
+        files: [...files.value],
         githubContext: githubContext.value,
-    });
+    };
 
     message.value = '';
     files.value = [];
     githubContext.value = null;
     isEmpty.value = true;
     const el = textareaRef.value;
-    if (!el) return;
-    el.innerText = '';
+    if (el) el.innerText = '';
+
+    emit('generate', submission, () => {
+        // Never replace a newer draft typed while this submission was pending.
+        if (message.value || files.value.length || githubContext.value) return;
+        message.value = submission.message;
+        files.value = submission.files;
+        githubContext.value = submission.githubContext;
+        isEmpty.value = !submission.message;
+        if (textareaRef.value) textareaRef.value.innerText = submission.message;
+    });
 };
 
 const removeFile = (file: FileSystemObject) => {
@@ -347,7 +350,7 @@ onMounted(() => {
 
             <UiChatUtilsSendChatButton
                 :is-streaming="isStreaming"
-                :is-empty="isEmpty"
+                :is-empty="isEmpty || !!isSubmitting"
                 :is-uploading="isUploading"
                 @send="sendMessage"
                 @cancel-stream="emit('cancelStream')"
