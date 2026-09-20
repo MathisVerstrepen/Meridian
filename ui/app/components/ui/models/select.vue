@@ -574,9 +574,8 @@ onUnmounted(() => {
         <!-- Trigger -->
         <div
             ref="buttonRef"
-            class="ui-models-trigger group/trigger focus-within:ring-ember-glow/60 relative h-full
-                w-full cursor-default overflow-hidden rounded-2xl border-2 text-left transition-all
-                focus-within:ring-2 focus:outline-none"
+            class="ui-models-trigger group/trigger relative h-full w-full cursor-default
+                overflow-hidden rounded-2xl border-2 text-left transition-all focus:outline-none"
             :class="{
                 [`bg-soft-silk/15 border-olive-grove-dark dark:text-olive-grove-dark
                 text-anthracite`]: variant === 'green',
