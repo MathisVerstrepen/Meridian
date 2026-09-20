@@ -1058,10 +1058,23 @@ def _build_openrouter_modality(input_modalities: list[str], output_modalities: l
     return f"{input_modality}->{output_modality}"
 
 
+def _is_openrouter_batch_model(raw_model: dict[str, Any], id_field: str) -> bool:
+    model_id = raw_model.get(id_field)
+    name = raw_model.get("name")
+    return (
+        isinstance(model_id, str)
+        and model_id.casefold().endswith(":batch")
+        or isinstance(name, str)
+        and name.strip().casefold().endswith("(batch)")
+    )
+
+
 def _map_frontend_openrouter_model(raw_model: dict[str, Any]) -> ModelInfo | None:
     model_id = raw_model.get("slug")
     endpoint = raw_model.get("endpoint")
     if not isinstance(model_id, str) or not model_id:
+        return None
+    if _is_openrouter_batch_model(raw_model, "slug"):
         return None
     if not isinstance(endpoint, dict):
         endpoint = {}
@@ -1119,9 +1132,15 @@ def _map_frontend_openrouter_models(raw_models: dict[str, Any]) -> ResponseModel
 
 
 def _map_v1_openrouter_models(raw_models: dict[str, Any]) -> ResponseModel:
-    models = ResponseModel(**raw_models)
+    raw_data = raw_models.get("data", [])
+    filtered_data = [
+        raw_model
+        for raw_model in raw_data
+        if isinstance(raw_model, dict) and not _is_openrouter_batch_model(raw_model, "id")
+    ]
+    models = ResponseModel(**{**raw_models, "data": filtered_data})
 
-    for model, raw_model in zip(models.data, raw_models.get("data", [])):
+    for model, raw_model in zip(models.data, filtered_data):
         model.icon = _get_openrouter_brand_icon(model.id)
 
         model.toolsSupport = raw_model.get("supported_parameters") is not None and (
