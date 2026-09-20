@@ -1,5 +1,5 @@
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { MessageContent, BlockDefinition } from '@/types/graph';
+import type { BlockDefinition } from '@/types/graph';
 import type { ChatInputSubmission, ChatSession } from '@/types/chat';
 import type { ShallowRef } from 'vue';
 
@@ -52,6 +52,7 @@ export const useChatGenerator = (
     );
     const streamingSession = ref<StreamSession | null>();
     const generationError = ref<string | null>(null);
+    const isSubmitting = ref(false);
     const selectedNodeType = ref<BlockDefinition | null>(null);
 
     // --- Private Helper Functions ---
@@ -184,7 +185,7 @@ export const useChatGenerator = (
         triggerScroll();
     };
 
-    const generateNew = async (
+    const createAndGenerate = async (
         forcedNodeId: string | null = null,
         submission: ChatInputSubmission | null = null,
     ) => {
@@ -193,11 +194,10 @@ export const useChatGenerator = (
 
         if (forcedNodeId) {
             const currentChatId = openChatId.value;
-            if (!currentChatId) return;
+            if (!currentChatId) throw new Error('No active chat session.');
             const lastestMessage = getLatestMessage();
             if (!lastestMessage?.content) {
-                console.warn('No message found, skipping generation.');
-                return;
+                throw new Error('No message found for generation.');
             }
 
             const storedSubmission: ChatInputSubmission = {
@@ -215,7 +215,9 @@ export const useChatGenerator = (
             }
         } else if (submission && selectedNodeType.value) {
             const currentChatId = openChatId.value;
-            if (!currentChatId) return;
+            if (!currentChatId) throw new Error('No active chat session.');
+            // Prepare all content before creating nodes or changing the session.
+            const filesContent = submission.files.map(fileToMessageContent);
             const createdNodes = createNodeFromVariant(
                 selectedNodeType.value.nodeType,
                 currentChatId,
@@ -223,10 +225,7 @@ export const useChatGenerator = (
             );
             generatorNodeId = createdNodes.generatorNodeId;
 
-            let filesContent: MessageContent[] = [];
-            if (submission.files.length > 0) {
-                filesContent = submission.files.map((file) => fileToMessageContent(file));
-            }
+            if (!generatorNodeId) throw new Error('No generator node was created.');
 
             addMessage({
                 role: MessageRoleEnum.user,
@@ -247,8 +246,7 @@ export const useChatGenerator = (
         }
 
         if (!generatorNodeId) {
-            console.warn('No text-to-text node ID found, skipping message send.');
-            return;
+            throw new Error('No generator node is available.');
         }
 
         session.value.fromNodeId = generatorNodeId;
@@ -265,6 +263,25 @@ export const useChatGenerator = (
         }, 100);
 
         await generate();
+    };
+
+    const generateNew = async (
+        forcedNodeId: string | null = null,
+        submission: ChatInputSubmission | null = null,
+    ): Promise<boolean> => {
+        if (isSubmitting.value || isStreaming.value) return false;
+        isSubmitting.value = true;
+        generationError.value = null;
+        try {
+            await createAndGenerate(forcedNodeId, submission);
+            return true;
+        } catch (err) {
+            console.error('Failed to submit chat message:', err);
+            generationError.value = 'Could not send your message because generation could not start. Please try again.';
+            return false;
+        } finally {
+            isSubmitting.value = false;
+        }
     };
 
     const generateFollowUp = async (
@@ -356,6 +373,7 @@ export const useChatGenerator = (
 
     return {
         isStreaming,
+        isSubmitting,
         streamingSession,
         generationError,
         selectedNodeType,

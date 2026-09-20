@@ -14,6 +14,7 @@ interface ChatBoxTestStubs {
     graphEmit: ReturnType<typeof vi.fn>;
     initialOpenChatId: string;
     isStreaming: Ref<boolean> | null;
+    generationError: Ref<string | null> | null;
     openChatId: Ref<string | null> | null;
     session: ChatSession;
     sessionRef: Ref<ChatSession> | null;
@@ -25,6 +26,7 @@ const stubs = vi.hoisted((): ChatBoxTestStubs => ({
     graphEmit: vi.fn(),
     initialOpenChatId: 'chat-id',
     isStreaming: null,
+    generationError: null,
     openChatId: null,
     session: {
         fromNodeId: 'chat-id',
@@ -36,10 +38,12 @@ const stubs = vi.hoisted((): ChatBoxTestStubs => ({
 mockNuxtImport('useChatGenerator', () => (session: Ref<ChatSession>) => {
     stubs.sessionRef = session;
     stubs.isStreaming = ref(false);
+    stubs.generationError = ref(null);
     return {
         isStreaming: stubs.isStreaming,
+        isSubmitting: ref(false),
         streamingSession: ref(null),
-        generationError: ref(null),
+        generationError: stubs.generationError,
         selectedNodeType: ref(NodeTypeEnum.STREAMING),
         generateNew: stubs.generateNew,
         generateFollowUp: vi.fn(),
@@ -152,6 +156,7 @@ describe('chatBox manual message generation', () => {
         });
         stubs.generateNew.mockReset().mockImplementation(() => {
             stubs.callOrder.push('generate-new');
+            return Promise.resolve(true);
         });
     });
 
@@ -178,13 +183,42 @@ describe('chatBox manual message generation', () => {
         };
 
         try {
-            wrapper.findComponent(TextInputStub).vm.$emit('generate', submission);
+            wrapper.findComponent(TextInputStub).vm.$emit('generate', submission, vi.fn());
 
             expect(stubs.graphEmit).toHaveBeenCalledOnce();
             expect(stubs.graphEmit).toHaveBeenCalledWith('open-upcoming-node-data', {});
             expect(stubs.generateNew).toHaveBeenCalledOnce();
             expect(stubs.generateNew).toHaveBeenCalledWith(null, submission);
             expect(stubs.callOrder).toEqual(['open-upcoming-node-data', 'generate-new']);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('awaits failed submission and restores input without hiding its inline error', async () => {
+        let finishSubmission: (success: boolean) => void = () => {};
+        stubs.generateNew.mockReturnValueOnce(new Promise<boolean>((resolve) => {
+            finishSubmission = resolve;
+        }));
+        const wrapper = await mountSuspended(ChatBox, {
+            shallow: true,
+            global: { stubs: { UiChatTextInput: TextInputStub } },
+        });
+        const restoreInput = vi.fn();
+        try {
+            wrapper.getComponent(TextInputStub).vm.$emit('generate', {
+                message: 'Keep draft', files: [], githubContext: null,
+            }, restoreInput);
+            await nextTick();
+            expect(restoreInput).not.toHaveBeenCalled();
+
+            stubs.generationError!.value = 'Could not send your message. Please try again.';
+            finishSubmission(false);
+            await flushPromises();
+
+            expect(restoreInput).toHaveBeenCalledOnce();
+            expect(wrapper.get('[role="alert"]').text()).toContain('Please try again');
+            expect(wrapper.get('[role="alert"]').element.closest('.chat-panel__messages')).toBeNull();
         } finally {
             wrapper.unmount();
         }

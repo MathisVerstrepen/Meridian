@@ -57,6 +57,7 @@ const { getTextFromMessage, getTextFromMessageFast } = useMessage();
 // --- Decomposed Logic via Composables ---
 const {
     isStreaming,
+    isSubmitting,
     streamingSession,
     generationError,
     selectedNodeType,
@@ -150,9 +151,9 @@ const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
 
-const handleGenerateNew = (submission: ChatInputSubmission) => {
+const handleGenerateNew = async (submission: ChatInputSubmission, restoreInput: () => void) => {
     graphEvents.emit('open-upcoming-node-data', {});
-    generateNew(null, submission);
+    if (!await generateNew(null, submission)) restoreInput();
 };
 
 const chatPanelStyle = computed(() => {
@@ -452,24 +453,24 @@ onUnmounted(() => {
                         </template>
                     </li>
 
-                    <!-- Error Display -->
-                    <div
-                        v-if="generationError"
-                        class="border-terracotta-clay-dark bg-terracotta-clay/10
-                            text-terracotta-clay my-4 rounded-xl border p-3 text-center font-bold"
-                    >
-                        {{ generationError }}
-                    </div>
-
                     <div class="h-3 shrink-0" />
                 </ul>
             </div>
 
             <!-- Chat Input Area -->
+            <div
+                v-if="generationError"
+                role="alert"
+                class="border-terracotta-clay-dark bg-terracotta-clay/10
+                    text-terracotta-clay my-4 rounded-xl border p-3 text-center font-bold"
+            >
+                {{ generationError }}
+            </div>
             <UiChatTextInput
                 v-if="openChatId"
                 :is-locked-to-bottom="isLockedToBottom"
                 :is-streaming="isStreaming"
+                :is-submitting="isSubmitting"
                 :is-disabled="!isConnected"
                 :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"
                 from="chat"

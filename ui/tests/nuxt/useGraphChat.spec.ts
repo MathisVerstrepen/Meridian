@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import type { GraphNode } from '@vue-flow/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { NodeTypeEnum } from '@/types/enums';
 import { useGraphChat } from '@/composables/useGraphChat';
 import { graphNode } from './support/graphNode';
@@ -29,6 +30,9 @@ const stubs = vi.hoisted(() => {
     })),
     placeEdge: vi.fn(),
     resolveOverlaps: vi.fn(),
+    areNodesInitialized: { value: false },
+    onNodesInitialized: vi.fn<(callback: () => void) => { off: () => void }>(),
+    off: vi.fn(),
     };
 });
 
@@ -36,6 +40,8 @@ mockNuxtImport('useGraphFlow', () => () => ({
         findNode: stubs.findNode,
         getNodes: stubs.nodes,
         getEdges: stubs.edges,
+        areNodesInitialized: stubs.areNodesInitialized,
+        onNodesInitialized: stubs.onNodesInitialized,
     }));
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'graph-id' } }));
@@ -201,5 +207,60 @@ describe('useGraphChat createNodeFromVariant', () => {
             ['attached-prompt-id', 'attached-file-id', 'attached-github-id'],
             { direction: 'below' },
         );
+    });
+});
+
+describe('useGraphChat render readiness', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.useFakeTimers();
+        stubs.areNodesInitialized.value = false;
+        stubs.onNodesInitialized.mockReset().mockReturnValue({ off: stubs.off });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('resolves already-initialized graphs without waiting for another event', async () => {
+        stubs.areNodesInitialized.value = true;
+        await useGraphChat().waitForRender();
+        expect(stubs.onNodesInitialized).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('resolves on initialization and cleans up the listener and fallback timer', async () => {
+        const resolved = vi.fn();
+        const pending = useGraphChat().waitForRender().then(resolved);
+        await nextTick();
+        expect(resolved).not.toHaveBeenCalled();
+        stubs.onNodesInitialized.mock.calls[0]![0]();
+        await pending;
+        expect(resolved).toHaveBeenCalledOnce();
+        expect(stubs.off).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('rechecks initialized state after subscribing to cover a missed event', async () => {
+        stubs.onNodesInitialized.mockImplementationOnce(() => {
+            stubs.areNodesInitialized.value = true;
+            return { off: stubs.off };
+        });
+        await useGraphChat().waitForRender();
+        expect(stubs.off).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('allows execution to continue after a bounded wait when no event arrives', async () => {
+        const resolved = vi.fn();
+        const pending = useGraphChat().waitForRender().then(resolved);
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(999);
+        expect(resolved).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+        expect(resolved).toHaveBeenCalledOnce();
+        expect(stubs.off).toHaveBeenCalledOnce();
+        expect(vi.getTimerCount()).toBe(0);
     });
 });
