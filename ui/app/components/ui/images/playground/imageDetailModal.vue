@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useImageReferencePreview } from '@/composables/useImageReferencePreview';
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
     imagePlaygroundActualDimensions,
@@ -31,7 +32,7 @@ const props = withDefaults(
     },
 );
 
-const { getFileBlob } = useAPI();
+const { openReferenceInNewTab } = useImageReferencePreview();
 
 const emit = defineEmits<{
     (e: 'close'): void;
@@ -91,27 +92,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeydown);
 });
-
-const openReferenceInNewTab = async (referenceId: string) => {
-    const tab = window.open('about:blank', '_blank');
-    if (tab) {
-        tab.opener = null;
-    }
-    try {
-        const blob = await getFileBlob(referenceId);
-        const url = URL.createObjectURL(blob);
-        if (tab) {
-            tab.location.href = url;
-        } else {
-            window.open(url, '_blank', 'noopener,noreferrer');
-        }
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (error) {
-        console.error('Reference image open failed:', error);
-        tab?.close();
-        window.open(imagePlaygroundImageUrl(referenceId), '_blank', 'noopener,noreferrer');
-    }
-};
 
 const chipBtn =
     'flex items-center justify-center rounded-full border border-soft-silk/15 bg-obsidian/55 text-soft-silk/85 backdrop-blur-md transition hover:scale-105 hover:border-ember-glow/55 hover:text-ember-glow';
