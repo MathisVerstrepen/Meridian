@@ -19,13 +19,7 @@ const props = defineProps<{
     from: 'home' | 'chat';
 }>();
 
-// --- Stores ---
-const settingsStore = useSettingsStore();
-const usageStore = useUsageStore();
-
 // --- Composables ---
-const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
-const { error } = useToast();
 const graphEvents = useGraphEvents();
 const { isImageAttachment } = useFiles();
 const { githubContext, openGithubContext, removeGithubContext } = useChatGithubContext();
@@ -37,9 +31,11 @@ const isEmpty = ref(true);
 const files = ref<FileSystemObject[]>([]);
 const isDraggingOver = ref(false);
 
-type UploadStatus = 'uploading' | 'complete' | 'error';
-const uploads = ref<Record<string, { status: UploadStatus }>>({});
-const isUploading = computed(() => Object.keys(uploads.value).length > 0);
+const { addFiles, uploads, isUploading, collision, resolveCollision } = useAttachmentUploads(
+    (file) => {
+        if (!files.value.some((attached) => attached.id === file.id)) files.value.push(file);
+    },
+);
 
 const imageAttachments = computed(() => files.value.filter(isImageAttachment));
 const nonImageAttachments = computed(() => files.value.filter((file) => !isImageAttachment(file)));
@@ -137,78 +133,8 @@ const handlePaste = (event: ClipboardEvent) => {
     }
 
     if (imageFiles.length) {
-        void addFiles(imageFiles, 'keep_both');
+        void addFiles(imageFiles);
     }
-};
-
-const addFiles = async (
-    newFiles: globalThis.FileList | File[],
-    conflictPolicy?: FileConflictPolicy,
-) => {
-    if (!newFiles) return;
-
-    const currentUploads: Record<string, { status: UploadStatus }> = {};
-    const fileList = Array.from(newFiles);
-
-    fileList.forEach((file, index) => {
-        const tempId = `upload-${Date.now()}-${index}`;
-        currentUploads[tempId] = { status: 'uploading' };
-    });
-    uploads.value = { ...uploads.value, ...currentUploads };
-
-    const root = await getRootFolder();
-    let targetId = root.id;
-
-    const defaultFolder = settingsStore.blockAttachmentSettings.default_upload_folder;
-
-    if (defaultFolder) {
-        try {
-            const contents = await getFolderContents(root.id);
-            const folder = contents.find((f) => f.name === defaultFolder && f.type === 'folder');
-
-            if (folder) {
-                targetId = folder.id;
-            } else {
-                const newFolder = await createFolder(defaultFolder, root.id);
-                targetId = newFolder.id;
-            }
-        } catch (err) {
-            console.warn('Failed to use default upload folder, falling back to root:', err);
-        }
-    }
-
-    const uploadPromises = fileList.map(async (file, index) => {
-        const tempId = Object.keys(currentUploads)[index];
-        try {
-            const newFile = conflictPolicy
-                ? await uploadFile(file, targetId, conflictPolicy)
-                : await uploadFile(file, targetId);
-            files.value.push(newFile);
-            uploads.value[tempId].status = 'complete';
-        } catch (err) {
-            const detail = runtimeErrorDetail(err) ?? '';
-            console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. ${detail}`, {
-                title: 'Upload Error',
-            });
-            uploads.value[tempId].status = 'error';
-        }
-    });
-
-    await Promise.allSettled(uploadPromises);
-
-    setTimeout(() => {
-        const completedIds = Object.keys(currentUploads);
-        let remainingUploads = { ...uploads.value };
-        completedIds.forEach((id) => {
-            remainingUploads = Object.fromEntries(
-                Object.entries(remainingUploads).filter(([key]) => key !== id),
-            );
-        });
-        uploads.value = remainingUploads;
-    }, 100);
-
-    usageStore.fetchUsage();
 };
 
 const handleShiftSpace = () => {
@@ -238,6 +164,11 @@ onMounted(() => {
 </script>
 
 <template>
+    <UiAttachmentCollisionModal
+        v-if="collision"
+        :collision="collision"
+        @resolve="resolveCollision"
+    />
     <div class="relative flex h-fit w-full flex-col items-center justify-end">
         <!-- Scroll to Bottom Button -->
         <button
@@ -265,10 +196,7 @@ onMounted(() => {
                 data-attachment-row="github"
                 class="col-span-1 flex w-full list-none flex-wrap items-center justify-start gap-2"
             >
-                <UiChatGithubContextChip
-                    :context="githubContext"
-                    @remove="removeGithubContext"
-                />
+                <UiChatGithubContextChip :context="githubContext" @remove="removeGithubContext" />
             </ul>
             <ul
                 v-if="imageAttachments.length > 0"

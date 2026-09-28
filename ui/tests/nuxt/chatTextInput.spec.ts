@@ -69,10 +69,7 @@ mockNuxtImport('useGraphEvents', () => () => ({
     on: stubs.graphOn,
 }));
 
-const mountInput = (
-    from: 'home' | 'chat' = 'chat',
-    stubAttachmentChip = true,
-) =>
+const mountInput = (from: 'home' | 'chat' = 'chat', stubAttachmentChip = true) =>
     mountSuspended(TextInput, {
         props: {
             isLockedToBottom: true,
@@ -86,6 +83,7 @@ const mountInput = (
                 UiChatAttachmentUploadButton: true,
                 UiChatUtilsSendChatButton: true,
                 UiChatUtilsUploadProgressCircle: true,
+                UiAttachmentCollisionModal: true,
                 UiIcon: true,
             },
         },
@@ -183,14 +181,14 @@ describe('chat text input clipboard paste', () => {
                 'Pasted caption',
             );
             expect(stubs.uploadFile).toHaveBeenCalledOnce();
-            expect(stubs.uploadFile).toHaveBeenCalledWith(image, 'root', 'keep_both');
+            expect(stubs.uploadFile).toHaveBeenCalledWith(image, 'root');
             expect(stubs.fetchUsage).toHaveBeenCalledOnce();
         } finally {
             wrapper.unmount();
         }
     });
 
-    it('attaches distinct server results from sequential same-name clipboard images', async () => {
+    it('attaches distinct server results after choosing rename for a same-name clipboard image', async () => {
         stubs.uploadFile
             .mockResolvedValueOnce({
                 id: 'first-image',
@@ -217,21 +215,26 @@ describe('chat text input clipboard paste', () => {
         try {
             dispatchPaste(wrapper.get('[contenteditable]').element, '', [firstImage]);
             await flushPromises();
+            stubs.getFolderContents.mockResolvedValue([
+                {
+                    id: 'first-image',
+                    name: 'image.png',
+                    type: 'file',
+                    created_at: '',
+                    updated_at: '',
+                    cached: false,
+                },
+            ]);
             dispatchPaste(wrapper.get('[contenteditable]').element, '', [secondImage]);
             await flushPromises();
+            expect(stubs.uploadFile).toHaveBeenCalledOnce();
+            wrapper
+                .getComponent({ name: 'UiAttachmentCollisionModal' })
+                .vm.$emit('resolve', 'keep_both');
+            await flushPromises();
 
-            expect(stubs.uploadFile).toHaveBeenNthCalledWith(
-                1,
-                firstImage,
-                'root',
-                'keep_both',
-            );
-            expect(stubs.uploadFile).toHaveBeenNthCalledWith(
-                2,
-                secondImage,
-                'root',
-                'keep_both',
-            );
+            expect(stubs.uploadFile).toHaveBeenNthCalledWith(1, firstImage, 'root');
+            expect(stubs.uploadFile).toHaveBeenNthCalledWith(2, secondImage, 'root', 'keep_both');
             expect(wrapper.findAll('img').map((preview) => preview.attributes('src'))).toEqual([
                 '/api/auth/refresh/files/view/first-image?size=160x160',
                 '/api/auth/refresh/files/view/second-image?size=160x160',
@@ -256,41 +259,52 @@ describe('chat text input clipboard paste', () => {
         }
     });
 
-    it.each([false, true])('restores failed attachments and text without replacing newer drafts (%s)', async (hasNewDraft) => {
-        const wrapper = await mountInput();
-        const attachment: FileSystemObject = {
-            id: 'document', name: 'notes.txt', type: 'file', created_at: '', updated_at: '', cached: false,
-        };
-        try {
-            selectCloudAttachments([attachment]);
-            const input = wrapper.get<HTMLElement>('[contenteditable]');
-            input.element.innerText = 'Original draft';
-            await input.trigger('input');
-            await input.trigger('keydown', { key: 'Enter' });
-            expect(input.element.innerText).toBe('');
-            expect(wrapper.find('[data-attachment-grid]').exists()).toBe(false);
-            const restore = wrapper.emitted<[ChatInputSubmission, () => void]>('generate')?.[0]?.[1];
-            if (!restore) throw new Error('Missing restore callback');
-
-            if (hasNewDraft) {
-                input.element.innerText = 'Newer draft';
+    it.each([false, true])(
+        'restores failed attachments and text without replacing newer drafts (%s)',
+        async (hasNewDraft) => {
+            const wrapper = await mountInput();
+            const attachment: FileSystemObject = {
+                id: 'document',
+                name: 'notes.txt',
+                type: 'file',
+                created_at: '',
+                updated_at: '',
+                cached: false,
+            };
+            try {
+                selectCloudAttachments([attachment]);
+                const input = wrapper.get<HTMLElement>('[contenteditable]');
+                input.element.innerText = 'Original draft';
                 await input.trigger('input');
-            }
-            restore();
-            await flushPromises();
+                await input.trigger('keydown', { key: 'Enter' });
+                expect(input.element.innerText).toBe('');
+                expect(wrapper.find('[data-attachment-grid]').exists()).toBe(false);
+                const restore =
+                    wrapper.emitted<[ChatInputSubmission, () => void]>('generate')?.[0]?.[1];
+                if (!restore) throw new Error('Missing restore callback');
 
-            expect(input.element.innerText).toBe(hasNewDraft ? 'Newer draft' : 'Original draft');
-            expect(wrapper.find('[data-attachment-grid]').exists()).toBe(!hasNewDraft);
-            await input.trigger('keydown', { key: 'Enter' });
-            expect(wrapper.emitted('generate')?.[1]?.[0]).toEqual({
-                message: hasNewDraft ? 'Newer draft' : 'Original draft',
-                files: hasNewDraft ? [] : [attachment],
-                githubContext: null,
-            });
-        } finally {
-            wrapper.unmount();
-        }
-    });
+                if (hasNewDraft) {
+                    input.element.innerText = 'Newer draft';
+                    await input.trigger('input');
+                }
+                restore();
+                await flushPromises();
+
+                expect(input.element.innerText).toBe(
+                    hasNewDraft ? 'Newer draft' : 'Original draft',
+                );
+                expect(wrapper.find('[data-attachment-grid]').exists()).toBe(!hasNewDraft);
+                await input.trigger('keydown', { key: 'Enter' });
+                expect(wrapper.emitted('generate')?.[1]?.[0]).toEqual({
+                    message: hasNewDraft ? 'Newer draft' : 'Original draft',
+                    files: hasNewDraft ? [] : [attachment],
+                    githubContext: null,
+                });
+            } finally {
+                wrapper.unmount();
+            }
+        },
+    );
 
     it('preserves pending input and suppresses Enter and button submission while submitting', async () => {
         const wrapper = await mountInput();
@@ -502,9 +516,7 @@ describe('chat Git context', () => {
                 clone_url_https: 'https://example.test/meridian/test.git',
                 default_branch: 'main',
             },
-            selectedFiles: [
-                { name: 'README.md', type: 'file', path: 'README.md', children: [] },
-            ],
+            selectedFiles: [{ name: 'README.md', type: 'file', path: 'README.md', children: [] }],
             selectedIssues: [],
             currentBranch: 'main',
         };
@@ -522,7 +534,9 @@ describe('chat Git context', () => {
         expect(wrapper.text()).toContain('meridian/test');
         expect(wrapper.text()).toContain('1 file(s), 0 issue(s)');
 
-        await wrapper.get('button[aria-label="Remove Git context for meridian/test"]').trigger('click');
+        await wrapper
+            .get('button[aria-label="Remove Git context for meridian/test"]')
+            .trigger('click');
         expect(wrapper.text()).not.toContain('meridian/test');
 
         closeGithubSelector(context);
@@ -534,7 +548,10 @@ describe('chat Git context', () => {
         wrapper.getComponent({ name: 'UiChatUtilsSendChatButton' }).vm.$emit('send');
 
         expect(wrapper.emitted('generate')).toEqual([
-            [{ message: 'Use this context', files: [], githubContext: context }, expect.any(Function)],
+            [
+                { message: 'Use this context', files: [], githubContext: context },
+                expect.any(Function),
+            ],
         ]);
         await flushPromises();
         expect(wrapper.text()).not.toContain('meridian/test');
@@ -544,7 +561,9 @@ describe('chat Git context', () => {
         restore();
         await flushPromises();
         expect(wrapper.text()).toContain('meridian/test');
-        expect(wrapper.get<HTMLElement>('[contenteditable]').element.innerText).toBe('Use this context');
+        expect(wrapper.get<HTMLElement>('[contenteditable]').element.innerText).toBe(
+            'Use this context',
+        );
 
         wrapper.unmount();
     });
