@@ -72,6 +72,9 @@ async def create_user_from_provider(
 
             await session.flush()
 
+            if user.id is None:
+                raise ValueError("User ID is missing after flush.")
+
             # Create Default Workspace
             workspace = Workspace(user_id=user.id, name="Default")
             session.add(workspace)
@@ -132,6 +135,9 @@ async def create_user_with_password(
                 session.add(user)
 
                 await session.flush()
+
+                if user.id is None:
+                    raise ValueError("User ID is missing after flush.")
 
                 # Create Default Workspace
                 workspace = Workspace(user_id=user.id, name="Default")

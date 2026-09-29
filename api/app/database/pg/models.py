@@ -1312,6 +1312,9 @@ async def create_initial_users(
                         session.add(new_user)
                         await session.flush()
 
+                        if new_user.id is None:
+                            raise ValueError("User ID is missing after flush.")
+
                         workspace = Workspace(user_id=new_user.id, name="Default")
                         session.add(workspace)
 

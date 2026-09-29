@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional
 
 from database.pg.models import ProviderToken
@@ -14,10 +15,11 @@ logger = logging.getLogger("uvicorn.error")
 async def store_provider_token(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, provider: str, encrypted_token: str
 ):
+    parsed_user_id = uuid.UUID(user_id)
     async with AsyncSession(pg_engine) as session:
         stmt = select(ProviderToken).where(
             and_(
-                ProviderToken.user_id == user_id,
+                ProviderToken.user_id == parsed_user_id,
                 ProviderToken.provider == provider,
             )
         )
@@ -25,7 +27,7 @@ async def store_provider_token(
         db_token = result.scalar_one_or_none()
         if db_token is None:
             db_token = ProviderToken(
-                user_id=user_id,
+                user_id=parsed_user_id,
                 provider=provider,
                 access_token=encrypted_token,
             )

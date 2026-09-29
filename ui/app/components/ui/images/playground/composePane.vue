@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useImageReferencePreview } from '@/composables/useImageReferencePreview';
 import {
     IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH,
 } from '@/stores/imagePlayground';
@@ -22,6 +23,7 @@ const settingsStore = useSettingsStore();
 const { error: showError, success } = useToast();
 const graphEvents = useGraphEvents();
 const { createImageGenerationJobs, getImageGenerationJobStatus } = useAPI();
+const { openReferenceInNewTab } = useImageReferencePreview();
 const { isReady: modelsReady } = storeToRefs(modelStore);
 const {
     isReady: settingsReady,
@@ -1150,16 +1152,31 @@ defineExpose({
                         @drop="onReferenceItemDrop"
                         @dragend.stop="onReferenceDragEnd"
                     >
-                        <img
-                            :src="imagePlaygroundImageUrl(image.id, '160x160')"
-                            :alt="image.name"
-                            class="h-full w-full object-cover"
-                        />
+                        <a
+                            :href="imagePlaygroundImageUrl(image.id)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :aria-label="`Open reference ${image.name} in new tab`"
+                            draggable="false"
+                            class="block h-full w-full cursor-zoom-in rounded-lg
+                                focus-visible:outline-2 focus-visible:-outline-offset-2
+                                focus-visible:outline-ember-glow"
+                            @click.prevent="!isReferenceDragging && openReferenceInNewTab(image.id)"
+                        >
+                            <img
+                                :src="imagePlaygroundImageUrl(image.id, '160x160')"
+                                :alt="image.name"
+                                draggable="false"
+                                class="h-full w-full object-cover"
+                            />
+                        </a>
                         <button
                             type="button"
                             class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center
                                 rounded-full bg-black/75 text-white opacity-0 transition
-                                group-hover/ref:opacity-100 hover:bg-red-500/80"
+                                group-hover/ref:opacity-100 hover:bg-red-500/80
+                                focus-visible:opacity-100 focus-visible:outline-2
+                                focus-visible:outline-ember-glow"
                             aria-label="Remove reference image"
                             @click.stop="removeSourceImage(image.id)"
                         >

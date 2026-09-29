@@ -66,6 +66,9 @@ async def _get_or_create_and_reset_record(
     Retrieves a usage record, creating or resetting it if necessary.
     Can lock the row for an atomic update if `for_update` is True.
     """
+    if user.id is None:
+        raise ValueError("User ID is missing.")
+
     stmt = select(UserQueryUsage).where(
         and_(UserQueryUsage.user_id == user.id, UserQueryUsage.query_type == query_type.value)
     )
