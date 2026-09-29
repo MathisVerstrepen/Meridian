@@ -5,6 +5,7 @@ from database.pg.models import (
     PromptImproverChange,
     PromptImproverChangeStatusEnum,
     PromptImproverRun,
+    PromptImproverRunStatusEnum,
 )
 from fastapi import HTTPException
 from sqlalchemy import delete, select
@@ -72,7 +73,7 @@ async def create_prompt_improver_run(
             active_phase=active_phase,
             active_tool_call_id=active_tool_call_id,
             clarification_tool_call_ids=clarification_tool_call_ids,
-            status=status,
+            status=PromptImproverRunStatusEnum(status),
         )
         session.add(run)
         await session.commit()
@@ -172,9 +173,11 @@ async def create_prompt_improver_changes(
                 dimension_id=change_payload.get("dimension_id"),
                 rationale=change_payload.get("rationale"),
                 impact=change_payload.get("impact"),
-                review_status=change_payload.get(
-                    "review_status",
-                    PromptImproverChangeStatusEnum.ACCEPTED.value,
+                review_status=PromptImproverChangeStatusEnum(
+                    change_payload.get(
+                        "review_status",
+                        PromptImproverChangeStatusEnum.ACCEPTED.value,
+                    )
                 ),
             )
             session.add(db_change)

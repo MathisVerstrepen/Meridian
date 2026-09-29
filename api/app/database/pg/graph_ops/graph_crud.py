@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import selectinload
@@ -231,6 +231,7 @@ async def create_folder(
     engine: SQLAlchemyAsyncEngine, user_id: str, name: str, workspace_id: str | None = None
 ) -> Folder:
     """Create a new folder."""
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
     async with AsyncSession(engine) as session:
         target_workspace_id = None
         if workspace_id:
@@ -239,7 +240,7 @@ async def create_folder(
 
         folder = Folder(
             name=name,
-            user_id=user_id,
+            user_id=user_uuid,
             workspace_id=target_workspace_id,
         )
         session.add(folder)
@@ -440,6 +441,11 @@ async def create_empty_graph(
             database.
     """
     systemPromptSelected = [sp.id for sp in user_config.models.systemPrompt if sp.enabled]
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
+    try:
+        top_k = TypeAdapter(int).validate_python(user_config.models.topK)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="topK must be a finite integer.") from exc
 
     async with AsyncSession(engine) as session:
         async with session.begin():
@@ -461,14 +467,14 @@ async def create_empty_graph(
 
             graph = Graph(
                 name="New Canvas",
-                user_id=user_id,
+                user_id=user_uuid,
                 temporary=temporary,
                 workspace_id=target_workspace_id,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,
                 top_p=user_config.models.topP,
-                top_k=user_config.models.topK,
+                top_k=top_k,
                 frequency_penalty=user_config.models.frequencyPenalty,
                 presence_penalty=user_config.models.presencePenalty,
                 repetition_penalty=user_config.models.repetitionPenalty,
@@ -626,8 +632,9 @@ async def get_user_workspaces(engine: SQLAlchemyAsyncEngine, user_id: str) -> li
 
 
 async def create_workspace(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Workspace:
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
     async with AsyncSession(engine) as session:
-        ws = Workspace(name=name, user_id=user_id)
+        ws = Workspace(name=name, user_id=user_uuid)
         session.add(ws)
         await session.commit()
         await session.refresh(ws)

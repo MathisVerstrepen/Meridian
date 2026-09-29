@@ -14,9 +14,10 @@ logger = logging.getLogger("uvicorn.error")
 async def create_db_refresh_token(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, token: str, expires_at: datetime
 ) -> RefreshToken:
+    parsed_user_id = uuid.UUID(user_id)
     async with AsyncSession(pg_engine) as session:
         db_token = RefreshToken(
-            user_id=user_id,
+            user_id=parsed_user_id,
             token=token,
             expires_at=expires_at,
         )
