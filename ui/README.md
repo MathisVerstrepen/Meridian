@@ -49,7 +49,7 @@ Nuxt 4 frontend for Meridian. This app provides the canvas editor, chat UX, sett
 
 ## Tech Stack
 
-- Nuxt 4.5.0 + Vue 3
+- Nuxt 4.6 + Vue 3
 - TypeScript (Nuxt-generated tsconfig, `strict: false` in Nuxt config)
 - Pinia stores
 - Vue Flow (`@vue-flow/core` + controls/resizer/additional-components)
@@ -155,6 +155,12 @@ Common UI env vars (from docker config):
 - `NUXT_OAUTH_GOOGLE_CLIENT_SECRET`
 
 ## Local Development
+
+Use the project-pinned pnpm 12.14 through Corepack. Dependency build permissions
+and overrides live in `pnpm-workspace.yaml`.
+
+TypeScript stays on 6.0 because `vue-tsc` 3.3 cannot load the TypeScript 7 compiler.
+KaTeX stays below 0.19 to satisfy `marked-katex-extension` 5.1's peer dependency.
 
 ```bash
 cd ui

@@ -1,6 +1,6 @@
-black==26.3.1
-flake8==7.1.0
-isort==5.13.2
-mypy==1.19.1
+black==26.10.1
+flake8==7.4.1
+isort==9.0.2
+mypy==2.4.0
 types-python-dateutil
-pytest==9.0.3
+pytest==9.1.1

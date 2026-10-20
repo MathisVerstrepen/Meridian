@@ -33,6 +33,7 @@ const { getNodes, getEdges } = useVueFlow();
 
 // --- Local State ---
 const isHovering = ref(false);
+const handleCategory = NodeCategoryEnum.CONTEXT;
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -97,7 +98,7 @@ const wheelOptions = computed(() =>
                     handleConnectableInput(
                         node,
                         connectedEdges,
-                        NodeCategoryEnum.CONTEXT,
+                        handleCategory,
                         props.type,
                         multipleInput || false,
                     )

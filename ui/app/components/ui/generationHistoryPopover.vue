@@ -586,8 +586,9 @@ onUnmounted(() => {
         0 0 0 1px color-mix(in oklab, var(--color-obsidian) 60%, transparent),
         0 30px 60px -20px rgba(0, 0, 0, 0.55),
         0 10px 20px -10px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(14px) saturate(140%);
+    /* Keep the standard property last so Lightning CSS preserves it in production. */
     -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
     font-variant-numeric: tabular-nums;
 }
 

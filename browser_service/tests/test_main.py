@@ -61,7 +61,7 @@ def build_app(manager: FakeManager, hardening: FakeHardening):
         settings_loader=settings,
         manager_factory=lambda **kwargs: manager,
         artifact_verifier=lambda: None,
-        browser_version_loader=lambda: "152.0.4-beta.27",
+        browser_version_loader=lambda: "156.0.1-beta.36",
         cache_preflight=lambda version, geoip: None,
     )
 
@@ -80,7 +80,7 @@ def test_health_auth_fetch_environment_scrub_and_shutdown(monkeypatch) -> None:
         assert "LINK_EXTRACTION_BROWSER_PROXY_URL" not in os.environ
         assert client.get("/health").json() == {
             "status": "ok",
-            "browser_build": "152.0.4-beta.27",
+            "browser_build": "156.0.1-beta.36",
             "capacity": 4,
             "queue_capacity": 8,
         }

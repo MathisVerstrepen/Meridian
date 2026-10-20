@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { extractTextContent, mapMessages, parseJsonMaybe } from './message-mapping.mjs';
+import { resolveRequestedModel } from './model-resolution.mjs';
 
 import {
     AuthType,
@@ -11,12 +12,6 @@ import {
     getOauthClient,
     LlmRole,
     setupUser,
-} from '@google/gemini-cli-core';
-import {
-    DEFAULT_GEMINI_MODEL_AUTO,
-    GEMINI_MODEL_ALIAS_AUTO,
-    PREVIEW_GEMINI_MODEL_AUTO,
-    resolveModel,
 } from '@google/gemini-cli-core';
 
 const command = process.argv[2] || '';
@@ -308,17 +303,6 @@ const createGeminiCliCoreConfigStub = () => ({
     isInteractive: () => false,
     getAcpMode: () => false,
 });
-
-const resolveRequestedModel = (requestedModel, previewFeaturesEnabled) => {
-    const modelToResolve =
-        requestedModel === GEMINI_MODEL_ALIAS_AUTO
-            ? previewFeaturesEnabled
-                ? PREVIEW_GEMINI_MODEL_AUTO
-                : DEFAULT_GEMINI_MODEL_AUTO
-            : requestedModel;
-
-    return resolveModel(modelToResolve, false, false, false, previewFeaturesEnabled);
-};
 
 const executeWithModelFallback = async (requestedModel, operation) => {
     const previewModel = resolveRequestedModel(requestedModel, true);

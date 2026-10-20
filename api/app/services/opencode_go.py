@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
 from dataclasses import dataclass, field
@@ -47,6 +46,19 @@ from services.providers.opencode_go_catalog import (
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
     OPENCODE_GO_TOP_P_OVERRIDES,
 )
+from services.providers.opencode_go_errors import (
+    extract_opencode_go_error_message as _extract_opencode_go_error_message,
+)
+from services.providers.opencode_go_errors import (
+    parse_opencode_go_error as _parse_opencode_go_error,
+)
+from services.providers.opencode_go_errors import (
+    sanitize_opencode_go_error_message as _sanitize_opencode_go_error_message,
+)
+from services.providers.opencode_go_headers import build_opencode_go_session_headers
+from services.providers.opencode_go_validation import (  # noqa: F401
+    validate_opencode_go_api_key as validate_opencode_go_api_key,
+)
 from services.tools import get_openrouter_tools
 from services.usage_data import (
     append_usage_request_breakdown,
@@ -61,7 +73,6 @@ logger = logging.getLogger("uvicorn.error")
 OPENCODE_GO_OPENAI_CHAT_URL = "https://opencode.ai/zen/go/v1/chat/completions"
 OPENCODE_GO_OPENAI_RESPONSES_URL = "https://opencode.ai/zen/go/v1/responses"
 OPENCODE_GO_ANTHROPIC_MESSAGES_URL = "https://opencode.ai/zen/go/v1/messages"
-OPENCODE_GO_VALIDATION_MODEL = f"{OPENCODE_GO_MODEL_PREFIX}qwen3.5-plus"
 OPENCODE_GO_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
 OPENCODE_GO_ANTHROPIC_VERSION = "2023-06-01"
 OPENCODE_GO_FALLBACK_USER_CONTENT = "Please respond to the available context."
@@ -71,7 +82,6 @@ OPENCODE_GO_REASONING_CONTENT_MODEL_IDS = {
     "kimi-k2.5",
     "kimi-k2.6",
 }
-OPENCODE_GO_ERROR_MESSAGE_LIMIT = 500
 OPENCODE_GO_CORRELATION_HEADERS = (
     "x-request-id",
     "request-id",
@@ -187,69 +197,6 @@ def _parse_anthropic_error(error_content: bytes) -> str:
     if isinstance(error_payload, dict):
         return str(error_payload.get("message") or error_payload.get("type") or "Unknown API error")
     return str(error_payload or error_json)
-
-
-def _parse_opencode_go_error(error_content: bytes) -> str:
-    message: str | None = None
-    try:
-        payload = json.loads(error_content)
-        if isinstance(payload, dict):
-            message = _extract_opencode_go_error_message(payload)
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
-        pass
-
-    if not message:
-        return "OpenCode Go returned an unknown API error."
-    return _sanitize_opencode_go_error_message(message)
-
-
-def _extract_opencode_go_error_message(
-    payload: dict[str, Any],
-    *,
-    raw_depth: int = 0,
-) -> str | None:
-    error = payload.get("error")
-    if isinstance(error, str) and error.strip():
-        return error
-
-    top_level_message = payload.get("message")
-    if isinstance(top_level_message, str) and top_level_message.strip():
-        return top_level_message
-
-    if not isinstance(error, dict):
-        return None
-    nested_message = error.get("message")
-    if isinstance(nested_message, str) and nested_message.strip():
-        return nested_message
-
-    metadata = error.get("metadata")
-    raw_error = metadata.get("raw") if isinstance(metadata, dict) else None
-    if not isinstance(raw_error, str) or raw_depth >= 1:
-        return None
-    try:
-        decoded_raw_error = json.loads(raw_error)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if not isinstance(decoded_raw_error, dict):
-        return None
-    return _extract_opencode_go_error_message(decoded_raw_error, raw_depth=raw_depth + 1)
-
-
-def _sanitize_opencode_go_error_message(message: str) -> str:
-    sanitized = " ".join(message.split())
-    sanitized = re.sub(
-        r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
-        "Bearer [REDACTED]",
-        sanitized,
-    )
-    sanitized = re.sub(
-        r"(?i)\b(api[_ -]?key|access[_ -]?token|authorization|auth|token)"
-        r"\s*[:=]\s*['\"]?[^\s,'\"]+",
-        lambda match: f"{match.group(1)}=[REDACTED]",
-        sanitized,
-    )
-    sanitized = re.sub(r"\bsk-[A-Za-z0-9._~+/=-]+", "[REDACTED]", sanitized)
-    return sanitized[:OPENCODE_GO_ERROR_MESSAGE_LIMIT]
 
 
 def _bounded_structure_keys(payload: dict[Any, Any]) -> list[str]:
@@ -445,11 +392,22 @@ class OpenCodeGoReq:
         "anthropic-version": OPENCODE_GO_ANTHROPIC_VERSION,
     }
 
-    def __init__(self, api_key: str, model: str, http_client=None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        http_client=None,
+        *,
+        user_id: str | None = None,
+        graph_id: str | None = None,
+    ):
         self.api_key = api_key
         self.opencode_go_api_key = api_key
         self.model = model
         self.http_client = http_client
+        self._session_headers = build_opencode_go_session_headers(
+            user_id=user_id, graph_id=graph_id
+        )
         self.uses_anthropic_protocol = _uses_anthropic_protocol(model)
         self.uses_openai_responses_protocol = _uses_openai_responses_protocol(model)
         if self.uses_anthropic_protocol:
@@ -462,8 +420,16 @@ class OpenCodeGoReq:
     @property
     def headers(self) -> dict[str, str]:
         if self.uses_anthropic_protocol:
-            return {**self.ANTHROPIC_BASE_HEADERS, "x-api-key": self.api_key}
-        return {**self.OPENAI_BASE_HEADERS, "Authorization": f"Bearer {self.api_key}"}
+            return {
+                **self.ANTHROPIC_BASE_HEADERS,
+                **self._session_headers,
+                "x-api-key": self.api_key,
+            }
+        return {
+            **self.OPENAI_BASE_HEADERS,
+            **self._session_headers,
+            "Authorization": f"Bearer {self.api_key}",
+        }
 
 
 @dataclass(kw_only=True)
@@ -474,7 +440,12 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
     def __post_init__(self) -> None:
         super().__post_init__()
         OpenCodeGoReq.__init__(
-            self, api_key=self.api_key, model=self.model, http_client=self.http_client
+            self,
+            api_key=self.api_key,
+            model=self.model,
+            http_client=self.http_client,
+            user_id=self.user_id,
+            graph_id=self.graph_id,
         )
         if self.http_client is None:
             raise ValueError("http_client must be provided")
@@ -616,37 +587,6 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             payload["tools"] = tools
 
         return {key: value for key, value in payload.items() if value is not None}
-
-
-async def validate_opencode_go_api_key(
-    api_key: str,
-    http_client: Optional[httpx.AsyncClient] = None,
-) -> None:
-    payload = {
-        "model": strip_model_prefix(OPENCODE_GO_VALIDATION_MODEL, OPENCODE_GO_MODEL_PREFIX),
-        "messages": [{"role": "user", "content": "Reply with OK."}],
-        "stream": False,
-        "max_tokens": 16,
-    }
-
-    async def _do_validate(client: httpx.AsyncClient) -> None:
-        response = await client.post(
-            OPENCODE_GO_OPENAI_CHAT_URL,
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-            json=payload,
-        )
-        if response.status_code != 200:
-            error_message = _parse_opencode_go_error(response.content)
-            raise ValueError(
-                f"OpenCode Go validation failed (status {response.status_code}): {error_message}"
-            )
-
-    if http_client is not None:
-        await _do_validate(http_client)
-        return
-
-    async with httpx.AsyncClient(timeout=60.0, http2=True) as client:
-        await _do_validate(client)
 
 
 async def make_opencode_go_request_non_streaming(

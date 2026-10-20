@@ -49,6 +49,10 @@ from services.providers.openai_codex_catalog import (
     get_models_dev_openai_codex_models,
     get_openai_codex_image_generation_base_model_id,
 )
+from services.providers.openai_codex_probe import (
+    format_openai_codex_probe_error as _format_openai_codex_auth_probe_error,
+)
+from services.providers.openai_codex_probe import probe_openai_codex_session
 from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
@@ -85,8 +89,6 @@ OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS = 5 * 60
 OPENAI_CODEX_DEVICE_SESSION_REDIS_PREFIX = "openai_codex_device_oauth:"
 OPENAI_CODEX_REFRESH_MARGIN_SECONDS = 60
 OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS = 3
-OPENAI_CODEX_AUTH_PROBE_INPUT = "Reply with OK."
-OPENAI_CODEX_AUTH_PROBE_INSTRUCTIONS = "Validate this OpenAI Codex session. Reply with OK."
 OPENAI_CODEX_IMAGE_GENERATION_INSTRUCTIONS = (
     "You are an image generation assistant. Follow the user's prompt and reference images. "
     "Use the image_generation tool exactly once and return the generated image."
@@ -2009,16 +2011,6 @@ def _build_openai_codex_response_headers(
     raise ValueError("OpenAI Codex OAuth tokens or API key are required.")
 
 
-def _select_openai_codex_probe_model_id() -> str:
-    return "gpt-5.5"
-
-
-def _format_openai_codex_auth_probe_error(status_code: int, body: str) -> str:
-    detail = body[:500].strip()
-    suffix = f" ({status_code} {detail})" if detail else f" ({status_code})"
-    return "OpenAI Codex authentication is invalid or unavailable. Sign in again." + suffix
-
-
 async def _probe_openai_api_key_auth(api_key: str) -> None:
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(
@@ -2045,31 +2037,13 @@ async def _probe_openai_codex_auth(normalized_auth_json: str) -> None:
         normalized_auth_json,
         session_id=f"auth-probe-{uuid.uuid4().hex}",
     )
-    probe_payload = {
-        "model": _select_openai_codex_probe_model_id(),
-        "instructions": OPENAI_CODEX_AUTH_PROBE_INSTRUCTIONS,
-        "input": [
-            {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": OPENAI_CODEX_AUTH_PROBE_INPUT}],
-            }
-        ],
-        "store": False,
-        "stream": True,
-        "include": [],
-    }
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
-        async with client.stream("POST", endpoint, headers=headers, json=probe_payload) as response:
-            if response.status_code >= 400:
-                body = (await response.aread()).decode("utf-8", errors="replace")
-                raise ValueError(_format_openai_codex_auth_probe_error(response.status_code, body))
-            async for event_type, event_data in _iter_openai_codex_sse_events(response):
-                error_payload = event_data.get("error")
-                if event_type in {"error", "response.failed"} or error_payload:
-                    error_text = json.dumps(error_payload or event_data, separators=(",", ":"))
-                    raise ValueError(_format_openai_codex_auth_probe_error(200, error_text))
-                return
+        await probe_openai_codex_session(
+            client,
+            endpoint,
+            headers,
+            iter_events=_iter_openai_codex_sse_events,
+        )
 
 
 async def _iter_openai_codex_sse_events(

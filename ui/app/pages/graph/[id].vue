@@ -91,6 +91,7 @@ const { autoLayoutGraph } = useGraphAutoLayout({ graphId, fitGraph });
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
+const multipleExecutionDirection = ExecutionPlanDirectionEnum.MULTIPLE;
 const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
     getNodes,
     project,
@@ -822,7 +823,7 @@ onUnmounted(() => {
                         setExecutionPlan(
                             graphId,
                             selectedNodeIds,
-                            ExecutionPlanDirectionEnum.MULTIPLE,
+                            multipleExecutionDirection,
                         );
                     }
                 "

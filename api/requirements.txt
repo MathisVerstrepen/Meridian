@@ -1,6 +1,7 @@
 fastapi[standard]
 slowapi
 sqlmodel
+sqlalchemy[asyncio]
 asyncpg
 neo4j
 pybase64
@@ -15,7 +16,7 @@ types-aiofiles
 curl-cffi
 beautifulsoup4
 boto3
-markdownify==1.2.0
+markdownify==1.2.3
 arxiv2text
 requests
 python-dateutil
@@ -25,5 +26,5 @@ pillow
 numpy
 opencv-python-headless
 httpx[http2]
-claude-agent-sdk==0.1.58
-github-copilot-sdk==1.0.8
+claude-agent-sdk==0.2.168
+github-copilot-sdk==1.0.24

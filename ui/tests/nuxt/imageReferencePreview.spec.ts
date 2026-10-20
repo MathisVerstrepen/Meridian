@@ -54,6 +54,23 @@ const globalOptions = {
     stubs: { UiIcon: true, UiUtilsBaseModal: true },
 };
 
+const mockReservedTab = () => {
+    const navigate = vi.fn<(url: string) => void>();
+    const close = vi.fn();
+    const tab: Pick<Window, 'opener' | 'close'> & { location: Pick<Location, 'href'> } = {
+        opener: window,
+        location: {
+            set href(url: string) {
+                navigate(url);
+            },
+        },
+        close,
+    };
+    // SAFETY: The preview only uses opener, location.href and close on the reserved window.
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as Window);
+    return { tab, open, navigate, close };
+};
+
 const mountCompose = async () => {
     const pinia = createPinia();
     const store = useImagePlaygroundStore(pinia);
@@ -85,10 +102,7 @@ describe.each(['sidebar', 'image details'] as const)('%s reference preview', (su
 
     it('opens the authenticated full image in a reserved tab and releases the blob URL', async () => {
         const wrapper = await mountSurface();
-        const open = vi.spyOn(window, 'open').mockReturnValue(window);
-        const navigate = vi.spyOn(window.location, 'href', 'set').mockImplementation(() => undefined);
-        const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
-        window.opener = window;
+        const { tab, open, navigate, close } = mockReservedTab();
         let resolveBlob!: (blob: Blob) => void;
         getFileBlob.mockReturnValueOnce(new Promise<Blob>((resolve) => { resolveBlob = resolve; }));
         vi.useFakeTimers();
@@ -100,7 +114,7 @@ describe.each(['sidebar', 'image details'] as const)('%s reference preview', (su
 
             expect(open).toHaveBeenCalledExactlyOnceWith('about:blank', '_blank');
             expect(getFileBlob).toHaveBeenCalledExactlyOnceWith('reference-1');
-            expect(window.opener).toBeNull();
+            expect(tab.opener).toBeNull();
             expect(navigate).not.toHaveBeenCalled();
 
             const fullImage = new Blob(['original image'], { type: 'image/png' });
@@ -141,8 +155,7 @@ describe.each(['sidebar', 'image details'] as const)('%s reference preview', (su
 
     it('closes the reserved tab and uses the full-image URL when fetching fails', async () => {
         const wrapper = await mountSurface();
-        const open = vi.spyOn(window, 'open').mockReturnValue(window);
-        const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+        const { open, close } = mockReservedTab();
         const error = new Error('File unavailable');
         const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         getFileBlob.mockRejectedValueOnce(error);

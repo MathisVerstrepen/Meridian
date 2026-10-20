@@ -9,15 +9,16 @@ const SlotStub = defineComponent({
     },
 });
 
+const stubs = {
+    Teleport: true,
+    AnimatePresence: SlotStub,
+    'motion.div': SlotStub,
+    UiIcon: true,
+};
+
 const mountMenu = () =>
     mountSuspended(UploadButton, {
-        global: {
-            stubs: {
-                Teleport: true,
-                AnimatePresence: SlotStub,
-                UiIcon: true,
-            },
-        },
+        global: { stubs },
     });
 
 describe('chat add menu', () => {
@@ -71,7 +72,7 @@ describe('chat add menu', () => {
     it('does not open while disabled', async () => {
         const wrapper = await mountSuspended(UploadButton, {
             props: { disabled: true },
-            global: { stubs: { Teleport: true, AnimatePresence: SlotStub, UiIcon: true } },
+            global: { stubs },
         });
 
         await wrapper.get('button[aria-label="Add context"]').trigger('click');

@@ -113,10 +113,8 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
         html_snippet,
         heading_style="ATX",  # Use '#' for headings
         bullets="*",  # Use '*' for list items
-        convert_images=False,  # Do not convert images
         strip=["img"],  # Strip images but keep their alt text
         autolinks=False,  # Don't automatically convert URLs to links
-        base_url=base_url,  # Helps resolve relative image/link paths
     )
     return markdown_text or ""
 
