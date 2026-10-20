@@ -350,6 +350,7 @@ test('keeps filtered model rows consecutive after activation and scrolling', asy
 
     const panel = page.locator('.ui-models-panel');
     await expect(panel).toBeVisible();
+    await expect(panel).toHaveCSS('backdrop-filter', 'blur(14px) saturate(1.4)');
     const list = panel.locator('.custom_scroll');
     const lingOption = panel.getByRole('option', { name: /Ling-3\.0-flash/ });
     const githubJump = panel.getByRole('button', { name: /GitHub Copilot 1/ });
