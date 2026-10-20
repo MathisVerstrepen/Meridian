@@ -81,17 +81,17 @@ def test_selected_official_asset_retains_real_installer_metadata(
     install_browser.install_browser()
 
     assert download.call_args.args[1] == (
-        "https://github.com/daijro/camoufox/releases/download/v152.0.4-beta.27/"
-        f"camoufox-152.0.4-beta.27-lin.{arch}.zip"
+        "https://github.com/daijro/camoufox/releases/download/v156.0.1-beta.36/"
+        f"camoufox-156.0.1-beta.36-lin.{arch}.zip"
     )
-    installed = multiversion.find_installed_version("152.0.4-beta.27")
+    installed = multiversion.find_installed_version("156.0.1-beta.36")
     assert installed is not None
     active = multiversion.get_active_path()
-    assert active == root / "browsers" / "official" / "152.0.4-beta.27"
+    assert active == root / "browsers" / "official" / "156.0.1-beta.36"
     assert multiversion.load_config()["active_version"] == str(active.relative_to(root))
     metadata = json.loads((active / "version.json").read_text())
-    assert metadata["version"] == "152.0.4"
-    assert metadata["build"] == "beta.27"
+    assert metadata["version"] == "156.0.1"
+    assert metadata["build"] == "beta.36"
     assert metadata["prerelease"] is False
     assert metadata["sha256"] is None  # No claim of upstream byte verification.
     assert (root / ".0.5_FLAG").is_file()
@@ -138,7 +138,7 @@ def test_browser_download_failure_propagates_and_skips_extras(isolated_install):
     with pytest.raises(requests.HTTPError, match="404"):
         install_browser.install_browser()
     assert not (root / ".0.5_FLAG").exists()
-    assert multiversion.find_installed_version("152.0.4-beta.27") is None
+    assert multiversion.find_installed_version("156.0.1-beta.36") is None
     geoip.assert_not_called()
     default_addons.assert_not_called()
 

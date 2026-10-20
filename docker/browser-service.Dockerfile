@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY ./browser_service/app /build/app
 RUN PYTHONPATH=/build python -m app.install_browser \
     && PYTHONPATH=/build python -c "from app.camoufox_runtime import load_browser_version, preflight_camoufox_cache; preflight_camoufox_cache(load_browser_version(), True)" \
-    && PYTHONPATH=/build python -c "from camoufox.async_api import launch_options; [launch_options(os=name, headless=True, browser='152.0.4-beta.27', debug=False) for name in ('linux', 'macos', 'windows')]" \
+    && PYTHONPATH=/build python -c "from camoufox.async_api import launch_options; [launch_options(os=name, headless=True, browser='156.0.1-beta.36', debug=False) for name in ('linux', 'macos', 'windows')]" \
     && PYTHONPATH=/build python -c "from pathlib import Path; from app.artifacts import build_cache_manifest; Path('/build/app/camoufox_cache_manifest.sha256').write_text('\n'.join(build_cache_manifest()) + '\n')" \
     && chmod -R a-w /home/browseruser/.cache/camoufox
 

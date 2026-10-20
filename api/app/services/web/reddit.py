@@ -129,7 +129,6 @@ def _content_to_markdown(content: str) -> str:
         html_fragment,
         heading_style="ATX",
         bullets="*",
-        convert_images=False,
         strip=["a", "img"],
         autolinks=False,
     )

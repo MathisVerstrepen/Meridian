@@ -26,7 +26,7 @@ export default defineNuxtConfig({
         head: {
             script: [
                 {
-                    src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
+                    src: 'https://cdn.jsdelivr.net/npm/katex@0.18.11/dist/katex.min.js',
                     type: 'text/javascript',
                     async: true,
                 },

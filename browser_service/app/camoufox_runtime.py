@@ -16,7 +16,7 @@ from camoufox.multiversion import find_installed_version
 from crawlee.browsers import PlaywrightBrowserController, PlaywrightBrowserPlugin
 
 BROWSER_MANIFEST_PATH = Path(__file__).with_name("camoufox_browser_version.txt")
-EXPECTED_BROWSER_BUILD = "official/stable/152.0.4-beta.27"
+EXPECTED_BROWSER_BUILD = "official/stable/156.0.1-beta.36"
 GEOIP_PREPARATION_TIMEOUT_SECONDS = 35
 CHILD_ENVIRONMENT = {
     "HOME": "/home/browseruser",
