@@ -39,7 +39,7 @@ def test_proxy_parser_preserves_paired_percent_decoded_credentials() -> None:
 
 def test_plugin_passes_only_minimal_child_environment(monkeypatch) -> None:
     captured = []
-    monkeypatch.setattr(camoufox_runtime, "load_browser_version", lambda: "152.0.4-beta.27")
+    monkeypatch.setattr(camoufox_runtime, "load_browser_version", lambda: "156.0.1-beta.36")
     monkeypatch.setattr(camoufox_runtime, "preflight_camoufox_cache", lambda *args: None)
     monkeypatch.setattr(
         camoufox_runtime,
@@ -65,7 +65,7 @@ def test_proxy_geolocation_is_prepared_once_for_four_controllers(monkeypatch) ->
     prepared_calls = []
     public_ip_calls = []
     browser_options = []
-    monkeypatch.setattr(camoufox_runtime, "load_browser_version", lambda: "152.0.4-beta.27")
+    monkeypatch.setattr(camoufox_runtime, "load_browser_version", lambda: "156.0.1-beta.36")
     monkeypatch.setattr(camoufox_runtime, "preflight_camoufox_cache", lambda *args: None)
 
     def prepare(**kwargs):

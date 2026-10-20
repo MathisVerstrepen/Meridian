@@ -1,5 +1,6 @@
 import { NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition, BlockCategories } from '@/types/graph';
+import { normalizeToolSelection } from '@/utils/toolSelection';
 
 const { generateId } = useUniqueId();
 
@@ -27,7 +28,9 @@ export function useBlocks() {
                 model: defaultModel,
             };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
-            const selectedTools = toolsSettings.value?.defaultSelectedTools ?? [];
+            const selectedTools = normalizeToolSelection(
+                toolsSettings.value?.defaultSelectedTools ?? [],
+            );
             const defaultAutoSelectTools = toolsSettings.value?.defaultAutoSelectTools ?? false;
 
             return {

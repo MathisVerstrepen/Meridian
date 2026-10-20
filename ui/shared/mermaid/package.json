@@ -2,12 +2,17 @@
   "name": "meridian-mermaid-runtime",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "smoke:parse": "node ./runtime.smoke.mjs"
+  },
   "dependencies": {
     "dompurify": "file:./dompurify-shim",
-    "mermaid": "^11.15.0"
+    "mermaid": "^12.2.0"
   },
   "overrides": {
-    "lodash-es": "4.18.0",
-    "uuid": "11.1.1"
+    "dompurify": "$dompurify"
   }
 }

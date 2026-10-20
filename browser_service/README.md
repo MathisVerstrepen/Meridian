@@ -1,6 +1,6 @@
 # Browser Service
 
-This private FastAPI sidecar owns Meridian's pinned Crawlee 1.8.2, Camoufox 0.5.4, Playwright 1.60.0, and Camoufox browser build `official/stable/152.0.4-beta.27`. The API keeps the existing `BrowserFetchManager.fetch(url) -> str`, typed errors, and shutdown call, but now makes one authenticated HTTP/1.1 request with no retry. Any direct or ordinary-proxy 403 admits that call; a direct or ordinary-proxy 401 admits it only with bounded generic `browser_challenge` evidence, while an ordinary authentication or permission 401 stops.
+This private FastAPI sidecar owns Meridian's pinned Crawlee 1.11.0, Camoufox 0.5.8, Playwright 1.62.0, and Camoufox browser build `official/stable/156.0.1-beta.36`. The API keeps the existing `BrowserFetchManager.fetch(url) -> str`, typed errors, and shutdown call, but now makes one authenticated HTTP/1.1 request with no retry. Any direct or ordinary-proxy 403 admits that call; a direct or ordinary-proxy 401 admits it only with bounded generic `browser_challenge` evidence, while an ordinary authentication or permission 401 stops.
 
 ## Protocol and capacity
 

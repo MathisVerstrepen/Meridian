@@ -1,10 +1,19 @@
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
+import { defineComponent, h } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CollisionModal from '@/components/ui/attachment/collisionModal.vue';
 import type { AttachmentCollision } from '@/composables/useAttachmentUploads';
 
 enableAutoUnmount(afterEach);
+const stubs = {
+    UiIcon: true,
+    'motion.div': defineComponent({
+        setup(_, { slots }) {
+            return () => h('div', slots.default?.());
+        },
+    }),
+};
 const collision: AttachmentCollision = {
     existing: {
         id: 'existing',
@@ -28,7 +37,7 @@ afterEach(() => vi.restoreAllMocks());
 const mountModal = (value = collision) => mountSuspended(CollisionModal, {
     props: { collision: value },
     attachTo: document.body,
-    global: { stubs: { UiIcon: true } },
+    global: { stubs },
 });
 const dialog = () => document.querySelector('[role="dialog"]')!;
 
@@ -40,7 +49,7 @@ describe('attachment collision modal keyboard behavior', () => {
         const wrapper = await mountSuspended(CollisionModal, {
             props: { collision },
             attachTo: document.body,
-            global: { stubs: { UiIcon: true } },
+            global: { stubs },
         });
         try {
             const dialog = document.querySelector('[role="dialog"]');
@@ -79,7 +88,7 @@ describe('attachment collision modal keyboard behavior', () => {
         async (method) => {
             const wrapper = await mountSuspended(CollisionModal, {
                 props: { collision },
-                global: { stubs: { UiIcon: true } },
+                global: { stubs },
             });
             if (method === 'Escape') {
                 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

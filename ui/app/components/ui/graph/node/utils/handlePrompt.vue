@@ -26,6 +26,7 @@ const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
 const { getNodes, getEdges } = useGraphFlow();
 const isHovering = ref(false);
+const handleCategory = NodeCategoryEnum.PROMPT;
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -77,7 +78,7 @@ const wheelOptions = computed(() =>
             }"
             :connectable="
                 (node, connectedEdges) =>
-                    handleConnectableInput(node, connectedEdges, NodeCategoryEnum.PROMPT, props.type)
+                    handleConnectableInput(node, connectedEdges, handleCategory, props.type)
             "
         />
 

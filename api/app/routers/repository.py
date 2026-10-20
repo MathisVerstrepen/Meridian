@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.rate_limit import limiter
 from services.repository_clone_service import clone_repository
-from services.repository_service import get_repository_branches
+from services.repository_service import (
+    get_repository_branches,
+)
 from services.repository_service import (
     get_repository_commit_state as get_repository_commit_state_service,
 )

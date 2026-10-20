@@ -1,4 +1,15 @@
 packages: ['.']
 
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: false
+  esbuild: true
+  vue-demi: true
+
+minimumReleaseAgeExclude:
+  - happy-dom@21.0.4
+
 overrides:
-  esbuild: 0.28.1
+  dompurify: 3.4.17
+  esbuild: 0.28.2
+  postcss: 8.5.31

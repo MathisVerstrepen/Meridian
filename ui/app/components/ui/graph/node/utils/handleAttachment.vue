@@ -26,6 +26,7 @@ const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
 const { getNodes, getEdges } = useVueFlow();
 const isHovering = ref(false);
+const handleCategory = NodeCategoryEnum.ATTACHMENT;
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -77,7 +78,7 @@ const wheelOptions = computed(() =>
                     handleConnectableInput(
                         node,
                         connectedEdges,
-                        NodeCategoryEnum.ATTACHMENT,
+                        handleCategory,
                         props.type,
                     )
             "

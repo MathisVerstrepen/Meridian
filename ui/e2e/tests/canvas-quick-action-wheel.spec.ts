@@ -220,12 +220,16 @@ test('@smoke opens target-aware wheels and dispatches an add action', async ({ p
     const handleIndicator = workflow.locator('[data-workflow-handle-indicator]');
     await expect(handleIndicator).toHaveAttribute('data-handle-category', 'context');
     await expect(handleIndicator).toHaveAttribute('data-handle-direction', 'target');
-    expect(await handleIndicator.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
-        'var(--color-node-cat-context)',
-    );
+    expect(
+        await handleIndicator.evaluate((element) =>
+            element instanceof HTMLElement ? element.style.backgroundColor : null,
+        ),
+    ).toBe('var(--color-node-cat-context)');
     expect(
         await workflow.evaluate((element) =>
-            getComputedStyle(element).getPropertyValue('--quick-action-accent'),
+            element instanceof HTMLElement
+                ? element.style.getPropertyValue('--quick-action-accent')
+                : null,
         ),
     ).toBe('var(--color-olive-grove)');
     await workflow.locator('[data-external-action-label]').click();
