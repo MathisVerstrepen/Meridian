@@ -98,6 +98,8 @@ def test_exact_model_route_matrix_preserves_other_protocols() -> None:
     assert grok.headers == {
         "Content-Type": "application/json",
         "Authorization": "Bearer test-key",
+        "User-Agent": "Meridian/1.0",
+        "x-opencode-session": grok.headers["x-opencode-session"],
     }
 
 

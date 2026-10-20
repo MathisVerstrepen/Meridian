@@ -107,6 +107,8 @@ def test_kimi_k3_uses_fixed_sampling_and_openai_contract() -> None:
     assert request.headers == {
         "Content-Type": "application/json",
         "Authorization": "Bearer test-key",
+        "User-Agent": "Meridian/1.0",
+        "x-opencode-session": request.headers["x-opencode-session"],
     }
     assert payload["model"] == "kimi-k3"
     assert payload["temperature"] == 1.0
@@ -143,6 +145,8 @@ def test_empty_anthropic_conversion_gets_local_fallback(
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01",
         "x-api-key": "test-key",
+        "User-Agent": "Meridian/1.0",
+        "x-opencode-session": request.headers["x-opencode-session"],
     }
     assert payload["messages"] == [
         {
