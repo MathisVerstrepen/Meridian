@@ -152,8 +152,9 @@ const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
 };
 
 const handleGenerateNew = async (submission: ChatInputSubmission, restoreInput: () => void) => {
+    const targetSession = session.value;
     graphEvents.emit('open-upcoming-node-data', {});
-    if (!await generateNew(null, submission)) restoreInput();
+    if (!await generateNew(null, submission) && session.value === targetSession) restoreInput();
 };
 
 const chatPanelStyle = computed(() => {
@@ -422,6 +423,11 @@ onUnmounted(() => {
                                 "
                                 @cancel-edit="currentEditModeIdx = null"
                                 @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
+                            />
+
+                            <UiChatUtilsStreamRetryStatus
+                                v-if="message.role === MessageRoleEnum.assistant"
+                                :node-id="message.node_id"
                             />
 
                             <UiChatMessageFooter

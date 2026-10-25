@@ -415,16 +415,18 @@ onMounted(async () => {
 
         <div
             v-show="isOverflowing"
-            class="hide-close pointer-events-none absolute bottom-[80px] left-0 h-12 w-full px-4"
+            class="hide-close pointer-events-none relative z-10 h-0 shrink-0"
         >
             <div
-                class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-12 w-[364px]
-                    bg-linear-to-t to-transparent"
+                class="dark:from-anthracite/75 from-stone-gray/20 absolute inset-x-0 bottom-0
+                    z-10 h-12 bg-linear-to-t to-transparent"
             />
-            <div class="from-obsidian absolute h-12 w-[364px] bg-linear-to-t to-transparent" />
+            <div
+                class="from-obsidian absolute inset-x-0 bottom-0 h-12 bg-linear-to-t to-transparent"
+            />
         </div>
 
-        <!-- Pagination -->
+        <!-- Workspace switcher -->
         <UiSidebarHistoryWorkspacePagination
             class="hide-close"
             :workspaces="workspaces"

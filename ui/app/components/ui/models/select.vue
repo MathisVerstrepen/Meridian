@@ -94,8 +94,7 @@ const normalizedSectionOrder = computed(() =>
 const pinnedModelIds = computed(() => modelsDropdownSettings.value.pinnedModels ?? []);
 const normalizedQuery = computed(() => query.value.trim().toLowerCase());
 
-const PIN_SHORTCUT_KEY = 'p';
-const PIN_SHORTCUT_LABEL = 'Ctrl/Cmd+Shift+P';
+const PIN_SHORTCUT_LABEL = 'Shift+Enter';
 
 // --- Computed Properties ---
 const compatibleModels = computed(() =>
@@ -459,10 +458,13 @@ const togglePinnedModel = (modelId: string) => {
 const handlePinShortcut = (event: KeyboardEvent, activeOption: RuntimeValue) => {
     if (
         props.disabled ||
+        event.isComposing ||
+        event.defaultPrevented ||
         event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
         !event.shiftKey ||
-        (!event.ctrlKey && !event.metaKey) ||
-        event.key.toLowerCase() !== PIN_SHORTCUT_KEY
+        event.key !== 'Enter'
     ) {
         return;
     }

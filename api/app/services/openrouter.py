@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
+from contextlib import aclosing
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -20,7 +21,9 @@ from models.message import NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.openrouter_retry import OpenRouterError, RetryCallback
 from services.openrouter_schema import build_openrouter_response_format
+from services.openrouter_transport import post_openrouter_json, stream_openrouter_data
 from services.providers.message_serialization import message_to_wire
 from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.reasoning_effort import reasoning_efforts_mask_from_catalog, resolve_reasoning_effort
@@ -654,10 +657,7 @@ async def make_openrouter_request_non_streaming(
     with sentry_sdk.start_span(op="ai.request", description="Non-streaming AI request") as span:
         span.set_tag("chat.model", req.model)
         try:
-            response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
-            response.raise_for_status()
-
-            data = response.json()
+            data = await post_openrouter_json(client, req.api_url, req.headers, req.get_payload())
             content = data["choices"][0]["message"]["content"]
             if content is None:
                 raise ValueError("OpenRouter returned empty message content.")
@@ -677,6 +677,9 @@ async def make_openrouter_request_non_streaming(
 
             return str(content)
 
+        except OpenRouterError:
+            span.set_status("unavailable")
+            raise
         except HTTPStatusError as e:
             error_message = _parse_openrouter_error(e.response.content)
             sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
@@ -704,6 +707,8 @@ async def stream_openrouter_response(
     pg_engine: SQLAlchemyAsyncEngine,
     redis_manager: RedisManager,
     final_data_container: Optional[dict] = None,
+    *,
+    on_retry: RetryCallback | None = None,
 ):
     """
     Streams responses from the OpenRouter API asynchronously.
@@ -733,153 +738,123 @@ async def stream_openrouter_response(
             round_usage_data: dict[str, Any] | None = None
             round_request_id: str | None = None
             native_finish_reason: str | None = None
-            async with client.stream(
-                "POST", req.api_url, headers=req.headers, json=req.get_payload()
-            ) as response:
-                if response.status_code != 200:
-                    error_content = await response.aread()
-                    error_message = _parse_openrouter_error(error_content)
-                    sentry_sdk.set_tag("openrouter.status_code", response.status_code)
-                    yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter
-                                (Status: {response.status_code}). \n{error_message}[!ERROR]"""
-                    return
-
-                with sentry_sdk.start_span(
-                    op="ai.streaming", description="Stream AI response"
-                ) as span:
-                    span.set_tag("chat.model", req.model)
-                    streamed_bytes = 0
-                    chunks_count = 0
-                    buffer = ""
-                    tool_call_chunks = []
-                    finish_reason = None
-
-                    async for byte_chunk in response.aiter_bytes():
-                        streamed_bytes += len(byte_chunk)
+            with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
+                span.set_tag("chat.model", req.model)
+                streamed_bytes = 0
+                chunks_count = 0
+                tool_call_chunks = []
+                finish_reason = None
+                async with aclosing(
+                    stream_openrouter_data(
+                        client, req.api_url, req.headers, req.get_payload(), on_retry=on_retry
+                    )
+                ) as events:
+                    async for data_str in events:
+                        streamed_bytes += len(data_str.encode("utf-8"))
                         chunks_count += 1
+                        if data_str == "[DONE]":
+                            if web_search_active:
+                                yield "[!WEB_SEARCH]\n"
+                                web_search_active = False
+                            if image_gen_active:
+                                yield "[!IMAGE_GEN]\n"
+                                image_gen_active = False
+                            if reasoning_started:
+                                yield "\n[!THINK]\n"
+                                reasoning_started = False
+                            finish_reason = "stop"
+                            break
 
-                        buffer += byte_chunk.decode("utf-8", errors="ignore")
-                        lines = buffer.splitlines(keepends=True)
+                        try:
+                            chunk = json.loads(data_str)
+                            if chunk.get("id") and round_request_id is None:
+                                round_request_id = str(chunk["id"])
+                            if (
+                                "choices" in chunk
+                                and chunk["choices"]
+                                and (
+                                    (
+                                        "message" in chunk["choices"][0]
+                                        and "annotations" in chunk["choices"][0]["message"]
+                                    )
+                                    or (
+                                        "delta" in chunk["choices"][0]
+                                        and "annotations" in chunk["choices"][0]["delta"]
+                                    )
+                                )
+                            ):
+                                file_annotations = chunk["choices"][0].get("message", {}).get(
+                                    "annotations"
+                                ) or chunk["choices"][0].get("delta", {}).get("annotations")
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            pass
 
-                        if lines and not lines[-1].endswith(("\n", "\r")):
-                            buffer = lines.pop()
-                        else:
-                            buffer = ""
+                        # Extract usage data
+                        if '"usage"' in data_str:
+                            try:
+                                usage_chunk = json.loads(data_str)
+                                if new_usage := usage_chunk.get("usage"):
+                                    round_usage_data = new_usage
+                            except json.JSONDecodeError:
+                                pass
 
-                        for line in lines:
-                            line = line.strip()
-                            if not line.startswith("data: "):
-                                continue
+                        # Process chunk for content or tool calls
+                        try:
+                            chunk = json.loads(data_str)
+                            choice = chunk["choices"][0]
+                            delta = choice.get("delta", {})
+                            if choice.get("native_finish_reason"):
+                                native_finish_reason = str(choice["native_finish_reason"])
 
-                            data_str = line[len("data: ") :].strip()
+                            # Collect reasoning details
+                            if "reasoning_details" in delta and delta["reasoning_details"]:
+                                collected_reasoning_details.extend(delta["reasoning_details"])
 
-                            if data_str == "[DONE]":
-                                if web_search_active:
-                                    yield "[!WEB_SEARCH]\n"
-                                    web_search_active = False
-                                if image_gen_active:
-                                    yield "[!IMAGE_GEN]\n"
-                                    image_gen_active = False
+                            if "tool_calls" in delta:
+                                tool_call_chunks.extend(delta["tool_calls"])
+                                for tc in delta["tool_calls"]:
+                                    name = tc.get("function", {}).get("name")
+                                    if name == "web_search" and not web_search_active:
+                                        yield "[WEB_SEARCH]"
+                                        web_search_active = True
+                                    if (
+                                        name
+                                        in {
+                                            "generate_image",
+                                            "generate_image_with_context",
+                                            "edit_image",
+                                        }
+                                        and not image_gen_active
+                                    ):
+                                        yield "[IMAGE_GEN]"
+                                        image_gen_active = True
+
+                            if choice.get("finish_reason") == "tool_calls":
                                 if reasoning_started:
                                     yield "\n[!THINK]\n"
                                     reasoning_started = False
-                                finish_reason = "stop"
+                                finish_reason = "tool_calls"
                                 break
 
-                            try:
-                                chunk = json.loads(data_str)
-                                if chunk.get("id") and round_request_id is None:
-                                    round_request_id = str(chunk["id"])
-                                if (
-                                    "choices" in chunk
-                                    and chunk["choices"]
-                                    and (
-                                        (
-                                            "message" in chunk["choices"][0]
-                                            and "annotations" in chunk["choices"][0]["message"]
-                                        )
-                                        or (
-                                            "delta" in chunk["choices"][0]
-                                            and "annotations" in chunk["choices"][0]["delta"]
-                                        )
-                                    )
-                                ):
-                                    file_annotations = chunk["choices"][0].get("message", {}).get(
-                                        "annotations"
-                                    ) or chunk["choices"][0].get("delta", {}).get("annotations")
-                            except (json.JSONDecodeError, KeyError, IndexError):
-                                pass
+                            # Track clean content for history
+                            if "content" in delta and delta["content"]:
+                                clean_content += delta["content"]
 
-                            # Extract usage data
-                            if '"usage"' in data_str:
-                                try:
-                                    usage_chunk = json.loads(data_str)
-                                    if new_usage := usage_chunk.get("usage"):
-                                        round_usage_data = new_usage
-                                except json.JSONDecodeError:
-                                    pass
+                            processed = _process_chunk(data_str, full_response, reasoning_started)
+                            if processed:
+                                content, full_response, reasoning_started = processed
+                                if web_search_active and content:
+                                    yield "[!WEB_SEARCH]\n"
+                                    web_search_active = False
+                                if image_gen_active and content:
+                                    yield "[!IMAGE_GEN]\n"
+                                    image_gen_active = False
+                                yield content
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
 
-                            # Process chunk for content or tool calls
-                            try:
-                                chunk = json.loads(data_str)
-                                choice = chunk["choices"][0]
-                                delta = choice.get("delta", {})
-                                if choice.get("native_finish_reason"):
-                                    native_finish_reason = str(choice["native_finish_reason"])
-
-                                # Collect reasoning details
-                                if "reasoning_details" in delta and delta["reasoning_details"]:
-                                    collected_reasoning_details.extend(delta["reasoning_details"])
-
-                                if "tool_calls" in delta:
-                                    tool_call_chunks.extend(delta["tool_calls"])
-                                    for tc in delta["tool_calls"]:
-                                        name = tc.get("function", {}).get("name")
-                                        if name == "web_search" and not web_search_active:
-                                            yield "[WEB_SEARCH]"
-                                            web_search_active = True
-                                        if (
-                                            name
-                                            in {
-                                                "generate_image",
-                                                "generate_image_with_context",
-                                                "edit_image",
-                                            }
-                                            and not image_gen_active
-                                        ):
-                                            yield "[IMAGE_GEN]"
-                                            image_gen_active = True
-
-                                if choice.get("finish_reason") == "tool_calls":
-                                    if reasoning_started:
-                                        yield "\n[!THINK]\n"
-                                        reasoning_started = False
-                                    finish_reason = "tool_calls"
-                                    break
-
-                                # Track clean content for history
-                                if "content" in delta and delta["content"]:
-                                    clean_content += delta["content"]
-
-                                processed = _process_chunk(
-                                    data_str, full_response, reasoning_started
-                                )
-                                if processed:
-                                    content, full_response, reasoning_started = processed
-                                    if web_search_active and content:
-                                        yield "[!WEB_SEARCH]\n"
-                                        web_search_active = False
-                                    if image_gen_active and content:
-                                        yield "[!IMAGE_GEN]\n"
-                                        image_gen_active = False
-                                    yield content
-                            except (json.JSONDecodeError, KeyError, IndexError):
-                                continue
-                        if finish_reason:
-                            break
-
-                    span.set_data("streamed_bytes", streamed_bytes)
-                    span.set_data("chunks_count", chunks_count)
+                span.set_data("streamed_bytes", streamed_bytes)
+                span.set_data("chunks_count", chunks_count)
 
             if round_usage_data and not req.is_title_generation:
                 request_index += 1
@@ -951,15 +926,21 @@ async def stream_openrouter_response(
                             remote_hash=remote_hash,
                         )
 
-        usage_data = finalize_usage_data(usage_data)
-
-        if usage_data and not req.is_title_generation:
-            if final_data_container is not None:
-                final_data_container["usage_data"] = usage_data
-
     except asyncio.CancelledError:
         logger.info(f"Stream for node {req.node_id} was cancelled by the connection manager.")
         raise
+    except OpenRouterError as e:
+        logger.warning(
+            "OpenRouter stream failed: status=%s request_id=%s", e.status_code, e.request_id
+        )
+        sentry_sdk.set_tag("openrouter.status_code", e.status_code)
+        if reasoning_started:
+            yield "\n[!THINK]\n"
+        if web_search_active:
+            yield "[!WEB_SEARCH]\n"
+        if image_gen_active:
+            yield "[!IMAGE_GEN]\n"
+        yield f"[ERROR]Stream Error: {e}[!ERROR]"
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
         yield """[ERROR]Connection Error: Could not connect to the API.
@@ -974,6 +955,10 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
+    finally:
+        finalized_usage = finalize_usage_data(usage_data)
+        if finalized_usage and not req.is_title_generation and final_data_container is not None:
+            final_data_container["usage_data"] = finalized_usage
 
 
 BRAND_ICONS = [

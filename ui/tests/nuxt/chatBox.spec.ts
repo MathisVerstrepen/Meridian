@@ -224,6 +224,30 @@ describe('chatBox manual message generation', () => {
         }
     });
 
+    it('does not restore a failed background submission into a fork', async () => {
+        let finishSubmission: (success: boolean) => void = () => {};
+        stubs.generateNew.mockReturnValueOnce(new Promise<boolean>((resolve) => {
+            finishSubmission = resolve;
+        }));
+        const wrapper = await mountSuspended(ChatBox, {
+            shallow: true,
+            global: { stubs: { UiChatTextInput: TextInputStub } },
+        });
+        const restoreInput = vi.fn();
+        try {
+            wrapper.getComponent(TextInputStub).vm.$emit('generate', {
+                message: 'Message B', files: [], githubContext: null,
+            }, restoreInput);
+            stubs.sessionRef!.value = { fromNodeId: 'fork-id', messages: [] };
+            finishSubmission(false);
+            await flushPromises();
+
+            expect(restoreInput).not.toHaveBeenCalled();
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('renders nested streamed text after migrating the temporary session', async () => {
         stubs.initialOpenChatId = DEFAULT_NODE_ID;
         stubs.session.fromNodeId = DEFAULT_NODE_ID;
