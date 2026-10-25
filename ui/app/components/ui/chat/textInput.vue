@@ -164,12 +164,12 @@ onMounted(() => {
 </script>
 
 <template>
-    <UiAttachmentCollisionModal
-        v-if="collision"
-        :collision="collision"
-        @resolve="resolveCollision"
-    />
     <div class="relative flex h-fit w-full flex-col items-center justify-end">
+        <UiAttachmentCollisionModal
+            v-if="collision"
+            :collision="collision"
+            @resolve="resolveCollision"
+        />
         <!-- Scroll to Bottom Button -->
         <button
             v-if="!isLockedToBottom"
