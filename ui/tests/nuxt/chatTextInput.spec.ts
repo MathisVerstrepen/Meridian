@@ -71,6 +71,7 @@ mockNuxtImport('useGraphEvents', () => () => ({
 
 const mountInput = (from: 'home' | 'chat' = 'chat', stubAttachmentChip = true) =>
     mountSuspended(TextInput, {
+        attrs: { class: from === 'home' ? 'max-h-[300px]' : 'max-h-[600px]!' },
         props: {
             isLockedToBottom: true,
             isStreaming: false,
@@ -160,6 +161,20 @@ describe('chat text input clipboard paste', () => {
             value: vi.fn(() => true),
             configurable: true,
         });
+    });
+
+    it.each(['home', 'chat'] as const)('preserves the parent height limit in %s', async (from) => {
+        const wrapper = await mountInput(from);
+
+        try {
+            const input = wrapper.get('[contenteditable]');
+            const container = input.element.parentElement?.parentElement;
+            expect(container?.classList.contains(
+                from === 'home' ? 'max-h-[300px]' : 'max-h-[600px]!',
+            )).toBe(true);
+        } finally {
+            wrapper.unmount();
+        }
     });
 
     it('uploads clipboard images once while preserving mixed plain text paste', async () => {
