@@ -1,4 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { computed, shallowRef } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatGenerator } from '@/composables/useChatGenerator';
@@ -6,6 +7,7 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import type { ChatSession } from '@/types/chat';
 import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
+import type { useStreamStore } from '@/stores/stream';
 
 const { useFiles: realUseFiles } = await vi.importActual<typeof import('@/composables/useFiles')>(
     '@/composables/useFiles',
@@ -20,7 +22,7 @@ const stubs = vi.hoisted(() => ({
     removeAllMessagesFromIndex: vi.fn(),
     syncUpcomingModelDefaults: vi.fn(),
     saveGraph: vi.fn().mockResolvedValue(undefined),
-    setChatCallback: vi.fn(),
+    setChatCallback: vi.fn<ReturnType<typeof useStreamStore>['setChatCallback']>(),
     setOnFinishedCallback: vi.fn(),
     ensureSession: vi.fn(),
     removeChatCallback: vi.fn(),
@@ -117,6 +119,7 @@ describe('useChatGenerator prompt identity', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
+        stubs.execute.mockReset().mockResolvedValue(undefined);
         stubs.fileToMessageContent.mockReset().mockImplementation(realUseFiles().fileToMessageContent);
         stubs.openChatId.value = 'existing-chat-id';
         stubs.createNodeFromVariant.mockReturnValue({
@@ -211,6 +214,79 @@ describe('useChatGenerator prompt identity', () => {
         expect(await pending).toBe(true);
         expect(stubs.execute).toHaveBeenCalledOnce();
         expect(generator.isSubmitting.value).toBe(false);
+    });
+
+    it('allows a fork to submit while the original response is pending and isolates both streams', async () => {
+        let finishOriginal = () => {};
+        let finishFork = () => {};
+        stubs.execute
+            .mockReturnValueOnce(new Promise<void>((resolve) => { finishOriginal = resolve; }))
+            .mockReturnValueOnce(new Promise<void>((resolve) => { finishFork = resolve; }));
+        const { session, generator } = setupGenerator([userMessage('answer-a', 'Message A')]);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        const original = session.value;
+        const pendingB = generator.generateNew(null, {
+            message: 'Message B', files: [], githubContext: null,
+        });
+        await flushPromises();
+        expect(generator.isSubmitting.value).toBe(true);
+
+        session.value = { fromNodeId: 'answer-a', messages: [userMessage('answer-a', 'Message A')] };
+        stubs.openChatId.value = 'answer-a';
+        expect(generator.isStreaming.value).toBe(false);
+        expect(generator.isSubmitting.value).toBe(false);
+        const fork = session.value;
+        session.value = original;
+        expect(generator.isSubmitting.value).toBe(true);
+        session.value = fork;
+
+        const originalChunk = stubs.setChatCallback.mock.calls[0]![2];
+        originalChunk('Response B', undefined);
+        expect(original.messages.at(-1)?.content[0]?.text).toBe('Response B');
+        expect(session.value.messages.at(-1)?.content[0]?.text).toBe('Message A');
+
+        stubs.createNodeFromVariant.mockReturnValueOnce({ generatorNodeId: 'fork-generator' });
+        const pendingC = generator.generateNew(null, {
+            message: 'Message C', files: [], githubContext: null,
+        });
+        await flushPromises();
+        expect(stubs.execute).toHaveBeenLastCalledWith('fork-generator');
+        expect(generator.isSubmitting.value).toBe(true);
+
+        finishOriginal();
+        expect(await pendingB).toBe(true);
+        expect(generator.isSubmitting.value).toBe(true);
+        const forkChunk = stubs.setChatCallback.mock.calls[1]![2];
+        forkChunk('Response C', undefined);
+        expect(session.value.messages.at(-1)?.content[0]?.text).toBe('Response C');
+        expect(original.messages.at(-1)?.content[0]?.text).toBe('Response B');
+
+        finishFork();
+        expect(await pendingC).toBe(true);
+        expect(generator.isSubmitting.value).toBe(false);
+    });
+
+    it('keeps generation attached to its original session when forking before render is ready', async () => {
+        let finishRender = () => {};
+        stubs.waitForRender.mockReturnValueOnce(new Promise<void>((resolve) => { finishRender = resolve; }));
+        const { session, generator } = setupGenerator([]);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        const original = session.value;
+        const pending = generator.generateNew(null, {
+            message: 'Message B', files: [], githubContext: null,
+        });
+        const fork: ChatSession = { fromNodeId: 'answer-a', messages: [] };
+        session.value = fork;
+        stubs.openChatId.value = 'answer-a';
+        stubs.addMessage.mockImplementation((message: Message, nodeId: string) => {
+            (nodeId === 'generator-node-id' ? original : fork).messages.push(message);
+        });
+
+        finishRender();
+        expect(await pending).toBe(true);
+        expect(stubs.execute).toHaveBeenCalledExactlyOnceWith('generator-node-id');
+        expect(original.messages.at(-1)?.role).toBe(MessageRoleEnum.assistant);
+        expect(fork.messages).toEqual([]);
     });
 
     it('stores both identities on a fresh follow-up while executing from the generator', async () => {

@@ -1,7 +1,7 @@
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 import type { BlockDefinition } from '@/types/graph';
 import type { ChatInputSubmission, ChatSession } from '@/types/chat';
-import type { ShallowRef } from 'vue';
+import { shallowReactive, type ShallowRef } from 'vue';
 
 export const useChatGenerator = (
     session: ShallowRef<ChatSession, ChatSession>,
@@ -52,7 +52,8 @@ export const useChatGenerator = (
     );
     const streamingSession = ref<StreamSession | null>();
     const generationError = ref<string | null>(null);
-    const isSubmitting = ref(false);
+    const submittingSessions = shallowReactive(new Set<ChatSession>());
+    const isSubmitting = computed(() => submittingSessions.has(session.value));
     const selectedNodeType = ref<BlockDefinition | null>(null);
 
     // --- Private Helper Functions ---
@@ -105,9 +106,11 @@ export const useChatGenerator = (
         });
     };
 
-    const addToLastAssistantMessage = (text: string, modelId: string | undefined) => {
+    const addToLastAssistantMessage = (
+        text: string, modelId: string | undefined, targetSession = session.value,
+    ) => {
         if (modelId) return;
-        const lastMessage = session.value.messages[session.value.messages.length - 1];
+        const lastMessage = targetSession.messages[targetSession.messages.length - 1];
         if (lastMessage && lastMessage.content[0]?.type === MessageContentTypeEnum.TEXT) {
             lastMessage.content[0].text += text;
         } else if (lastMessage) {
@@ -137,8 +140,9 @@ export const useChatGenerator = (
     };
 
     // --- Core Generation Logic ---
-    const generate = async () => {
-        if (!session.value.fromNodeId) {
+    const generate = async (targetSession = session.value) => {
+        const nodeId = targetSession.fromNodeId;
+        if (!nodeId) {
             const msg = "Cannot generate response: 'fromNodeId' is missing.";
             console.error(msg);
             error(msg, { title: 'Error' });
@@ -146,49 +150,53 @@ export const useChatGenerator = (
             return;
         }
 
-        if (isStreaming.value) {
+        if (isNodeStreaming.value(nodeId)) {
             console.warn('Generation already in progress.');
             return;
         }
 
-        streamingSession.value = ensureSession(
-            session.value.fromNodeId,
+        const currentStream = ensureSession(
+            nodeId,
             selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
         );
-        generationError.value = null;
-        triggerScroll();
+        if (session.value === targetSession) {
+            streamingSession.value = currentStream;
+            generationError.value = null;
+            triggerScroll();
+        }
 
         addMessage({
             role: MessageRoleEnum.assistant,
             content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
-            model: getCurrentModelTextFromNodeId(session.value.fromNodeId) || '',
-            node_id: session.value.fromNodeId,
-            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+            model: getCurrentModelTextFromNodeId(nodeId) || '',
+            node_id: nodeId,
+            type: currentStream?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
             usageData: null,
-        });
-        goBackToBottom('auto');
+        }, nodeId);
+        if (session.value === targetSession) goBackToBottom('auto');
 
         await saveGraph();
 
         setChatCallback(
-            session.value.fromNodeId,
+            nodeId,
             NodeTypeEnum.TEXT_TO_TEXT,
-            addToLastAssistantMessage,
+            (text, modelId) => addToLastAssistantMessage(text, modelId, targetSession),
         );
-        setOnFinishedCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
+        setOnFinishedCallback(nodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
             saveGraph();
         });
 
-        await nodeRegistry.execute(session.value.fromNodeId);
+        await nodeRegistry.execute(nodeId);
 
-        triggerScroll();
+        if (session.value === targetSession) triggerScroll();
     };
 
     const createAndGenerate = async (
         forcedNodeId: string | null = null,
         submission: ChatInputSubmission | null = null,
     ) => {
+        const targetSession = session.value;
         let generatorNodeId: string | undefined;
         syncUpcomingModelDefaults();
 
@@ -249,7 +257,7 @@ export const useChatGenerator = (
             throw new Error('No generator node is available.');
         }
 
-        session.value.fromNodeId = generatorNodeId;
+        targetSession.fromNodeId = generatorNodeId;
 
         if (openChatId.value && openChatId.value !== generatorNodeId) {
             migrateSessionId(openChatId.value, generatorNodeId);
@@ -259,10 +267,10 @@ export const useChatGenerator = (
         await waitForRender();
 
         setTimeout(() => {
-            teleportViewportToNode(graphId.value, generatorNodeId);
+            if (session.value === targetSession) teleportViewportToNode(graphId.value, generatorNodeId);
         }, 100);
 
-        await generate();
+        await generate(targetSession);
     };
 
     const generateNew = async (
@@ -270,17 +278,20 @@ export const useChatGenerator = (
         submission: ChatInputSubmission | null = null,
     ): Promise<boolean> => {
         if (isSubmitting.value || isStreaming.value) return false;
-        isSubmitting.value = true;
+        const targetSession = session.value;
+        submittingSessions.add(targetSession);
         generationError.value = null;
         try {
             await createAndGenerate(forcedNodeId, submission);
             return true;
         } catch (err) {
             console.error('Failed to submit chat message:', err);
-            generationError.value = 'Could not send your message because generation could not start. Please try again.';
+            if (session.value === targetSession) {
+                generationError.value = 'Could not send your message because generation could not start. Please try again.';
+            }
             return false;
         } finally {
-            isSubmitting.value = false;
+            submittingSessions.delete(targetSession);
         }
     };
 
@@ -355,6 +366,7 @@ export const useChatGenerator = (
     };
 
     const restoreStreamingState = () => {
+        const targetSession = session.value;
         clearLastAssistantMessage();
         generationError.value = null;
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId!);
@@ -367,7 +379,7 @@ export const useChatGenerator = (
         setChatCallback(
             session.value.fromNodeId!,
             NodeTypeEnum.TEXT_TO_TEXT,
-            addToLastAssistantMessage,
+            (text, modelId) => addToLastAssistantMessage(text, modelId, targetSession),
         );
     };
 
