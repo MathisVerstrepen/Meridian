@@ -530,10 +530,23 @@ test(
         await input.fill('Generated Model 450');
         await expect(options).toHaveCount(1);
         await expect(options.first()).toHaveAttribute('aria-setsize', '1');
-        await input.press('Control+Shift+P');
+        await expect(panel).toContainText('Shift+Enter');
+        // The former browser shortcut must no longer toggle a pin.
+        for (const modifier of ['ctrlKey', 'metaKey']) {
+            await input.dispatchEvent('keydown', { key: 'P', shiftKey: true, [modifier]: true });
+            await expect(options).toHaveCount(1);
+        }
+        // IME confirmation must not pin a model or select it.
+        await input.dispatchEvent('keydown', { key: 'Enter', shiftKey: true, isComposing: true });
+        await expect(options).toHaveCount(1);
+        await expect(panel).toBeVisible();
+        await input.press('Shift+Enter');
         await expect(options).toHaveCount(2);
         await expect(options.filter({ hasText: 'Pinned' })).toHaveCount(1);
-        await input.press('Meta+Shift+P');
+        await expect(panel).toBeVisible();
+        await expect(input).toHaveValue('Generated Model 450');
+        await expect(input).toBeFocused();
+        await input.press('Shift+Enter');
         await expect(options).toHaveCount(1);
         await options.first().click();
         await expect(input).toHaveValue('Generated Model 450');
