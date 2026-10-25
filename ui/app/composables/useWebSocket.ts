@@ -111,10 +111,17 @@ const handleMessage = (event: MessageEvent) => {
         const modelId = isRuntimeString(model_id) ? model_id : undefined;
 
         switch (type) {
+            case 'stream_retry_status':
+                if (streamStore.isNodeStreaming(nodeId)) {
+                    useStreamRetryStore().update(nodeId, payload, modelId);
+                }
+                break;
             case 'stream_chunk':
+                useStreamRetryStore().clear(nodeId, modelId ?? '');
                 if (isRuntimeString(payload)) streamStore.handleStreamChunk(nodeId, payload, modelId);
                 break;
             case 'stream_end':
+                useStreamRetryStore().clear(nodeId, modelId);
                 streamStore.handleStreamEnd(
                     nodeId,
                     {
@@ -125,6 +132,7 @@ const handleMessage = (event: MessageEvent) => {
                 );
                 break;
             case 'stream_error':
+                useStreamRetryStore().clear(nodeId);
                 streamStore.handleStreamError(nodeId, {
                     message: runtimeErrorMessage(payload) ?? 'Unknown stream error',
                 });
@@ -179,6 +187,7 @@ const handleMessage = (event: MessageEvent) => {
 };
 
 const handleClose = (event: CloseEvent) => {
+    useStreamRetryStore().clearAll();
     console.log(`WebSocket connection closed: Code ${event.code}, Reason: ${event.reason}`);
     state.isConnected = false;
     state.isConnecting = false;

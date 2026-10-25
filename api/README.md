@@ -338,6 +338,18 @@ Redis:
 
 - **WebSocket Single Endpoint**: `/ws/chat/{client_id}?token=...` handles all streams (cancel via msg).
 - **Async Streaming**: OpenRouter SSE → chunked WS, tool calls (search/fetch/code execution) looped.
+- **OpenRouter inference retries**: Each streaming or non-streaming request has at most four
+  attempts for HTTP/SSE 408, 429, 500, 502, 503, and 504 errors or transient connection failures.
+  Backoff uses jitter within 2/4/8-second windows, honors `Retry-After` (seconds or HTTP date),
+  and permits at most 90 seconds of cumulative waiting. Longer server delays fail without
+  retrying early. Authentication, request validation, and ordinary credit errors fail immediately;
+  a 402 is retryable only for `openrouter_in_flight_budget` with `Retry-After`.
+  Streaming retries stop once that request produces text, reasoning, annotations, or tool-call
+  fragments. Completed tools are retained when retrying a subsequent inference round.
+  `stream_retry_status` WebSocket messages carry transient waiting notices, with a null payload
+  to clear them; they never enter response text/history. Cancelling also interrupts backoff.
+  Existing per-request timeouts still apply; the 90-second limit covers waiting, not generation.
+  An accepted request that times out before output may still incur provider charges on retry.
 - **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Routing (JSON select), ContextMerger (branches).
 
 From `const/plans.py`:

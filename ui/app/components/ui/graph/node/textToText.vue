@@ -217,6 +217,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
+        <UiChatUtilsStreamRetryStatus v-if="isVisible" :node-id="props.id" />
         <div v-if="isVisible" class="mb-2 flex h-fit items-center justify-between">
             <!-- Model Select -->
             <UiModelsSelect
