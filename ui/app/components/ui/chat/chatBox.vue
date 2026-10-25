@@ -152,8 +152,9 @@ const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
 };
 
 const handleGenerateNew = async (submission: ChatInputSubmission, restoreInput: () => void) => {
+    const targetSession = session.value;
     graphEvents.emit('open-upcoming-node-data', {});
-    if (!await generateNew(null, submission)) restoreInput();
+    if (!await generateNew(null, submission) && session.value === targetSession) restoreInput();
 };
 
 const chatPanelStyle = computed(() => {
