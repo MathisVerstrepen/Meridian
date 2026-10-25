@@ -224,6 +224,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
         session.isStreaming = true;
         session.error = null;
+        useStreamRetryStore().clear(nodeId);
         session.response = '';
         session.type = type;
         session.usageData = null;
@@ -344,6 +345,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
         flushPendingChunk(session);
         session.isStreaming = false;
+        useStreamRetryStore().clear(nodeId);
         session.error = new Error('Stream cancelled by user.');
 
         if (session.routingPromiseResolve) {
@@ -358,6 +360,7 @@ export const useStreamStore = defineStore('Stream', () => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return null;
 
+        useStreamRetryStore().clear(nodeId);
         session.isStreaming = true;
         session.error = null;
         session.pendingChunk = '';

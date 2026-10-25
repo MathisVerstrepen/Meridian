@@ -65,6 +65,7 @@ from services.sandbox_inputs import (
     collect_sandbox_input_files,
 )
 from services.settings import get_user_settings
+from services.stream_retry_status import retry_status_sender
 from services.tools.ask_user import build_ask_user_answer_result, normalize_ask_user_answers
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -768,7 +769,11 @@ async def resume_tool_response_to_websocket(
 
         final_data_container: dict[str, Any] = {}
         async for chunk in stream_inference_response(
-            inference_req, pg_engine, redis_manager, final_data_container
+            inference_req,
+            pg_engine,
+            redis_manager,
+            final_data_container,
+            on_retry=retry_status_sender(websocket, str(tool_call.node_id)),
         ):
             await websocket.send_json(
                 {
@@ -1020,7 +1025,19 @@ async def propagate_stream_to_websocket(
             final_data_container: dict[str, Any] = {}
             # Stream the response back to the client
             async for chunk in stream_inference_response(
-                inference_req, pg_engine, redis_manager, final_data_container
+                inference_req,
+                pg_engine,
+                redis_manager,
+                final_data_container,
+                on_retry=retry_status_sender(
+                    websocket,
+                    request_data.node_id,
+                    (
+                        request_data.modelId
+                        if request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
+                        else None
+                    ),
+                ),
             ):
                 payload = {
                     "type": "stream_chunk",

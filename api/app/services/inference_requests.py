@@ -39,6 +39,7 @@ from services.openrouter import (
     make_openrouter_request_non_streaming,
     stream_openrouter_response,
 )
+from services.openrouter_retry import RetryCallback
 from services.z_ai_coding_plan import (
     ZAiCodingPlanReqChat,
     make_z_ai_coding_plan_request_non_streaming,
@@ -206,6 +207,8 @@ async def stream_inference_response(
     pg_engine: SQLAlchemyAsyncEngine,
     redis_manager: RedisManager,
     final_data_container: dict | None = None,
+    *,
+    on_retry: RetryCallback | None = None,
 ):
     if isinstance(req, ClaudeAgentReqChat):
         async for chunk in stream_claude_agent_response(
@@ -251,6 +254,6 @@ async def stream_inference_response(
         return
 
     async for chunk in stream_openrouter_response(
-        req, pg_engine, redis_manager, final_data_container
+        req, pg_engine, redis_manager, final_data_container, on_retry=on_retry
     ):
         yield chunk

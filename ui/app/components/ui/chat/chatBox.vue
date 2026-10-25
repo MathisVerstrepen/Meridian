@@ -425,6 +425,11 @@ onUnmounted(() => {
                                 @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
                             />
 
+                            <UiChatUtilsStreamRetryStatus
+                                v-if="message.role === MessageRoleEnum.assistant"
+                                :node-id="message.node_id"
+                            />
+
                             <UiChatMessageFooter
                                 :message="message"
                                 :graph-id="graphId"
