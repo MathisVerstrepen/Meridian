@@ -371,3 +371,61 @@ def test_openai_non_streaming_rejection_uses_same_safe_structural_log(caplog) ->
     assert '"response_status": 500' in caplog.text
     assert '"cf-ray": "ray-456"' in caplog.text
     assert '"request_model": "grok-4.5"' in caplog.text
+
+
+@pytest.mark.parametrize("model", ["deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-pro"])
+def test_deepseek_auxiliary_requests_disable_thinking_within_the_output_budget(model):
+    request = _request(model=f"opencode-go/{model}", stream=False, is_title_generation=True,
+                       config=_config(max_tokens=4096, exclude_reasoning=True))
+    payload = request.get_payload()
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["max_tokens"] == 4096
+    assert payload["stream"] is False
+
+
+@pytest.mark.parametrize("model,title", [("deepseek-v4.1-flash", False), ("kimi-k3", True), ("glm-5.3", True)])
+def test_auxiliary_thinking_override_does_not_change_other_models_or_normal_chat(model, title):
+    request = _request(model=f"opencode-go/{model}", is_title_generation=title,
+                       config=_config(exclude_reasoning=True))
+    assert "thinking" not in request.get_payload()
+
+
+@pytest.mark.parametrize("effort,expected", [
+    ("minimal", "low"), ("low", "low"), ("medium", "high"),
+    ("high", "high"), ("xhigh", "high"), ("max", "max"),
+])
+def test_deepseek_thinking_uses_configured_effort_even_when_reasoning_is_hidden(effort, expected):
+    request = _request(model="opencode-go/deepseek-v4.1-flash",
+                       config=_config(reasoning_effort=effort, exclude_reasoning=True))
+    payload = request.get_payload()
+    assert payload["thinking"] == {"type": "enabled"}
+    assert payload["reasoning_effort"] == expected
+
+
+@pytest.mark.parametrize("title,effort", [(True, "high"), (False, "none")])
+def test_deepseek_short_auxiliary_tasks_and_explicit_none_disable_thinking(title, effort):
+    request = _request(model="opencode-go/deepseek-v4.1-flash", is_title_generation=title,
+                       config=_config(reasoning_effort=effort))
+    payload = request.get_payload()
+    assert payload["thinking"] == {"type": "disabled"}
+    assert "reasoning_effort" not in payload
+
+
+def test_other_opencode_go_models_do_not_receive_deepseek_thinking_parameters():
+    payload = _request(model="opencode-go/kimi-k3",
+                       config=_config(reasoning_effort="low")).get_payload()
+    assert "thinking" not in payload and "reasoning_effort" not in payload
+
+
+@pytest.mark.parametrize("reason,expected", [("length", "token limit"), ("stop", "empty response")])
+def test_openai_non_streaming_rejects_reasoning_only_output_without_logging_content(caplog, reason, expected):
+    client = AsyncMock()
+    client.post.return_value = httpx.Response(200, json={"choices": [{"finish_reason": reason,
+        "message": {"content": "", "reasoning_content": "PRIVATE_REASONING_SENTINEL"}}]},
+        request=httpx.Request("POST", OPENCODE_GO_OPENAI_CHAT_URL))
+    request = _request(http_client=client, model="opencode-go/deepseek-v4.1-flash", stream=False)
+    caplog.set_level("WARNING", logger="uvicorn.error")
+    with pytest.raises(ValueError, match=expected):
+        asyncio.run(_make_opencode_go_openai_request_non_streaming(request, MagicMock()))
+    assert 'finish_reason=' + reason in caplog.text
+    assert 'PRIVATE_REASONING_SENTINEL' not in caplog.text

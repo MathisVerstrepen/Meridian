@@ -21,6 +21,7 @@ export interface AgentProfile {
     name: string;
     description: string;
     icon: string;
+    iconSvg?: string | null;
     accentColor: string;
     lifecycle: 'draft' | 'active' | 'archived';
     visibility: 'private' | 'public';

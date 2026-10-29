@@ -1,11 +1,12 @@
 """Agent library and execution contracts. Client profile metadata is never execution policy."""
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from models.chatDTO import EffortEnum
 from models.message import ToolEnum
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from utils.svg_icon import MAX_SVG_LENGTH, normalize_svg_icon
 
 
 class PromptLayer(BaseModel):
@@ -38,6 +39,7 @@ class AgentWrite(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
     icon: str = Field(default="LucideBot", pattern=r"^[A-Za-z][A-Za-z0-9]{0,99}$")
+    iconSvg: str | None = Field(default=None, max_length=MAX_SVG_LENGTH)
     accentColor: str = Field(default="#eb5e28", pattern=r"^#[0-9a-fA-F]{6}$")
     lifecycle: Literal["draft", "active", "archived"] = "draft"
     visibility: Literal["private", "public"] = "private"
@@ -46,6 +48,11 @@ class AgentWrite(BaseModel):
     model_settings: AgentModelSettings
     prompt_stack: list[PromptLayer] = Field(default_factory=list, max_length=32)
     tools: list[ToolEnum] = Field(default_factory=list, max_length=6)
+
+    @field_validator("iconSvg")
+    @classmethod
+    def validate_icon_svg(cls, value: str | None) -> str | None:
+        return normalize_svg_icon(value) if value is not None else None
 
     @model_validator(mode="after")
     def validate_public(self):
@@ -65,6 +72,21 @@ class AgentDescriptionRequest(BaseModel):
 
 class AgentDescriptionResponse(BaseModel):
     description: str = Field(min_length=1, max_length=2000)
+
+
+class AgentIconRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="", max_length=100)
+    description: str = Field(default="", max_length=2000)
+    instructions: str = Field(default="", max_length=100000)
+    category: str = Field(default="General", max_length=100)
+    tags: list[Annotated[str, Field(max_length=100)]] = Field(default_factory=list, max_length=20)
+    tools: list[ToolEnum] = Field(default_factory=list, max_length=6)
+    model: str = Field(min_length=1, max_length=255)
+
+
+class AgentIconResponse(BaseModel):
+    iconSvg: str = Field(max_length=MAX_SVG_LENGTH)
 
 
 class TeamWrite(BaseModel):

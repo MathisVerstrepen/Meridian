@@ -525,3 +525,109 @@ test('library preview shows readable metadata and updates ratings and bookmarks 
     await more.press('Escape');
     await expect(card.getByRole('button', { name: 'Export JSON', exact: true })).not.toBeVisible();
 });
+
+test('custom SVG icons are previewed applied saved and restored alongside preset choices @smoke', async ({
+    page,
+}, testInfo) => {
+    await mockSettings(page, { existing: true });
+    let current: AgentRecord = record();
+    const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="10" cy="10" r="6"/><path d="M15 15l5 5"/></svg>';
+    let generated: JsonValue = null;
+    let saved: JsonValue = null;
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route('**/api/agents?**', (r) =>
+        r.fulfill({ json: { items: [current], total: 1 } }),
+    );
+    await page.route(`**/api/agents/${current.id}/versions`, (r) => r.fulfill({ json: [] }));
+    await page.route('**/api/agents/generate-icon', async (r) => {
+        generated = r.request().postDataJSON();
+        await pending;
+        return r.fulfill({ json: { iconSvg: svg } });
+    });
+    await page.route(`**/api/agents/${current.id}`, (r) => {
+        const body: AgentRecord['profile'] = r.request().postDataJSON();
+        saved = r.request().postDataJSON();
+        current = { ...current, profile: body, version: 2 };
+        return r.fulfill({ json: current });
+    });
+    await mountSettings(page);
+    await page.getByRole('button', { name: 'Edit Agent', exact: true }).click();
+    const editor = page.getByRole('form', { name: 'Agent editor' });
+    await editor
+        .getByRole('textbox', { name: 'Agent instructions' })
+        .fill('Research reliable sources and compare the evidence.');
+    await editor.locator('summary').filter({ hasText: 'Appearance & organization' }).click();
+    await editor.getByRole('button', { name: 'Generate icon', exact: true }).click();
+    await expect(editor.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
+    release?.();
+    await expect(editor.getByRole('img', { name: 'Generated SVG icon' })).toBeVisible();
+    expect(generated).toMatchObject({
+        name: 'Web Researcher',
+        instructions: 'Research reliable sources and compare the evidence.',
+        model: 'fixture/default',
+    });
+    await editor.getByRole('button', { name: 'Use icon', exact: true }).click();
+    await expect(
+        editor.getByRole('button', { name: 'Custom SVG icon', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await editor.getByRole('button', { name: 'Use accent #6788be', exact: true }).click();
+    await expect(
+        editor.getByRole('complementary', { name: 'Agent preview' }).locator('img'),
+    ).toHaveAttribute('src', /%236788be/);
+    await editor.getByRole('button', { name: 'Design icon', exact: true }).click();
+    await expect(
+        editor.getByRole('complementary', { name: 'Agent preview' }).locator('img'),
+    ).toHaveCount(0);
+    await editor.getByRole('button', { name: 'Custom SVG icon', exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath('agent-custom-icon-picker.png') });
+    await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your Agent library' })).toBeVisible();
+    expect(saved).toMatchObject({ iconSvg: svg, accentColor: '#6788be' });
+    await expect(page.locator('article img')).toHaveAttribute('src', /data:image\/svg\+xml/);
+    await page.getByRole('button', { name: 'Edit Agent', exact: true }).click();
+    await editor.locator('summary').filter({ hasText: 'Appearance & organization' }).click();
+    await expect(
+        editor.getByRole('button', { name: 'Custom SVG icon', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('icon generation preserves the existing icon on failure or changed draft context @smoke', async ({
+    page,
+}) => {
+    await mockSettings(page, { existing: true });
+    const entry = record();
+    await page.route(`**/api/agents/${entry.id}/versions`, (r) => r.fulfill({ json: [] }));
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route('**/api/agents/generate-icon', async (r) => {
+        await pending;
+        return r.fulfill({
+            json: { iconSvg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>' },
+        });
+    });
+    await mountSettings(page);
+    await page.getByRole('button', { name: 'Edit Agent', exact: true }).click();
+    const editor = page.getByRole('form', { name: 'Agent editor' });
+    await editor.locator('summary').filter({ hasText: 'Appearance & organization' }).click();
+    await editor.getByRole('button', { name: 'Generate icon', exact: true }).click();
+    await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Renamed Agent');
+    release?.();
+    await expect(editor.getByRole('alert')).toContainText('details changed');
+    await expect(editor.getByRole('button', { name: 'Use icon', exact: true })).toHaveCount(0);
+    await page.unroute('**/api/agents/generate-icon');
+    await page.route('**/api/agents/generate-icon', (r) =>
+        r.fulfill({ status: 502, json: { detail: 'Could not generate an icon. Try again.' } }),
+    );
+    await editor.getByRole('button', { name: 'Generate icon', exact: true }).click();
+    await expect(editor.getByRole('alert')).toContainText('Try again');
+    await expect(
+        editor.getByRole('complementary', { name: 'Agent preview' }).locator('img'),
+    ).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'Save changes', exact: true })).toBeEnabled();
+});

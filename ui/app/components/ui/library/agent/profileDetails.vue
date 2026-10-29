@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { AgentProfile } from '@/types/agent';
-import { AGENT_COLORS, AGENT_ICONS } from '@/utils/agentEditor';
-defineProps<{ editing: boolean }>();
+import { AGENT_COLORS } from '@/utils/agentEditor';
+defineProps<{ editing: boolean; disabled?: boolean }>();
+defineEmits<{ iconBusy: [busy: boolean] }>();
 const profile = defineModel<AgentProfile>({ required: true });
 const tags = computed({
     get: () => profile.value.tags.join(', '),
@@ -34,29 +35,11 @@ const inputClass =
             />
         </summary>
         <div class="border-stone-gray/10 flex flex-col gap-5 border-t p-4">
-            <fieldset>
-                <legend class="text-stone-gray mb-2 text-sm">Icon</legend>
-                <div class="flex flex-wrap gap-2">
-                    <button
-                        v-for="choice in AGENT_ICONS"
-                        :key="choice.icon"
-                        type="button"
-                        :aria-label="`${choice.label} icon`"
-                        :aria-pressed="profile.icon === choice.icon"
-                        :title="choice.label"
-                        class="flex size-10 items-center justify-center rounded-xl border
-                            transition-colors"
-                        :class="
-                            profile.icon === choice.icon
-                                ? 'border-ember-glow bg-ember-glow/10 text-ember-glow'
-                                : 'border-stone-gray/20 text-stone-gray hover:bg-stone-gray/10'
-                        "
-                        @click="profile.icon = choice.icon"
-                    >
-                        <UiIcon :name="choice.icon" class="size-5" />
-                    </button>
-                </div>
-            </fieldset>
+            <UiLibraryAgentIconPicker
+                v-model="profile"
+                :disabled="disabled"
+                @busy="$emit('iconBusy', $event)"
+            />
             <fieldset>
                 <legend class="text-stone-gray mb-2 text-sm">Accent color</legend>
                 <div class="flex flex-wrap items-center gap-3">

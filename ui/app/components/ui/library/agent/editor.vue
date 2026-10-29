@@ -24,9 +24,7 @@ const modelName = computed(
         modelStore.models.find((model) => model.id === profile.value.model_settings.model)?.name ??
         'Choose a model',
 );
-const displayIcon = computed(() =>
-    profile.value.icon === 'LucideBot' ? 'RiBrain2Line' : profile.value.icon,
-);
+const generatingIcon = ref(false);
 const inputClass =
     'bg-anthracite/25 border-stone-gray/20 focus:border-ember-glow/70 placeholder:text-stone-gray/35 text-soft-silk w-full rounded-xl border px-3.5 py-3 text-sm outline-none transition-colors';
 const { generatingDescription, descriptionError, generateDescription } = useAgentDescription(
@@ -42,11 +40,13 @@ const dateLabel = (date: string) =>
         ref="form"
         class="text-soft-silk mx-auto w-full max-w-5xl pb-4"
         aria-label="Agent editor"
-        @submit.prevent="!generatingDescription && save(props.agent ? null : 'active')"
+        @submit.prevent="
+            !generatingDescription && !generatingIcon && save(props.agent ? null : 'active')
+        "
     >
         <button
             type="button"
-            :disabled="saving || generatingDescription"
+            :disabled="saving || generatingDescription || generatingIcon"
             class="text-stone-gray/70 hover:text-soft-silk mb-5 inline-flex items-center gap-1.5
                 text-sm transition-colors disabled:opacity-40"
             @click="emit('close')"
@@ -109,7 +109,10 @@ const dateLabel = (date: string) =>
                                 aria-label="Generate Agent description"
                                 title="Generate a description from the instructions"
                                 :disabled="
-                                    generatingDescription || saving || !profile.model_settings.model
+                                    generatingDescription ||
+                                    generatingIcon ||
+                                    saving ||
+                                    !profile.model_settings.model
                                 "
                                 class="text-ember-glow hover:bg-ember-glow/10 absolute top-1/2
                                     right-2 flex size-8 -translate-y-1/2 items-center justify-center
@@ -174,7 +177,7 @@ const dateLabel = (date: string) =>
                                 modelError = '';
                             }
                         "
-                        :disabled="saving || generatingDescription"
+                        :disabled="saving || generatingDescription || generatingIcon"
                         variant="grey"
                         to="right"
                         from="bottom"
@@ -192,7 +195,12 @@ const dateLabel = (date: string) =>
                         <h3 class="text-sm font-semibold">Make it your own</h3>
                         <p class="text-stone-gray/55 mt-1 text-xs">Everything below is optional.</p>
                     </div>
-                    <UiLibraryAgentProfileDetails v-model="profile" :editing="!!props.agent" />
+                    <UiLibraryAgentProfileDetails
+                        v-model="profile"
+                        :editing="!!props.agent"
+                        :disabled="saving || generatingDescription"
+                        @icon-busy="generatingIcon = $event"
+                    />
                     <UiLibraryAgentPromptLayers v-model="profile.prompt_stack" />
                     <UiLibraryAgentModelOverrides v-model="profile.model_settings" />
                 </section>
@@ -214,7 +222,7 @@ const dateLabel = (date: string) =>
                         >
                         <button
                             type="button"
-                            :disabled="saving || generatingDescription"
+                            :disabled="saving || generatingDescription || generatingIcon"
                             class="text-ember-glow disabled:opacity-40"
                             @click="restore(version.version)"
                         >
@@ -255,7 +263,7 @@ const dateLabel = (date: string) =>
                         backgroundColor: `${profile.accentColor}1a`,
                     }"
                 >
-                    <UiIcon :name="displayIcon" class="size-7" />
+                    <UiLibraryAgentIcon :profile="profile" class="size-7" />
                 </div>
                 <h3 class="font-semibold wrap-break-word">
                     {{ profile.name || 'Your new Agent' }}
@@ -299,13 +307,15 @@ const dateLabel = (date: string) =>
                     class="size-4 shrink-0"
                 />
                 {{
-                    generatingDescription
-                        ? 'Generating description…'
-                        : saving
-                          ? 'Saving your Agent…'
-                          : props.agent
-                            ? `Editing v${props.agent.version} · Saves a new version`
-                            : 'Ready to use after creation'
+                    generatingIcon
+                        ? 'Generating icon…'
+                        : generatingDescription
+                          ? 'Generating description…'
+                          : saving
+                            ? 'Saving your Agent…'
+                            : props.agent
+                              ? `Editing v${props.agent.version} · Saves a new version`
+                              : 'Ready to use after creation'
                 }}
             </p>
             <div
@@ -315,7 +325,7 @@ const dateLabel = (date: string) =>
                 <button
                     v-if="props.agent"
                     type="button"
-                    :disabled="saving || generatingDescription"
+                    :disabled="saving || generatingDescription || generatingIcon"
                     class="text-stone-gray hover:text-soft-silk border-stone-gray/20
                         hover:bg-stone-gray/5 rounded-xl border px-4 py-2.5 text-sm
                         transition-colors disabled:opacity-40"
@@ -326,7 +336,7 @@ const dateLabel = (date: string) =>
                 <button
                     v-if="!props.agent"
                     type="button"
-                    :disabled="saving || generatingDescription"
+                    :disabled="saving || generatingDescription || generatingIcon"
                     class="text-stone-gray hover:text-soft-silk rounded-xl px-3 py-2.5 text-sm
                         transition-colors disabled:opacity-40"
                     @click="save('draft')"
@@ -335,7 +345,7 @@ const dateLabel = (date: string) =>
                 </button>
                 <button
                     type="submit"
-                    :disabled="saving || generatingDescription"
+                    :disabled="saving || generatingDescription || generatingIcon"
                     class="bg-ember-glow hover:bg-ember-glow/85 focus-visible:outline-ember-glow
                         flex min-w-36 items-center justify-center gap-2 rounded-xl px-5 py-2.5
                         text-sm font-semibold transition-colors focus-visible:outline-2

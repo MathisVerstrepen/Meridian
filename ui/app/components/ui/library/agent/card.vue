@@ -42,10 +42,7 @@ defineEmits<{
                     backgroundColor: `${agent.profile.accentColor}1a`,
                 }"
             >
-                <UiIcon
-                    :name="agent.profile.icon === 'LucideBot' ? 'RiBrain2Line' : agent.profile.icon"
-                    class="size-6"
-                />
+                <UiLibraryAgentIcon :profile="agent.profile" class="size-6" />
             </span>
             <span class="min-w-0 flex-1"
                 ><strong class="block text-base">{{ agent.profile.name }}</strong

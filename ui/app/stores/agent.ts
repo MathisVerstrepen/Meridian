@@ -72,6 +72,19 @@ export const useAgentStore = defineStore('agent', () => {
     const versions = (id: string) => apiFetch<AgentVersion[]>(`/api/agents/${id}/versions`);
     const restoreVersion = (id: string, version: number) =>
         apiFetch<AgentRecord>(`/api/agents/${id}/versions/${version}/restore`, { method: 'POST' });
+    const generateIcon = (body: {
+        name: string;
+        description: string;
+        instructions: string;
+        category: string;
+        tags: string[];
+        tools: AgentProfile['tools'];
+        model: string;
+    }) =>
+        apiFetch<{ iconSvg: string }>('/api/agents/generate-icon', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
     const generateDescription = (body: { name: string; instructions: string; model: string }) =>
         apiFetch<{ description: string }>('/api/agents/generate-description', {
             method: 'POST',
@@ -127,6 +140,7 @@ export const useAgentStore = defineStore('agent', () => {
         restoreVersion,
         presets,
         generateDescription,
+        generateIcon,
         importProfile,
         exportProfile,
         saveTeam,

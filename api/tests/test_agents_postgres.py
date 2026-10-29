@@ -237,3 +237,27 @@ async def test_authorization_is_rechecked_before_launch_and_resume(db, monkeypat
             await execution.delegate({"calls": [{"agent_id": str(children[0]["id"]), "instructions": "bad"}]}, None)
     finally:
         current_policy.reset(token)
+
+
+@pytest.mark.anyio
+async def test_custom_svg_icons_survive_profile_versions_forks_and_json_import_export(db):
+    from services.agents import catalog
+    from schemas.agents import AgentImport
+    from utils.svg_icon import normalize_svg_icon
+    engine, (owner, other, _), _ = db
+    svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8"/></svg>'
+    normalized = normalize_svg_icon(svg)
+    created = await library.save_profile(engine, owner, profile(iconSvg=svg, visibility="public"))
+    agent_id = created["id"]
+    assert created["profile"]["iconSvg"] == normalized
+    exported = await catalog.export_profile(engine, owner, agent_id)
+    imported = AgentImport.model_validate_json(exported.model_dump_json())
+    restored_copy = await library.save_profile(engine, other, imported.profile.model_copy(update={"handle": "icon-import", "visibility": "private"}))
+    assert restored_copy["profile"]["iconSvg"] == normalized
+    fork = await library.fork_profile(engine, str(other), agent_id)
+    assert fork["profile"]["iconSvg"] == normalized
+    await library.save_profile(engine, owner, profile(iconSvg=None, visibility="public"), agent_id)
+    restored = await library.restore_version(engine, owner, agent_id, 1)
+    assert restored["profile"]["iconSvg"] == normalized and restored["version"] == 3
+    history = await catalog.list_versions(engine, owner, agent_id)
+    assert len(history) == 3 and history[-1]["profile"]["iconSvg"] == normalized

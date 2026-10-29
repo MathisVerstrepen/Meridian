@@ -35,10 +35,7 @@ onMounted(() => heading.value?.focus({ preventScroll: true }));
                     backgroundColor: `${agent.profile.accentColor}1a`,
                 }"
             >
-                <UiIcon
-                    :name="agent.profile.icon === 'LucideBot' ? 'RiBrain2Line' : agent.profile.icon"
-                    class="size-7"
-                />
+                <UiLibraryAgentIcon :profile="agent.profile" class="size-7" />
             </span>
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">

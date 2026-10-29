@@ -46,6 +46,11 @@ from services.providers.opencode_go_catalog import (
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
     OPENCODE_GO_TOP_P_OVERRIDES,
 )
+from services.providers.opencode_go_completion import (
+    OpenCodeGoEmptyResponseError,
+    require_completion_text,
+    thinking_payload,
+)
 from services.providers.opencode_go_errors import (
     extract_opencode_go_error_message as _extract_opencode_go_error_message,
 )
@@ -525,6 +530,12 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             "max_tokens": normalize_max_tokens(getattr(self.config, "max_tokens", None)),
         }
 
+        payload.update(
+            thinking_payload(
+                self.model, self.is_title_generation, getattr(self.config, "reasoning_effort", None)
+            )
+        )
+
         tools = get_openrouter_tools(
             self.selected_tools,
             include_image_inspection=(
@@ -712,7 +723,11 @@ async def _make_opencode_go_openai_request_non_streaming(
             if message.get("tool_calls"):
                 raise ValueError("OpenCode Go tool execution requires streaming mode.")
 
-            content = str(message.get("content") or "")
+            content = require_completion_text(
+                str(message.get("content") or ""),
+                model=req.model,
+                finish_reason=data["choices"][0].get("finish_reason"),
+            )
             if usage_data := data.get("usage"):
                 if req.graph_id and req.node_id and not req.is_title_generation:
                     await update_node_usage_data(
@@ -737,6 +752,9 @@ async def _make_opencode_go_openai_request_non_streaming(
             raise ValueError(
                 f"API Error (Status: {exc.response.status_code}): {error_message}"
             ) from exc
+        except OpenCodeGoEmptyResponseError:
+            span.set_status("internal_error")
+            raise
         except (ConnectError, TimeoutException, AsyncTimeoutError) as exc:
             logger.error("Network/Timeout error connecting to OpenCode Go: %s", exc)
             span.set_status("unavailable")
