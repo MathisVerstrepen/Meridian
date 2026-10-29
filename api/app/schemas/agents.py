@@ -56,6 +56,17 @@ class AgentWrite(BaseModel):
         return self
 
 
+class AgentDescriptionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="", max_length=100)
+    instructions: str = Field(min_length=1, max_length=100000)
+    model: str = Field(min_length=1, max_length=255)
+
+
+class AgentDescriptionResponse(BaseModel):
+    description: str = Field(min_length=1, max_length=2000)
+
+
 class TeamWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=100)

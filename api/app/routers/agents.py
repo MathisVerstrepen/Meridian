@@ -5,6 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from schemas.agents import (
+    AgentDescriptionRequest,
+    AgentDescriptionResponse,
     AgentImport,
     AgentWrite,
     MentionRequest,
@@ -12,9 +14,10 @@ from schemas.agents import (
     TeamWrite,
     VerificationWrite,
 )
-from services.agents import catalog, library, teams
+from services.agents import catalog, description, library, teams
 from services.agents.presets import starter_presets
 from services.auth import get_current_user_id
+from services.inference import get_available_models_for_user
 
 
 async def agent_user_id(user_id: str = Depends(get_current_user_id)) -> UUID:
@@ -59,6 +62,20 @@ async def create_agent(data: AgentWrite, request: Request, user_id: UUID = Depen
 @router.get("/presets")
 async def presets(user_id: UUID = Depends(agent_user_id)):
     return starter_presets()
+
+
+@router.post("/generate-description", response_model=AgentDescriptionResponse)
+async def generate_description(
+    data: AgentDescriptionRequest, request: Request, user_id: UUID = Depends(agent_user_id)
+):
+    models = await get_available_models_for_user(request.app, str(user_id))
+    return await description.generate_description(
+        request.app.state.pg_engine,
+        str(user_id),
+        data,
+        request.app.state.http_client,
+        [model.model_dump() for model in models.data],
+    )
 
 
 @router.post("/import")

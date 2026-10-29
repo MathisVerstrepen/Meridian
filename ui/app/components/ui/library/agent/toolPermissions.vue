@@ -2,9 +2,8 @@
 import type { ToolEnum } from '@/types/enums';
 import { AGENT_TOOLS, changeAgentTool } from '@/utils/agentEditor';
 const tools = defineModel<ToolEnum[]>({ required: true });
-const toggle = (tool: ToolEnum, event: Event) => {
-    if (event.target instanceof HTMLInputElement)
-        tools.value = changeAgentTool(tools.value, tool, event.target.checked);
+const toggle = (tool: ToolEnum) => {
+    tools.value = changeAgentTool(tools.value, tool, !tools.value.includes(tool));
 };
 </script>
 
@@ -15,11 +14,16 @@ const toggle = (tool: ToolEnum, event: Event) => {
             Choose the tools it needs. You can change these later.
         </p>
         <div class="grid gap-2 sm:grid-cols-2">
-            <label
+            <button
+                type="button"
+                :aria-label="tool.name"
+                :aria-pressed="tools.includes(tool.value)"
+                @click="toggle(tool.value)"
                 v-for="tool in AGENT_TOOLS"
                 :key="tool.value"
-                class="focus-within:ring-ember-glow/60 flex cursor-pointer items-start gap-3
-                    rounded-xl border p-3 transition-colors focus-within:ring-2"
+                class="focus-visible:ring-ember-glow/60 flex cursor-pointer items-start gap-3
+                    rounded-xl border p-3 text-left transition-colors outline-none
+                    focus-visible:ring-2"
                 :class="
                     tools.includes(tool.value)
                         ? 'border-ember-glow/50 bg-ember-glow/5'
@@ -33,14 +37,7 @@ const toggle = (tool: ToolEnum, event: Event) => {
                         tool.description
                     }}</span></span
                 >
-                <input
-                    type="checkbox"
-                    :aria-label="tool.name"
-                    :checked="tools.includes(tool.value)"
-                    class="accent-ember-glow mt-1 size-4 shrink-0 cursor-pointer"
-                    @change="toggle(tool.value, $event)"
-                />
-            </label>
+            </button>
         </div>
         <p class="text-stone-gray/60 mt-3 text-xs">
             Web search includes permission to read links. Each Agent keeps its own tool permissions.

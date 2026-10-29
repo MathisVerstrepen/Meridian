@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentProfile, AgentRecord, AgentTeam } from '@/types/agent';
+import type { AgentRecord } from '@/types/agent';
 const store = useAgentStore();
 const { user } = useUserSession();
 const view = ref('my');
@@ -10,7 +10,6 @@ const tool = ref('');
 const sort = ref('updated');
 const offset = ref(0);
 const editing = ref<AgentRecord>();
-const preset = ref<AgentProfile>();
 const showEditor = ref(false);
 const filtersOpen = ref(false);
 const isEmptyLibrary = computed(
@@ -18,11 +17,8 @@ const isEmptyLibrary = computed(
 );
 const formHost = ref<HTMLElement | null>(null);
 const showTeams = ref(useRoute().query.view === 'teams');
-const team = ref<AgentTeam>();
-const showTeamEditor = ref(false);
 const preview = ref<AgentRecord>();
 const error = ref('');
-const starterPresets = ref<AgentProfile[]>([]);
 const views = [
     ['my', 'My Agents'],
     ['bookmarked', 'Bookmarked'],
@@ -49,7 +45,6 @@ watch([view, q, category, model, tool, sort], () => {
 watch(offset, refresh);
 onMounted(async () => {
     await Promise.all([refresh(), store.loadLibrary()]);
-    starterPresets.value = await store.presets();
 });
 const perform = async <T,>(action: () => Promise<T>) => {
     error.value = '';
@@ -60,9 +55,8 @@ const perform = async <T,>(action: () => Promise<T>) => {
         error.value = runtimeErrorDetail(err) ?? 'Could not complete this action.';
     }
 };
-const edit = (agent?: AgentRecord, starter?: AgentProfile) => {
+const edit = (agent?: AgentRecord) => {
     editing.value = agent;
-    preset.value = starter;
     showEditor.value = true;
     preview.value = undefined;
     nextTick(() => {
@@ -71,7 +65,6 @@ const edit = (agent?: AgentRecord, starter?: AgentProfile) => {
 };
 const saved = async () => {
     showEditor.value = false;
-    showTeamEditor.value = false;
     await perform(async () => {});
 };
 const exportAgent = async (agent: AgentRecord) => {
@@ -101,22 +94,27 @@ const importFile = async (event: Event) => {
     <section ref="formHost" class="text-soft-silk flex flex-col gap-5 py-5">
         <UiLibraryAgentEditor
             v-if="showEditor"
-            :key="editing?.id ?? preset?.handle ?? 'new'"
+            :key="editing?.id ?? 'new'"
             :agent="editing"
-            :preset="preset"
-            :presets="starterPresets"
             @saved="saved"
             @close="showEditor = false"
         />
         <template v-else>
             <div class="flex flex-wrap items-center gap-3">
                 <div class="mr-auto">
-                    <h2 class="text-xl font-semibold">Your Agent library</h2>
+                    <h2 class="text-xl font-semibold">
+                        {{ showTeams ? 'Agent Teams' : 'Your Agent library' }}
+                    </h2>
                     <p class="text-stone-gray/65 mt-1 text-sm">
-                        Build a team of helpers for the way you work.
+                        {{
+                            showTeams
+                                ? 'Choose which helpers work together in your graphs and chats.'
+                                : 'Build a team of helpers for the way you work.'
+                        }}
                     </p>
                 </div>
                 <button
+                    v-if="!showTeams"
                     class="bg-ember-glow hover:bg-ember-glow/85 rounded-xl px-4 py-2.5 text-sm
                         font-semibold transition-colors"
                     @click="edit()"
@@ -124,6 +122,7 @@ const importFile = async (event: Event) => {
                     + Create Agent
                 </button>
                 <label
+                    v-if="!showTeams"
                     class="border-stone-gray/20 text-stone-gray hover:bg-stone-gray/5 cursor-pointer
                         rounded-xl border px-4 py-2.5 text-sm"
                     >Import JSON
@@ -141,44 +140,7 @@ const importFile = async (event: Event) => {
                     {{ showTeams ? 'Agent library' : 'Manage Teams' }}
                 </button>
             </div>
-            <template v-if="showTeams">
-                <button
-                    class="self-start rounded-lg border px-4 py-2"
-                    @click="
-                        team = undefined;
-                        showTeamEditor = true;
-                    "
-                >
-                    Create Team
-                </button>
-                <UiLibraryAgentTeamEditor
-                    v-if="showTeamEditor"
-                    :key="team?.id ?? 'new'"
-                    :team="team"
-                    @saved="saved"
-                    @close="showTeamEditor = false"
-                />
-                <button
-                    v-for="entry in store.teams"
-                    :key="entry.id"
-                    class="border-stone-gray/20 rounded-lg border p-4 text-left"
-                    @click="
-                        team = entry;
-                        showTeamEditor = true;
-                    "
-                >
-                    <strong>{{ entry.name }}</strong>
-                    <span
-                        v-if="entry.is_default"
-                        class="bg-ember-glow/10 text-ember-glow ml-2 rounded-full px-2 py-0.5
-                            text-xs"
-                        >Default</span
-                    >
-                    · {{ entry.members.length }} members
-                    <p class="mt-1 text-xs opacity-70">@{{ entry.handle }}</p>
-                    <p>{{ entry.description }}</p>
-                </button>
-            </template>
+            <UiLibraryAgentTeamsPanel v-if="showTeams" />
             <template v-else>
                 <nav aria-label="Agent library views" class="flex flex-wrap gap-2">
                     <button
@@ -259,31 +221,15 @@ const importFile = async (event: Event) => {
                     <UiIcon name="RiBrain2Line" class="text-ember-glow mb-4 size-8" />
                     <h3 class="text-lg font-semibold">Meet your next go-to helper</h3>
                     <p class="text-stone-gray/70 mt-2 max-w-xl text-sm leading-relaxed">
-                        Give an Agent a role once, then use it across your graphs and chats. Start
-                        from a template or create one from scratch.
+                        Give an Agent a role once, then use it across your graphs and chats.
                     </p>
                     <button class="text-ember-glow mt-4 text-sm font-semibold" @click="edit()">
                         Create a custom Agent →
                     </button>
-                    <div
-                        v-if="starterPresets.length"
-                        class="border-stone-gray/10 mt-6 border-t pt-5"
-                    >
-                        <p
-                            class="text-stone-gray/55 mb-3 text-xs font-medium tracking-wider
-                                uppercase"
-                        >
-                            Start with a template
-                        </p>
-                        <UiLibraryAgentStarterTemplates
-                            :presets="starterPresets"
-                            @choose="(starter) => edit(undefined, starter)"
-                        />
-                    </div>
                 </div>
                 <p v-if="store.loading" role="status">Loading Agents…</p>
                 <p v-else-if="!store.items.length && !isEmptyLibrary">
-                    No Agents found. Create an Agent or start from a preset below.
+                    No Agents found. Create an Agent or adjust your filters.
                 </p>
                 <div class="grid gap-4 lg:grid-cols-2">
                     <UiLibraryAgentCard
@@ -376,19 +322,6 @@ const importFile = async (event: Event) => {
                     >
                         {{ preview.verified ? 'Remove verification' : 'Verify by Meridian' }}
                     </button>
-                </details>
-                <details
-                    v-if="!isEmptyLibrary && starterPresets.length"
-                    class="group border-stone-gray/15 rounded-xl border p-4"
-                >
-                    <summary class="text-stone-gray cursor-pointer text-sm">
-                        Explore starter templates
-                    </summary>
-                    <UiLibraryAgentStarterTemplates
-                        class="mt-4"
-                        :presets="starterPresets"
-                        @choose="(starter) => edit(undefined, starter)"
-                    />
                 </details>
             </template>
             <p v-if="error || store.error" role="alert" class="text-red-400">

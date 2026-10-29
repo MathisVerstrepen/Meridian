@@ -123,3 +123,53 @@ describe('Team-only Agent configuration', () => {
         }
     });
 });
+
+describe('Team membership editor', () => {
+    it('keeps membership ordered, excludes drafts, and makes removed Agents available again', async () => {
+        stubs.library = [
+            {
+                id: 'a',
+                profile: { lifecycle: 'active', name: 'Researcher', description: 'Find evidence' },
+            },
+            {
+                id: 'b',
+                profile: { lifecycle: 'active', name: 'Reviewer', description: 'Review evidence' },
+            },
+            { id: 'draft', profile: { lifecycle: 'draft', name: 'Draft helper', description: '' } },
+        ];
+        const wrapper = await mountSuspended(TeamEditor, {
+            props: { team: { ...stubs.teams[0]!, members: ['a', 'b'] } },
+        });
+        try {
+            expect(wrapper.find('button[aria-label="Add Draft helper"]').exists()).toBe(false);
+            await wrapper.get('button[aria-label="Move Reviewer up"]').trigger('click');
+            expect(wrapper.findAll('ol > li')[0]!.text()).toContain('Reviewer');
+            await wrapper.get('button[aria-label="Remove Researcher"]').trigger('click');
+            await wrapper.get('button[aria-label="Add Researcher"]').trigger('click');
+            expect(wrapper.find('button[aria-label="Add Researcher"]').exists()).toBe(false);
+            await wrapper.get('form').trigger('submit');
+            expect(stubs.saveTeam).toHaveBeenLastCalledWith(
+                expect.objectContaining({ members: ['b', 'a'] }),
+                'default-team',
+            );
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('retains a failed save and allows retry without losing Team edits', async () => {
+        stubs.saveTeam.mockRejectedValueOnce(new Error('Try later'));
+        const wrapper = await mountSuspended(TeamEditor, { props: { team: stubs.teams[0]! } });
+        try {
+            await wrapper.findAll('input')[0]!.setValue('My saved helpers');
+            await wrapper.get('form').trigger('submit');
+            await vi.waitFor(() => expect(wrapper.get('[role="alert"]').text()).toBeTruthy());
+            expect(wrapper.findAll('input')[0]!.element.value).toBe('My saved helpers');
+            expect(wrapper.get('fieldset').attributes('disabled')).toBeUndefined();
+            await wrapper.get('form').trigger('submit');
+            await vi.waitFor(() => expect(wrapper.emitted('saved')).toHaveLength(1));
+        } finally {
+            wrapper.unmount();
+        }
+    });
+});

@@ -1,28 +1,23 @@
 <script setup lang="ts">
-import type { AgentProfile, AgentRecord } from '@/types/agent';
+import type { AgentRecord } from '@/types/agent';
 import { useAgentProfileEditor } from '@/composables/useAgentProfileEditor';
 const props = defineProps<{
     agent?: AgentRecord;
-    preset?: AgentProfile;
-    presets?: AgentProfile[];
 }>();
 const emit = defineEmits<{ saved: []; close: [] }>();
 const {
     profile,
     instructions,
-    showHandle,
-    handleError,
     modelError,
     form,
     saving,
     saveIntent,
     error,
     history,
-    applyPreset,
-    setHandle,
     save,
     restore,
-} = useAgentProfileEditor(props.agent, props.preset, () => emit('saved'));
+} = useAgentProfileEditor(props.agent, () => emit('saved'));
+const descriptionId = `agent-description-${useId()}`;
 const modelStore = useModelStore();
 const modelName = computed(
     () =>
@@ -34,9 +29,10 @@ const displayIcon = computed(() =>
 );
 const inputClass =
     'bg-anthracite/25 border-stone-gray/20 focus:border-ember-glow/70 placeholder:text-stone-gray/35 text-soft-silk w-full rounded-xl border px-3.5 py-3 text-sm outline-none transition-colors';
-const updateHandle = (event: Event) => {
-    if (event.target instanceof HTMLInputElement) setHandle(event.target.value);
-};
+const { generatingDescription, descriptionError, generateDescription } = useAgentDescription(
+    profile,
+    instructions,
+);
 const dateLabel = (date: string) =>
     new Date(date).toLocaleDateString(undefined, { dateStyle: 'medium' });
 </script>
@@ -46,16 +42,16 @@ const dateLabel = (date: string) =>
         ref="form"
         class="text-soft-silk mx-auto w-full max-w-5xl"
         aria-label="Agent editor"
-        @submit.prevent="save(props.agent ? null : 'active')"
+        @submit.prevent="!generatingDescription && save(props.agent ? null : 'active')"
     >
         <button
             type="button"
-            :disabled="saving"
+            :disabled="saving || generatingDescription"
             class="text-stone-gray/70 hover:text-soft-silk mb-5 inline-flex items-center gap-1.5
                 text-sm transition-colors disabled:opacity-40"
             @click="emit('close')"
         >
-            <UiIcon name="TablerChevronCompactLeft" class="size-5" /> Agent library
+            <UiIcon name="MdiArrowUp" class="size-5 -rotate-90" /> Agent library
         </button>
         <div class="mb-7 flex items-start justify-between gap-4">
             <div>
@@ -76,24 +72,7 @@ const dateLabel = (date: string) =>
                 >{{ props.agent ? `Version ${props.agent.version}` : 'Private by default' }}</span
             >
         </div>
-        <details
-            v-if="!props.agent && props.presets?.length"
-            class="group border-stone-gray/15 mb-6 rounded-xl border"
-        >
-            <summary class="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5">
-                <UiIcon name="MynauiSparklesSolid" class="text-ember-glow size-5" /><span
-                    class="text-stone-gray flex-1 text-sm"
-                    >Get a head start with a template</span
-                >
-                <UiIcon
-                    name="FlowbiteChevronDownOutline"
-                    class="text-stone-gray/60 size-4 transition-transform group-open:rotate-180"
-                />
-            </summary>
-            <div class="border-stone-gray/10 border-t p-3">
-                <UiLibraryAgentStarterTemplates :presets="props.presets" @choose="applyPreset" />
-            </div>
-        </details>
+
         <div class="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_16rem]">
             <div class="min-w-0 space-y-7">
                 <section class="space-y-4" aria-label="Agent identity">
@@ -111,56 +90,53 @@ const dateLabel = (date: string) =>
                             autofocus
                         />
                     </label>
-                    <div
-                        class="text-stone-gray/60 -mt-2 flex flex-wrap items-center gap-x-2 gap-y-1
-                            text-xs"
-                    >
-                        <span
-                            >Library handle
-                            <span class="text-stone-gray font-medium"
-                                >@{{ profile.handle || 'your-agent' }}</span
-                            ></span
-                        >
-                        <button
-                            type="button"
-                            class="text-ember-glow hover:underline"
-                            :aria-expanded="showHandle"
-                            @click="showHandle = !showHandle"
-                        >
-                            {{ showHandle ? 'Done' : 'Edit handle' }}
-                        </button>
-                    </div>
-                    <label v-if="showHandle" class="text-stone-gray flex flex-col gap-2 text-sm"
-                        >Agent handle
-                        <input
-                            :value="profile.handle"
-                            aria-label="Agent handle"
-                            :class="inputClass"
-                            maxlength="50"
-                            autocomplete="off"
-                            :aria-invalid="!!handleError"
-                            @input="updateHandle"
-                        />
-                        <span class="text-stone-gray/55 text-xs"
-                            >Unique in your library. Lowercase letters, numbers, hyphens, and
-                            underscores.</span
-                        >
-                    </label>
-                    <p v-if="handleError" role="alert" class="text-sm text-red-400">
-                        {{ handleError }}
-                    </p>
-                    <label class="flex flex-col gap-2"
-                        ><span class="text-sm font-medium"
+                    <div class="flex flex-col gap-2">
+                        <label :for="descriptionId" class="text-sm font-medium"
                             >What does it help with?
-                            <span class="text-stone-gray/45 font-normal">Optional</span></span
+                            <span class="text-stone-gray/45 font-normal">Optional</span></label
                         >
-                        <input
-                            v-model="profile.description"
-                            maxlength="2000"
-                            :class="inputClass"
-                            placeholder="A short description to recognize it in your library."
-                        />
-                    </label>
+                        <span class="relative block">
+                            <input
+                                v-model="profile.description"
+                                :id="descriptionId"
+                                maxlength="2000"
+                                :class="[inputClass, instructions.trim() ? 'pr-12' : '']"
+                                placeholder="A short description to recognize it in your library."
+                            />
+                            <button
+                                v-if="instructions.trim()"
+                                type="button"
+                                aria-label="Generate Agent description"
+                                title="Generate a description from the instructions"
+                                :disabled="
+                                    generatingDescription || saving || !profile.model_settings.model
+                                "
+                                class="text-ember-glow hover:bg-ember-glow/10 absolute top-1/2
+                                    right-2 flex size-8 -translate-y-1/2 items-center justify-center
+                                    rounded-lg disabled:opacity-40"
+                                @click="generateDescription"
+                            >
+                                <UiIcon
+                                    :name="
+                                        generatingDescription
+                                            ? 'LineMdLoadingTwotoneLoop'
+                                            : 'MynauiSparklesSolid'
+                                    "
+                                    class="size-5"
+                                />
+                            </button>
+                        </span>
+                    </div>
+                    <p
+                        v-if="generatingDescription"
+                        role="status"
+                        class="text-stone-gray/65 text-xs"
+                    >
+                        Generating description…
+                    </p>
+                    <p v-if="descriptionError" role="alert" class="text-xs text-red-400">
+                        {{ descriptionError }}
+                    </p>
                 </section>
                 <section aria-label="Agent instructions">
                     <label class="flex flex-col gap-2"
@@ -198,7 +174,7 @@ const dateLabel = (date: string) =>
                                 modelError = '';
                             }
                         "
-                        :disabled="saving"
+                        :disabled="saving || generatingDescription"
                         variant="grey"
                         to="right"
                         from="bottom"
@@ -238,7 +214,7 @@ const dateLabel = (date: string) =>
                         >
                         <button
                             type="button"
-                            :disabled="saving"
+                            :disabled="saving || generatingDescription"
                             class="text-ember-glow disabled:opacity-40"
                             @click="restore(version.version)"
                         >
@@ -267,9 +243,7 @@ const dateLabel = (date: string) =>
                 <h3 class="font-semibold wrap-break-word">
                     {{ profile.name || 'Your new Agent' }}
                 </h3>
-                <p class="text-stone-gray/50 mt-1 text-xs wrap-break-word">
-                    @{{ profile.handle || 'your-agent' }}
-                </p>
+
                 <p class="text-stone-gray/70 mt-4 text-sm leading-relaxed wrap-break-word">
                     {{ profile.description || 'A dedicated helper for the way you work.' }}
                 </p>
@@ -317,7 +291,7 @@ const dateLabel = (date: string) =>
                 <button
                     v-if="!props.agent"
                     type="button"
-                    :disabled="saving"
+                    :disabled="saving || generatingDescription"
                     class="text-stone-gray hover:text-soft-silk rounded-xl px-3 py-2.5 text-sm
                         transition-colors disabled:opacity-40"
                     @click="save('draft')"
@@ -326,7 +300,7 @@ const dateLabel = (date: string) =>
                 </button>
                 <button
                     type="submit"
-                    :disabled="saving"
+                    :disabled="saving || generatingDescription"
                     class="bg-ember-glow hover:bg-ember-glow/85 flex items-center gap-2 rounded-xl
                         px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-wait
                         disabled:opacity-50"

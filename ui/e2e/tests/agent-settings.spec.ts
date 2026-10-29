@@ -1,5 +1,4 @@
 import type { Page } from '@playwright/test';
-import { AGENT_SETTINGS_PRESETS } from '../fixtures/agentSettingsFixture';
 import { createAgentDraft } from '../../app/utils/agentEditor';
 import { isJsonObject } from '../../app/utils/runtimeTypes';
 import {
@@ -41,7 +40,6 @@ async function mockSettings(page: Page, options: { existing?: boolean; conflict?
         r.fulfill({ json: { items: profiles, total: profiles.length } }),
     );
     await page.route('**/api/agents/teams', (r) => r.fulfill({ json: [] }));
-    await page.route('**/api/agents/presets', (r) => r.fulfill({ json: AGENT_SETTINGS_PRESETS }));
     await page.route('**/api/agents', async (r) => {
         const body: JsonValue = r.request().postDataJSON();
         if (!isJsonObject(body)) throw new Error('Agent request must be a JSON object');
@@ -102,7 +100,8 @@ test('create an Agent with a suggested handle default model and explicit tool ch
     const editor = page.getByRole('form', { name: 'Agent editor' });
     await expect(page.getByRole('navigation', { name: 'Agent library views' })).not.toBeVisible();
     await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Web Researcher');
-    await expect(editor).toContainText('@web-researcher-2');
+    await expect(editor).not.toContainText('@web-researcher');
+    await expect(editor.getByRole('button', { name: 'Edit handle' })).toHaveCount(0);
     await expect(
         editor.getByRole('textbox', { name: 'Agent handle', exact: true }),
     ).not.toBeVisible();
@@ -115,8 +114,16 @@ test('create an Agent with a suggested handle default model and explicit tool ch
     await expect(
         editor.getByRole('spinbutton', { name: 'Temperature', exact: true }),
     ).not.toBeVisible();
-    await editor.getByRole('checkbox', { name: 'Web search', exact: true }).check();
-    await expect(editor.getByRole('checkbox', { name: 'Read links', exact: true })).toBeChecked();
+    await editor.getByRole('button', { name: 'Web search', exact: true }).click();
+    await expect(editor.getByRole('button', { name: 'Read links', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+    );
+    await expect(
+        editor
+            .getByRole('group', { name: 'What can it do?', exact: true })
+            .locator('input[type=checkbox]'),
+    ).toHaveCount(0);
     await editor
         .getByRole('button', { name: 'Agent library', exact: true })
         .scrollIntoViewIfNeeded();
@@ -135,20 +142,21 @@ test('create an Agent with a suggested handle default model and explicit tool ch
     await expect(page.getByRole('heading', { name: 'Your Agent library' })).toBeVisible();
 });
 
-test('templates prefill role instructions and tools while Save draft stays private @smoke', async ({
-    page,
-}) => {
+test('creation has no starter templates and Save draft stays private @smoke', async ({ page }) => {
     const saved = await mockSettings(page);
+    let presetRequests = 0;
+    page.on('request', (request) => {
+        if (request.url().includes('/api/agents/presets')) presetRequests += 1;
+    });
     await mountSettings(page);
-    await page.getByRole('button', { name: 'Use Research Agent template', exact: true }).click();
+    await expect(page.getByText(/starter templates|start with a template/i)).toHaveCount(0);
+    await page.getByRole('button', { name: '+ Create Agent', exact: true }).click();
     const editor = page.getByRole('form', { name: 'Agent editor' });
-    await expect(editor.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(
-        'Research Agent',
-    );
-    await expect(editor.getByRole('textbox', { name: 'Agent instructions' })).toHaveValue(
-        'Research using primary sources and cite the evidence.',
-    );
-    await expect(editor.getByRole('checkbox', { name: 'Web search', exact: true })).toBeChecked();
+    await expect(editor.getByText(/template/i)).toHaveCount(0);
+    await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Research Agent');
+    await editor
+        .getByRole('textbox', { name: 'Agent instructions' })
+        .fill('Find reliable sources.');
     await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
     await expect.poll(() => saved.length).toBe(1);
     expect(saved[0]).toMatchObject({
@@ -156,23 +164,22 @@ test('templates prefill role instructions and tools while Save draft stays priva
         visibility: 'private',
         handle: 'research-agent',
     });
+    expect(presetRequests).toBe(0);
 });
 
-test('custom handles are preserved and failed saves keep the draft @smoke', async ({ page }) => {
+test('internal handle collisions retry and failed saves keep the draft @smoke', async ({
+    page,
+}) => {
     await mockSettings(page, { conflict: true });
     await mountSettings(page);
     await page.getByRole('button', { name: '+ Create Agent', exact: true }).click();
     const editor = page.getByRole('form', { name: 'Agent editor' });
     await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Research');
-    await editor.getByRole('button', { name: 'Edit handle' }).click();
-    await editor.getByRole('textbox', { name: 'Agent handle', exact: true }).fill('my-helper');
     await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Renamed Researcher');
     await editor
         .getByRole('textbox', { name: 'Agent instructions' })
         .fill('Keep these instructions.');
-    await expect(editor.getByRole('textbox', { name: 'Agent handle', exact: true })).toHaveValue(
-        'my-helper',
-    );
+    await expect(editor.getByRole('textbox', { name: 'Agent handle', exact: true })).toHaveCount(0);
     await editor.getByRole('button', { name: 'Create Agent', exact: true }).click();
     await expect(editor.getByRole('alert').first()).toContainText('already in use');
     await expect(editor.getByRole('textbox', { name: 'Agent instructions' })).toHaveValue(
@@ -219,4 +226,147 @@ test('creation remains usable on a narrow screen without horizontal overflow', a
     ).toBe(true);
     await page.getByRole('button', { name: 'Create Agent', exact: true }).scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Create Agent', exact: true })).toBeInViewport();
+});
+
+test('Teams panel searches reorders removes and saves members and creates Teams @smoke', async ({
+    page,
+}, testInfo) => {
+    await mockSettings(page, { existing: true });
+    const helper = record();
+    const reviewer = {
+        ...record({ ...existingProfile, name: 'Reviewer', handle: 'reviewer' }),
+        id: '00000000-0000-4000-8000-000000000011',
+    };
+    const teams = [
+        {
+            id: 'default-team',
+            name: 'Default Team',
+            handle: 'default',
+            is_default: true,
+            description: '',
+            members: [helper.id],
+        },
+    ];
+    const writes: JsonObject[] = [];
+    await page.route('**/api/agents?**', (r) =>
+        r.fulfill({ json: { items: [helper, reviewer], total: 2 } }),
+    );
+    await page.route('**/api/agents/teams', async (r) => {
+        if (r.request().method() === 'GET') return r.fulfill({ json: teams });
+        const body: JsonValue = r.request().postDataJSON();
+        if (!isJsonObject(body)) throw new Error('Expected Team object');
+        writes.push(body);
+        const entry = {
+            id: 'new-team',
+            is_default: false,
+            name: String(body.name),
+            handle: String(body.handle),
+            description: String(body.description),
+            members: [reviewer.id],
+        };
+        teams.push(entry);
+        return r.fulfill({ json: entry });
+    });
+    await page.route('**/api/agents/teams/default-team', async (r) => {
+        const body: JsonValue = r.request().postDataJSON();
+        if (!isJsonObject(body)) throw new Error('Expected Team object');
+        writes.push(body);
+        teams[0] = { ...teams[0]!, name: String(body.name), members: [reviewer.id] };
+        return r.fulfill({ json: teams[0] });
+    });
+    await mountSettings(page);
+    await page.getByRole('button', { name: 'Manage Teams', exact: true }).click();
+    const form = page.getByRole('form', { name: 'Team editor' });
+    await expect(form.getByRole('textbox', { name: 'Team handle', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '+ Create Agent' })).toHaveCount(0);
+    await form.getByRole('searchbox', { name: 'Add Agents' }).fill('review');
+    await form.getByRole('button', { name: 'Add Reviewer', exact: true }).click();
+    await form.getByRole('button', { name: 'Move Reviewer up', exact: true }).click();
+    const members = form.getByRole('region', { name: 'Team members' }).locator('ol > li');
+    await expect(members.first()).toContainText('Reviewer');
+    await form.getByRole('button', { name: 'Remove Web Researcher', exact: true }).click();
+    await form.getByRole('button', { name: 'Save Team', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('Team saved.');
+    expect(writes[0]).toEqual({
+        name: 'Default Team',
+        handle: 'default',
+        description: '',
+        members: [reviewer.id],
+    });
+    await page.getByRole('button', { name: '+ Create Team', exact: true }).click();
+    await form.getByRole('textbox', { name: 'Team name', exact: true }).fill('Review Team');
+    await expect(form.getByRole('textbox', { name: 'Team handle', exact: true })).toHaveValue(
+        'review-team',
+    );
+    await form.getByRole('button', { name: 'Add Reviewer', exact: true }).click();
+    await form.getByRole('button', { name: 'Save Team', exact: true }).click();
+    await expect(
+        page
+            .getByRole('navigation', { name: 'Your Teams' })
+            .getByRole('button', { name: /Review Team/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    expect(writes[1]).toMatchObject({ name: 'Review Team', members: [reviewer.id] });
+    await page.screenshot({ path: testInfo.outputPath('agent-teams-panel.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await expect(form.getByRole('button', { name: 'Save Team', exact: true })).toBeVisible();
+});
+
+test('description generation is available after instructions and preserves manual edits @smoke', async ({
+    page,
+}) => {
+    await mockSettings(page);
+    let release: (() => void) | undefined;
+    let captured: JsonValue = null;
+    const pending = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route('**/api/agents/generate-description', async (r) => {
+        captured = r.request().postDataJSON();
+        await pending;
+        await r.fulfill({
+            json: { description: 'Researches reliable sources and cites evidence.' },
+        });
+    });
+    await mountSettings(page);
+    await page.getByRole('button', { name: '+ Create Agent', exact: true }).click();
+    const editor = page.getByRole('form', { name: 'Agent editor' });
+    const generate = editor.getByRole('button', { name: 'Generate Agent description' });
+    await expect(generate).toHaveCount(0);
+    await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Researcher');
+    await editor
+        .getByRole('textbox', { name: 'Agent instructions' })
+        .fill('Find reliable sources and cite evidence.');
+    await generate.click();
+    await expect(generate).toBeDisabled();
+    const description = editor.getByRole('textbox', {
+        name: 'What does it help with? Optional',
+        exact: true,
+    });
+    await description.fill('My own description');
+    release?.();
+    await expect(editor.getByRole('alert')).toContainText('draft changed');
+    await expect(description).toHaveValue('My own description');
+    await generate.click();
+    await expect(description).toHaveValue('Researches reliable sources and cites evidence.');
+    expect(captured).toEqual({
+        name: 'Researcher',
+        instructions: 'Find reliable sources and cite evidence.',
+        model: 'fixture/default',
+    });
+    const model = editor.getByRole('combobox', { name: 'Model', exact: true });
+    const trigger = editor.locator('.ui-models-trigger').first();
+    const [inputBox, triggerBox] = await Promise.all([model.boundingBox(), trigger.boundingBox()]);
+    expect(
+        Math.abs(inputBox!.y + inputBox!.height / 2 - (triggerBox!.y + triggerBox!.height / 2)),
+    ).toBeLessThanOrEqual(1);
+    await page.unroute('**/api/agents/generate-description');
+    await page.route('**/api/agents/generate-description', (r) =>
+        r.fulfill({ status: 502, json: { detail: 'Please try again.' } }),
+    );
+    await generate.click();
+    await expect(editor.getByRole('alert')).toHaveText('Please try again.');
+    await expect(description).toHaveValue('Researches reliable sources and cites evidence.');
 });

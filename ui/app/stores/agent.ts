@@ -72,6 +72,11 @@ export const useAgentStore = defineStore('agent', () => {
     const versions = (id: string) => apiFetch<AgentVersion[]>(`/api/agents/${id}/versions`);
     const restoreVersion = (id: string, version: number) =>
         apiFetch<AgentRecord>(`/api/agents/${id}/versions/${version}/restore`, { method: 'POST' });
+    const generateDescription = (body: { name: string; instructions: string; model: string }) =>
+        apiFetch<{ description: string }>('/api/agents/generate-description', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
     const presets = () => apiFetch<AgentProfile[]>('/api/agents/presets');
     const importProfile = (body: JsonObject) =>
         apiFetch<AgentRecord>('/api/agents/import', { method: 'POST', body: JSON.stringify(body) });
@@ -121,6 +126,7 @@ export const useAgentStore = defineStore('agent', () => {
         versions,
         restoreVersion,
         presets,
+        generateDescription,
         importProfile,
         exportProfile,
         saveTeam,

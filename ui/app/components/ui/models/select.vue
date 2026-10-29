@@ -595,7 +595,7 @@ onUnmounted(() => {
             }"
             @click="handleTriggerClick"
         >
-            <div class="flex items-center">
+            <div class="flex h-full items-center">
                 <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
                     <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
                 </span>
