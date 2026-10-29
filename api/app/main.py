@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routers import (
+    agents,
     chat,
     files,
     github,
@@ -284,6 +285,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+app.include_router(agents.router)
 app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)

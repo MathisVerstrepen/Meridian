@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { DataRouting, DataTextToText } from '@/types/graph';
+import type { DataTextToText } from '@/types/graph';
 import { ToolEnum } from '@/types/enums';
 
 const props = defineProps<{
-    data: DataTextToText | DataRouting;
+    data: DataTextToText;
     theme?: 'light' | 'dark';
 }>();
 </script>

@@ -25,7 +25,6 @@ const modelStore = useModelStore();
 
 const fixtureModelsSettings: ModelsSettings = {
     defaultModel: 'fixture-account',
-    routingModel: '',
     titleGenerationModel: '',
     autoToolSelectionModel: '',
     excludeReasoning: false,

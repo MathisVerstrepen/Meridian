@@ -99,7 +99,7 @@ const supportsGenerationHistory = computed(() => {
         !!props.graphId &&
         !!props.message.node_id &&
         isNodeTypeEnum(props.message.type) &&
-        [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.ROUTING, NodeTypeEnum.PARALLELIZATION].includes(
+        [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.AGENT, NodeTypeEnum.PARALLELIZATION].includes(
             props.message.type,
         )
     );

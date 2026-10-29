@@ -19,7 +19,6 @@ export interface StreamSession {
     isStreaming: boolean;
     error: Error | null;
     isBackground: boolean;
-    routingPromiseResolve?: (value: StreamSession) => void;
     pendingChunk: string;
     lastModelId: string | undefined;
 }
@@ -243,7 +242,7 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param generateRequest - The request object for generating the stream.
      * @param generateTitle - Whether to generate a title for the stream.
      * @param isBackground - Whether the stream is a background process.
-     * @returns A promise that resolves with the stream session object. For routing, it resolves when the result is received.
+     * @returns A promise that resolves with the stream session object. The session receives attributed Agent run events.
      */
     const startStream = async (
         nodeId: string,
@@ -277,11 +276,6 @@ export const useStreamStore = defineStore('Stream', () => {
                 }
             }
 
-            if (type === NodeTypeEnum.ROUTING) {
-                return new Promise((resolve) => {
-                    session.routingPromiseResolve = resolve;
-                });
-            }
             return Promise.resolve(session);
         } catch (err) {
             const msg = `Failed to send start_stream message for node ID ${nodeId}`;
@@ -348,10 +342,6 @@ export const useStreamStore = defineStore('Stream', () => {
         useStreamRetryStore().clear(nodeId);
         session.error = new Error('Stream cancelled by user.');
 
-        if (session.routingPromiseResolve) {
-            session.routingPromiseResolve(session);
-            session.routingPromiseResolve = undefined;
-        }
 
         return true;
     };
@@ -365,6 +355,7 @@ export const useStreamStore = defineStore('Stream', () => {
         session.error = null;
         session.pendingChunk = '';
         session.lastModelId = undefined;
+        if (session.type === NodeTypeEnum.AGENT) session.response = '';
         return session;
     };
 
@@ -430,10 +421,6 @@ export const useStreamStore = defineStore('Stream', () => {
                 session.onFinished(session, modelId);
             }
 
-            if (session.routingPromiseResolve) {
-                session.routingPromiseResolve(session);
-                session.routingPromiseResolve = undefined;
-            }
 
             session.isStreaming = false;
 
@@ -493,17 +480,11 @@ export const useStreamStore = defineStore('Stream', () => {
     };
 
     /**
-     * Handles a routing response event for a specific node.
+     * Handles a agent response event for a specific node.
      * @param nodeId - The unique identifier for the stream session.
-     * @param payload - The data payload for the routing response event.
+     * @param payload - The data payload for the agent response event.
      * @returns void
      */
-    const handleRoutingResponse = (nodeId: string, payload: RuntimeValue) => {
-        const session = streamSessions.value.get(nodeId);
-        if (!session) return;
-
-        session.response = JSON.stringify(payload);
-    };
 
     /**
      * Handles the title response event for a specific node.
@@ -585,7 +566,6 @@ export const useStreamStore = defineStore('Stream', () => {
         handleStreamEnd,
         handleStreamError,
         handleToolQuestionError,
-        handleRoutingResponse,
         handleTitleResponse,
         handleUsageDataUpdate,
         clearToolQuestionError,

@@ -104,7 +104,7 @@ const seedInvalidSettings = () => {
         if (index === 2) {
             return {
                 ...wheelSlot,
-                mainBloc: NodeTypeEnum.ROUTING,
+                mainBloc: NodeTypeEnum.AGENT,
                 options: [NodeTypeEnum.PROMPT, NodeTypeEnum.CONTEXT_MERGER],
             };
         }
@@ -118,7 +118,7 @@ const seedLegacyLengths = () => {
     blockSettings.value.contextInputWheel = blockSettings.value.contextInputWheel.slice(0, 2);
     blockSettings.value.attachmentOutputWheel = [
         ...blockSettings.value.attachmentOutputWheel,
-        { name: 'Legacy Slot 5', mainBloc: NodeTypeEnum.ROUTING, options: [NodeTypeEnum.GITHUB] },
+        { name: 'Legacy Slot 5', mainBloc: NodeTypeEnum.AGENT, options: [NodeTypeEnum.GITHUB] },
     ];
 };
 const runStalePreset = () => {

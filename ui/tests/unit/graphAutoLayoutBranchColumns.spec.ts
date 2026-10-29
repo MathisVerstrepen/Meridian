@@ -154,7 +154,7 @@ describe('graph auto-layout prompted branch columns', () => {
             node('child-1', NodeTypeEnum.PARALLELIZATION, 200, 110),
             node('tail-1', NodeTypeEnum.TEXT_TO_TEXT, 260, 120),
             node('prompt-2', NodeTypeEnum.PROMPT, 230, 90),
-            node('child-2', NodeTypeEnum.ROUTING, 180, 130),
+            node('child-2', NodeTypeEnum.AGENT, 180, 130),
             node('tail-2', NodeTypeEnum.TEXT_TO_TEXT, 150, 100),
         ];
         const edges = [

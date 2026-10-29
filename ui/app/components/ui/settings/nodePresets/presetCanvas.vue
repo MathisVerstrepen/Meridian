@@ -71,8 +71,8 @@ defineExpose({ flush: editor.flush, addBlock: editor.addBlock });
                 <template #node-parallelization="nodeProps">
                     <UiGraphNodeParallelization v-bind="nodeProps" preset-editor :is-graph-name-default="false" @update:delete-node="editor.removeNode" @update:unlink-node="editor.unlinkNode" />
                 </template>
-                <template #node-routing="nodeProps">
-                    <UiGraphNodeRouting v-bind="nodeProps" preset-editor :is-graph-name-default="false" @update:delete-node="editor.removeNode" @update:unlink-node="editor.unlinkNode" />
+                <template #node-agent="nodeProps">
+                    <UiGraphNodeAgent v-bind="nodeProps" preset-editor :is-graph-name-default="false" @update:delete-node="editor.removeNode" @update:unlink-node="editor.unlinkNode" />
                 </template>
                 <template #node-contextMerger="nodeProps">
                     <UiGraphNodeContextMerger v-bind="nodeProps" preset-editor @update:delete-node="editor.removeNode" @update:unlink-node="editor.unlinkNode" />

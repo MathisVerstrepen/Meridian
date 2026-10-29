@@ -53,11 +53,10 @@ function runtimeData(
             activeGenerationHistoryId: undefined,
         };
     }
-    if (type === 'routing') {
+    if (type === 'agent') {
         return {
             ...merged,
-            model: '',
-            selectedRouteId: '',
+            agentExecution: undefined,
             reply: '',
             usageData: null,
             activeGenerationHistoryId: undefined,

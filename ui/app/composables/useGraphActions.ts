@@ -572,7 +572,7 @@ export const useGraphActions = () => {
         }
 
         const isGenerator = targetNode.type
-            ? ['textToText', 'parallelization', 'routing'].includes(targetNode.type)
+            ? ['textToText', 'parallelization', 'agent'].includes(targetNode.type)
             : false;
         const isContextHandle = connection.targetHandle?.startsWith('context_');
 

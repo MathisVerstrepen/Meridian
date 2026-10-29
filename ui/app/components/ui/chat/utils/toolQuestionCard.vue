@@ -147,7 +147,7 @@ const appendToActiveAssistantMessage = (chunk: string, modelId: string | undefin
         (content) => content.type === MessageContentTypeEnum.TEXT,
     );
     if (textContent) {
-        textContent.text = `${textContent.text || ''}${chunk}`;
+        textContent.text = lastMessage.type === NodeTypeEnum.AGENT ? chunk : `${textContent.text || ''}${chunk}`;
         return;
     }
 

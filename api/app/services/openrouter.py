@@ -17,10 +17,9 @@ from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.inference import Architecture, ModelInfo, Pricing, ResponseModel
-from models.message import NodeTypeEnum, ToolEnum
+from models.message import Message, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
-from services.graph_service import Message
 from services.openrouter_retry import OpenRouterError, RetryCallback
 from services.openrouter_schema import build_openrouter_response_format
 from services.openrouter_transport import post_openrouter_json, stream_openrouter_data
@@ -507,6 +506,27 @@ async def _process_tool_calls_and_continue(
                 )
         return public_tool_call_id
 
+    # Native parallel calls share one delegation round. The batch scheduler retains a
+    # distinct run for every task, including repeated calls to the same member.
+    delegation_results = {}
+    delegation_calls = [
+        tc for tc in function_tool_calls if tc.get("function", {}).get("name") == "delegate_agents"
+    ]
+    if delegation_calls:
+        try:
+            if has_ask_user_call:
+                raise ValueError("Ask User and delegation must use separate model rounds.")
+            batches = [json.loads(tc["function"]["arguments"]) for tc in delegation_calls]
+            combined = {"calls": [call for batch in batches for call in batch["calls"]]}
+            result = await TOOL_HANDLERS_BY_NAME["delegate_agents"](combined, req)
+            position = 0
+            for tc, batch in zip(delegation_calls, batches):
+                count = len(batch["calls"])
+                delegation_results[tc["id"]] = {"runs": result["runs"][position : position + count]}
+                position += count
+        except Exception as exc:
+            delegation_results = {tc["id"]: {"error": str(exc)} for tc in delegation_calls}
+
     for index, tool_call in enumerate(function_tool_calls):
         function_name = tool_call["function"]["name"]
         runtime = get_tool_runtime(function_name)
@@ -516,7 +536,10 @@ async def _process_tool_calls_and_continue(
         except json.JSONDecodeError:
             arguments = {}
 
-        if function_name == INSPECT_IMAGE_TOOL_NAME and has_ask_user_call:
+        if function_name == "delegate_agents":
+            tool_result = delegation_results[tool_call["id"]]
+            duration_ms = 0
+        elif function_name == INSPECT_IMAGE_TOOL_NAME and has_ask_user_call:
             tool_result = {
                 "error": "Inspect images in a separate tool round from ask_user.",
                 "file_id": str(arguments.get("file_id") or ""),
@@ -630,6 +653,11 @@ async def _process_tool_calls_and_continue(
             )
         messages.append({"role": "user", "content": image_content})
 
+    from services.agents.runtime import current_policy
+
+    policy = current_policy.get()
+    if policy and policy.paused:
+        awaiting_user_input = True
     req.messages = messages
 
     # Return information about web search and continue flag

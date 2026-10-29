@@ -42,7 +42,7 @@ describe('reasoning-effort helpers', () => {
     it('extracts and deduplicates model IDs from supported canvas node shapes', () => {
         const modelIds = getCanvasModelIds([
             { type: NodeTypeEnum.TEXT_TO_TEXT, data: { model: 'text-model' } },
-            { type: NodeTypeEnum.ROUTING, data: { model: 'routing-model' } },
+            { type: NodeTypeEnum.AGENT, data: { model: 'provider/main', teamId: 'team-id' } },
             {
                 type: NodeTypeEnum.PARALLELIZATION,
                 data: {
@@ -58,12 +58,12 @@ describe('reasoning-effort helpers', () => {
             { type: NodeTypeEnum.PROMPT, data: { model: 'ignored-model' } },
             { type: NodeTypeEnum.TEXT_TO_TEXT, data: { model: 42 } },
             { type: NodeTypeEnum.PARALLELIZATION, data: { models: 'malformed' } },
-            { type: NodeTypeEnum.ROUTING, data: null },
+            { type: NodeTypeEnum.AGENT, data: null },
         ]);
 
         expect(modelIds).toEqual([
             'text-model',
-            'routing-model',
+            'provider/main',
             'parallel-a',
             'parallel-b',
             'aggregator-model',

@@ -175,7 +175,7 @@ onUnmounted(() => {
                         <template
                             v-for="bloc in [
                                 getBlockById('primary-model-text-to-text'),
-                                getBlockById('primary-model-routing'),
+                                getBlockById('primary-model-agent'),
                                 getBlockById('primary-model-parallelization'),
                             ]"
                             :key="bloc?.id"

@@ -1315,6 +1315,10 @@ async def create_initial_users(
                         if new_user.id is None:
                             raise ValueError("User ID is missing after flush.")
 
+                        from database.pg.agent_ops.team_crud import ensure_default_team
+
+                        await ensure_default_team(session, new_user.id)
+
                         workspace = Workspace(user_id=new_user.id, name="Default")
                         session.add(workspace)
 

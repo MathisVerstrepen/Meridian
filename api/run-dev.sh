@@ -26,6 +26,13 @@ case "${1:-dev}" in
         cd "${SCRIPT_DIR}"
         exec "$API_PYTHON" -m alembic upgrade "${2:-head}"
         ;;
+    agents-cutover)
+        shift
+        cd "${SCRIPT_DIR}"
+        export PYTHONPATH="${APP_DIR}"
+        exec "$API_PYTHON" -m dotenv -f "${SCRIPT_DIR}/../docker/env/.env.local" run -- \
+            "$API_PYTHON" scripts/cutover_agents.py "$@"
+        ;;
     downgrade)
         if [ "$#" -ne 2 ]; then
             echo "Usage: $0 downgrade <revision>" >&2

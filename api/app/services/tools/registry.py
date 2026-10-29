@@ -1,9 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import escape
 from typing import Any, Awaitable, Callable
 
 from database.pg.models import ToolCallStatusEnum
 from models.message import ToolEnum
+from services.agents.runtime import delegate_handler, delegation_tool, guard_handler
 from services.tools.ask_user import ASK_USER_TOOL, ask_user
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
 from services.tools.image_generation import (
@@ -421,6 +422,11 @@ TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.ASK_USER: RUNTIME_DEFINITIONS["ask_user"].tool_definitions,
 }
 
+RUNTIME_DEFINITIONS = {
+    name: replace(runtime, handler=guard_handler(name, runtime.handler))
+    for name, runtime in RUNTIME_DEFINITIONS.items()
+}
+
 TOOL_HANDLERS_BY_NAME: dict[str, ToolHandler] = {
     name: runtime.handler for name, runtime in RUNTIME_DEFINITIONS.items()
 }
@@ -428,6 +434,8 @@ TOOL_HANDLERS_BY_NAME: dict[str, ToolHandler] = {
 TOOL_RUNTIME_BY_TAG_NAME: dict[str, ToolRuntimeDefinition] = {
     tag_name: runtime for runtime in RUNTIME_DEFINITIONS.values() for tag_name in runtime.tag_names
 }
+
+TOOL_HANDLERS_BY_NAME["delegate_agents"] = delegate_handler
 
 WEB_TOOL_NAMES = {"web_search", "fetch_page_content"}
 
@@ -440,7 +448,7 @@ def get_openrouter_tools(
         tools.extend(TOOLS_BY_ENUM.get(tool, []))
     if include_image_inspection and ToolEnum.IMAGE_GENERATION in selected_tools:
         tools.extend(RUNTIME_DEFINITIONS["inspect_image"].tool_definitions)
-    return tools
+    return tools + delegation_tool()
 
 
 def get_tool_runtime(tool_name: str) -> ToolRuntimeDefinition | None:

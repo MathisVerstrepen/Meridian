@@ -2,8 +2,7 @@
 import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
-import type { DataRouting } from '@/types/graph';
-import type { Route } from '@/types/settings';
+import type { DataAgent } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits([
@@ -17,17 +16,16 @@ const emit = defineEmits([
 const chatStore = useChatStore();
 const streamStore = useStreamStore();
 const canvasSaveStore = useCanvasSaveStore();
-const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
+const { openChatId } = storeToRefs(chatStore);
 const { isNodeStreaming } = storeToRefs(streamStore);
-const { isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
     streamStore;
-const { ensureGraphSaved, saveGraph } = canvasSaveStore;
+const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -35,88 +33,41 @@ const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
 // --- Props ---
 const props = withDefaults(
-    defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean; presetEditor?: boolean }>(),
+    defineProps<NodeProps<DataAgent> & { isGraphNameDefault: boolean; presetEditor?: boolean }>(),
     { presetEditor: false },
 );
 
 // --- Local State ---
 const isStreaming = ref(false);
 const protectedMode = ref(false);
-const isFetchingModel = ref(false);
-const blockDefinition = getBlockById('primary-model-routing');
-const selectedRoute = ref<Route | null>(null);
+const blockDefinition = getBlockById('primary-model-agent');
 const streamSession = ref<StreamSession | null>(null);
 const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
 
 // --- Core Logic Functions ---
 const addChunk = (chunk: string) => {
-    if (props.data) props.data.reply += chunk;
+    if (props.data) props.data.reply = chunk;
 };
 
 const sendPrompt = async () => {
     if (!props.data) return;
 
     protectedMode.value = true;
-    props.data.model = '';
-    props.data.reply = '';
-    selectedRoute.value = null;
-    isFetchingModel.value = true;
 
     await ensureGraphSaved();
 
+    props.data.reply = '';
     isStreaming.value = true;
     protectedMode.value = false;
 
-    const routingSession = await startStream(
-        props.id,
-        NodeTypeEnum.ROUTING,
-        {
-            graph_id: graphId.value,
-            node_id: props.id,
-            model: '',
-        },
-        false,
-        true,
-    );
-
-    // Routing phase ends before generation phase starts, so only abort on real cancellation/error.
-    if (routingSession?.error?.message === 'Stream cancelled by user.') {
-        isFetchingModel.value = false;
-        return;
-    }
-
-    if (routingSession?.error) {
-        console.warn('Routing session failed before generation started. Aborting sendPrompt.');
-        isFetchingModel.value = false;
-        return;
-    }
-
-    isFetchingModel.value = false;
-
-    const jsonResponse = JSON.parse(routingSession?.response || '{}');
-    props.data.selectedRouteId = jsonResponse?.route || '';
-    selectedRoute.value =
-        blockRoutingSettings.value.routeGroups
-            .find((group) => group.id === props.data.routeGroupId)
-            ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
-
-    props.data.model = selectedRoute.value?.modelId || '';
-    isStreaming.value = true;
-
-    if (!props.data.model) {
-        console.warn('Routing session returned no model. Aborting generation.');
-        isStreaming.value = false;
-        return;
-    }
-
-    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
+    setCanvasCallback(props.id, NodeTypeEnum.AGENT, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.AGENT, (session) => {
         isStreaming.value = false;
         props.data.usageData = session.usageData;
         saveGraph();
@@ -124,63 +75,39 @@ const sendPrompt = async () => {
 
     streamSession.value = await startStream(
         props.id,
-        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.AGENT,
         {
             graph_id: graphId.value,
             node_id: props.id,
             model: props.data.model,
         },
-        props.isGraphNameDefault,
+        false,
     );
 };
 
 const openChat = async () => {
-    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    updateUpcomingModelData(NodeTypeEnum.ROUTING, props.data);
+    setCanvasCallback(props.id, NodeTypeEnum.AGENT, addChunk);
+    updateUpcomingModelData(NodeTypeEnum.AGENT, props.data);
     loadAndOpenChat(graphId.value, props.id);
 };
 
 const handleCancelStream = async () => {
     if (!props.data) return;
-    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
+    removeChatCallback(props.id, NodeTypeEnum.AGENT);
     await nextTick();
-    props.data.reply = '';
-    selectedRoute.value = null;
-    isFetchingModel.value = false;
     isStreaming.value = false;
     await cancelStream(props.id);
 };
 
-// --- Watchers ---
-if (!props.presetEditor) {
-    watch(
-        isReady,
-        (ready) => {
-            if (ready) {
-                selectedRoute.value =
-                    blockRoutingSettings.value.routeGroups
-                        .find((group) => group.id === props.data.routeGroupId)
-                        ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
-            }
-        },
-        { immediate: true },
-    );
-
-    watch(
-        () => isNodeStreaming.value(props.id),
-        (streaming) => {
-            if (!streaming) {
-                isFetchingModel.value = false;
-                isStreaming.value = false;
-            }
-        },
-        { immediate: true },
-    );
-}
-
 // --- Lifecycle Hooks ---
 onMounted(() => {
     if (props.presetEditor) return;
+
+    // when a new text-to-text node is created in chat view, we attach the
+    //  callback so that the text generated in the chat is also displayed in the node
+    if (openChatId.value === props.id) {
+        setCanvasCallback(props.id, NodeTypeEnum.AGENT, addChunk);
+    }
 
     nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
 
@@ -195,6 +122,16 @@ onMounted(() => {
         );
     }
 });
+
+if (!props.presetEditor) {
+    watch(
+        () => isNodeStreaming.value(props.id),
+        (streaming) => {
+            isStreaming.value = streaming;
+        },
+        { immediate: true },
+    );
+}
 
 onUnmounted(() => {
     if (!props.presetEditor) nodeRegistry.unregister(props.id);
@@ -223,8 +160,9 @@ onUnmounted(() => {
 
     <div
         ref="nodeRef"
-        class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2
-            p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-sunbaked-sand border-obsidian/30 relative z-20 flex h-full w-full flex-col
+            rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
+            ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -265,41 +203,39 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
+        <UiChatUtilsStreamRetryStatus v-if="isVisible" :node-id="props.id" />
         <div v-if="isVisible" class="mb-2 flex h-fit items-center justify-between gap-2">
-            <!-- Model Select -->
-            <UiGraphNodeUtilsRoutingGroupSelect
-                :routing-group-id="props.data.routeGroupId"
-                :set-routing-group-id="
-                    (id: string) => {
-                        props.data.routeGroupId = id;
-                    }
-                "
-                class="w-md"
-            />
-
-            <UiGraphNodeUtilsRoutingSelectedModel
-                v-if="!props.presetEditor"
-                :is-fetching-model="isFetchingModel"
-                :selected-route="selectedRoute"
+            <UiLibraryAgentSelection
+                :auto-select-tools="data.autoSelectTools"
+                compact
+                class="min-w-0 flex-1 pr-4"
+                :model="props.data.model"
+                :selected-tools="props.data.selectedTools ?? []"
+                :team-id="props.data.teamId"
+                @model="props.data.model = $event"
+                @team="props.data.teamId = $event"
             />
 
             <!-- Send Prompt -->
             <button
                 v-if="!props.presetEditor && !isStreaming"
-                :disabled="!props.data?.routeGroupId || protectedMode"
-                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
-                    shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
-                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!props.data?.model || !props.data.teamId || protectedMode"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 text-obsidian
+                    flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-2xl
+                    transition-all duration-200 ease-in-out disabled:cursor-not-allowed
+                    disabled:opacity-50"
                 @click="sendPrompt"
             >
-                <UiIcon name="IconamoonSendFill" class="text-obsidian h-5 w-5 opacity-80" />
+                <UiIcon name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
             </button>
 
             <button
                 v-else-if="!props.presetEditor"
-                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8
-                    w-8 shrink-0 cursor-pointer items-center justify-center rounded-2xl
-                    transition-all duration-200 ease-in-out"
+                :disabled="!props.data?.model"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 text-obsidian
+                    relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center
+                    rounded-2xl transition-all duration-200 ease-in-out disabled:cursor-not-allowed
+                    disabled:opacity-50"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
@@ -318,6 +254,10 @@ onUnmounted(() => {
             </div>
         </div>
 
+        <UiLibraryAgentExecutionSummary
+            :node-id="props.id"
+            :execution="props.data.agentExecution"
+        />
         <!-- Model Response Area -->
         <UiGraphNodeUtilsTextarea
             :reply="props.data.reply"

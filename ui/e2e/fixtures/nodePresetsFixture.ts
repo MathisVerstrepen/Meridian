@@ -96,7 +96,6 @@ export const createNodePresetFixtureSettings = (): Settings => ({
     },
     models: {
         defaultModel: '',
-        routingModel: '',
         titleGenerationModel: '',
         autoToolSelectionModel: '',
         excludeReasoning: false,
@@ -136,7 +135,6 @@ export const createNodePresetFixtureSettings = (): Settings => ({
         file_manager_remember_last_view: true,
     },
     blockParallelization: { models: [], aggregator: { prompt: '', model: '' } },
-    blockRouting: { routeGroups: [] },
     blockGithub: { autoPull: false },
     blockContextMerger: {
         merger_mode: ContextMergerModeEnum.FULL,

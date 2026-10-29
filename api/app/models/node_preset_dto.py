@@ -145,9 +145,10 @@ class NodePresetParallelizationDataDTO(StrictPresetModel):
     defaultModel: String256
 
 
-class NodePresetRoutingDataDTO(UniqueToolsMixin, StrictPresetModel):
-    routeGroupId: String256
-    selectedTools: list[ToolEnumValue]
+class NodePresetAgentDataDTO(StrictPresetModel):
+    model: String256
+    selectedTools: list[ToolEnum] = Field(default_factory=list, max_length=6)
+    teamId: String256
     autoSelectTools: bool | None = None
     imageModel: String256 | None = None
     videoModel: String256 | None = None
@@ -222,7 +223,7 @@ NodePresetDataDTO: TypeAlias = Union[
     NodePresetFilePromptDataDTO,
     NodePresetTextToTextDataDTO,
     NodePresetParallelizationDataDTO,
-    NodePresetRoutingDataDTO,
+    NodePresetAgentDataDTO,
     NodePresetGithubDataDTO,
     NodePresetContextMergerDataDTO,
     NodePresetGroupDataDTO,
@@ -233,7 +234,7 @@ NodePresetNodeType: TypeAlias = Literal[
     "filePrompt",
     "textToText",
     "parallelization",
-    "routing",
+    "agent",
     "github",
     "contextMerger",
     "group",
@@ -244,7 +245,7 @@ NODE_DATA_MODELS: dict[str, type[StrictPresetModel]] = {
     "filePrompt": NodePresetFilePromptDataDTO,
     "textToText": NodePresetTextToTextDataDTO,
     "parallelization": NodePresetParallelizationDataDTO,
-    "routing": NodePresetRoutingDataDTO,
+    "agent": NodePresetAgentDataDTO,
     "github": NodePresetGithubDataDTO,
     "contextMerger": NodePresetContextMergerDataDTO,
     "group": NodePresetGroupDataDTO,
@@ -255,7 +256,7 @@ MINIMUM_NODE_DIMENSIONS: dict[str, tuple[float, float]] = {
     "filePrompt": (500, 275),
     "textToText": (600, 300),
     "parallelization": (660, 450),
-    "routing": (600, 300),
+    "agent": (600, 300),
     "github": (500, 250),
     "contextMerger": (285, 135),
     "group": (40, 40),
@@ -312,15 +313,15 @@ class NodePresetEdgeDTO(StrictPresetModel):
 EDGE_TYPE_RULES: dict[str, tuple[set[str], set[str]]] = {
     "prompt": (
         {"prompt"},
-        {"prompt", "textToText", "parallelization", "routing"},
+        {"prompt", "textToText", "parallelization", "agent"},
     ),
     "context": (
-        {"textToText", "parallelization", "routing", "contextMerger"},
-        {"textToText", "parallelization", "routing", "contextMerger"},
+        {"textToText", "parallelization", "agent", "contextMerger"},
+        {"textToText", "parallelization", "agent", "contextMerger"},
     ),
     "attachment": (
         {"filePrompt", "github"},
-        {"textToText", "parallelization", "routing"},
+        {"textToText", "parallelization", "agent"},
     ),
 }
 

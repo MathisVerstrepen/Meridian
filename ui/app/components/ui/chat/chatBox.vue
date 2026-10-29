@@ -28,7 +28,7 @@ const { closeChat, loadAndOpenChat, getSession } = chatStore;
 const { ensureGraphSaved } = canvasSaveStore;
 const { regenerateTitle, removeChatCallback } = streamStore;
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const router = useRouter();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
@@ -423,8 +423,16 @@ onUnmounted(() => {
                                 "
                                 @cancel-edit="currentEditModeIdx = null"
                                 @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
-                            />
-
+                            >
+                                <template #activity>
+                                    <UiLibraryAgentActivity
+                                        v-if="message.type === NodeTypeEnum.AGENT && message.node_id"
+                                        :node-id="message.node_id"
+                                        :execution="isJsonObject(message.data?.agentExecution) ? message.data.agentExecution : undefined"
+                                        @trigger-scroll="triggerScroll"
+                                    />
+                                </template>
+                            </UiChatMarkdownRenderer>
                             <UiChatUtilsStreamRetryStatus
                                 v-if="message.role === MessageRoleEnum.assistant"
                                 :node-id="message.node_id"

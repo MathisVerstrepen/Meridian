@@ -129,7 +129,7 @@ describe('graph auto-layout serial prompts', () => {
             node('tail-prompt-1', NodeTypeEnum.PROMPT, 180, 80),
             node('tail-1', NodeTypeEnum.TEXT_TO_TEXT, 300, 130),
             node('branch-prompt-2', NodeTypeEnum.PROMPT, 230, 90),
-            node('child-2', NodeTypeEnum.ROUTING, 180, 120),
+            node('child-2', NodeTypeEnum.AGENT, 180, 120),
             node('tail-prompt-2', NodeTypeEnum.PROMPT, 150, 70),
             node('tail-2', NodeTypeEnum.TEXT_TO_TEXT, 240, 110),
         ];

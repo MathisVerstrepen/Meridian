@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timezone
 from typing import Any, cast
 
 from const.plans import PLAN_LIMITS
+from database.pg.agent_ops.team_crud import ensure_default_team
 from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
@@ -75,6 +76,8 @@ async def create_user_from_provider(
             if user.id is None:
                 raise ValueError("User ID is missing after flush.")
 
+            await ensure_default_team(session, user.id)
+
             # Create Default Workspace
             workspace = Workspace(user_id=user.id, name="Default")
             session.add(workspace)
@@ -138,6 +141,8 @@ async def create_user_with_password(
 
                 if user.id is None:
                     raise ValueError("User ID is missing after flush.")
+
+                await ensure_default_team(session, user.id)
 
                 # Create Default Workspace
                 workspace = Workspace(user_id=user.id, name="Default")

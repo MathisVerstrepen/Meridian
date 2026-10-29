@@ -15,7 +15,6 @@ export function useBlocks() {
         const {
             modelsSettings,
             blockParallelizationSettings,
-            blockRoutingSettings,
             blockContextMergerSettings,
             toolsSettings,
         } = storeToRefs(globalSettingsStore);
@@ -27,7 +26,6 @@ export function useBlocks() {
                 prompt: '',
                 model: defaultModel,
             };
-            const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
             const selectedTools = normalizeToolSelection(
                 toolsSettings.value?.defaultSelectedTools ?? [],
             );
@@ -114,18 +112,16 @@ export function useBlocks() {
                         color: 'var(--color-terracotta-clay)',
                     },
                     {
-                        id: 'primary-model-routing',
-                        name: 'Routing',
-                        desc: 'In this block, you can route the user prompt to different models based on conditions, allowing for dynamic model selection.',
+                        id: 'primary-model-agent',
+                        name: 'Agent',
+                        desc: 'Let a main model answer with help from your selected Agent Team.',
                         icon: 'MaterialSymbolsAltRouteRounded',
-                        nodeType: NodeTypeEnum.ROUTING,
+                        nodeType: NodeTypeEnum.AGENT,
                         defaultData: {
-                            routeGroupId: routingGroups.find((group) => group.isDefault)?.id ?? '',
-                            model: '',
+                            model: defaultModel,
+                            selectedTools: [],
+                            teamId: useAgentStore().defaultTeamId,
                             reply: '',
-                            selectedRouteId: '',
-                            selectedTools: selectedTools,
-                            autoSelectTools: defaultAutoSelectTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',
@@ -142,7 +138,8 @@ export function useBlocks() {
                             mode: blockContextMergerSettings.value.merger_mode,
                             branch_summaries: {},
                             last_n: blockContextMergerSettings.value.last_n,
-                            include_user_messages: blockContextMergerSettings.value.include_user_messages,
+                            include_user_messages:
+                                blockContextMergerSettings.value.include_user_messages,
                         },
                         minSize: { width: 285, height: 135 },
                         color: 'var(--color-golden-ochre)',

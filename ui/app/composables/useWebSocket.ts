@@ -111,6 +111,14 @@ const handleMessage = (event: MessageEvent) => {
         const modelId = isRuntimeString(model_id) ? model_id : undefined;
 
         switch (type) {
+            case 'agent_run':
+                useAgentStore().updateRun(nodeId, payload);
+                break;
+            case 'agent_run_chunk':
+                if (isRuntimeString(message.run_id) && isRuntimeString(payload)) {
+                    useAgentStore().appendRunChunk(nodeId, message.run_id, payload);
+                }
+                break;
             case 'stream_retry_status':
                 if (streamStore.isNodeStreaming(nodeId)) {
                     useStreamRetryStore().update(nodeId, payload, modelId);
@@ -148,9 +156,6 @@ const handleMessage = (event: MessageEvent) => {
                 streamStore.handleToolQuestionError(nodeId, toolError);
                 break;
             }
-            case 'routing_response':
-                streamStore.handleRoutingResponse(nodeId, payload);
-                break;
             case 'title_response':
                 if (isJsonObject(payload) && isRuntimeString(payload.title)) {
                     streamStore.handleTitleResponse(nodeId, { title: payload.title });

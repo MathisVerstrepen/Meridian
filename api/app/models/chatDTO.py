@@ -18,7 +18,7 @@ class EffortEnum(str, Enum):
 class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
-    model: str
+    model: str = ""
     modelId: str | None = None
     stream_type: NodeTypeEnum
     title: bool = False

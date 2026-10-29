@@ -31,7 +31,7 @@ const handleCategory = NodeCategoryEnum.ATTACHMENT;
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ];
 const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB];
 

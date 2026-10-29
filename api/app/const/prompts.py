@@ -11,8 +11,6 @@ Use the following conversation to generate a suitable title.
 Titles should not be a question, but rather a statement summarizing the conversation.
 DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCTUATION, SPECIAL CHARACTERS OR QUOTATION MARKS."""
 
-ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best option out of the following routes:
-    {routes}. Answer only in JSON format."""
 
 CONTEXT_MERGER_SUMMARY_PROMPT = """You are an expert AI assistant specializing in conversation summarization. Your task is to create a concise, structured, and comprehensive summary of the provided conversation history. The summary must capture the essential information, key decisions, and final outcomes, while omitting conversational filler.
 
@@ -838,9 +836,9 @@ TOOL_VISUALISE_GUIDE = """
     *   **When to Use:** Use this tool when a visual explanation would materially improve the answer, such as for Mermaid diagrams, SVG diagrams, charts, interactive explainers, component maps, comparisons, or spatial/step-based concepts.
     *   **How to Use:** Pass a short `title`, concise `instructions`, the relevant `context`, an `output_mode` (`mermaid`, `svg`, or `html`), a `difficulty` hint (`standard` or `expert`), and `follow_up_interactivity` (`true` or `false`).
     *   **Title Discipline:** Keep `title` short and UI-friendly. It is used in the chat tool activity preview, so prefer a compact section label over a sentence-length instruction.
-    *   **Output Mode Routing:** Use `svg` for diagrams, maps, comparisons, and compact visuals that are primarily graphic. Use `html` for widgets, richer controls, chart UIs, or visuals that need more substantial DOM-based interaction. Use `mermaid` only for flowcharts, sequence diagrams, gantt charts, class diagrams, ER diagrams, and state diagrams that can be accurately represented in Mermaid's syntax and styling capabilities. `html` and `svg` should be your default choices for visual explanations, and you should only choose `mermaid` when you are confident the visual can be rendered correctly and clearly in that format. Order of preference for visual output modes is: `html` > `svg` > `mermaid`.
+    *   **Output Mode Selection:** Use `svg` for diagrams, maps, comparisons, and compact visuals that are primarily graphic. Use `html` for widgets, richer controls, chart UIs, or visuals that need more substantial DOM-based interaction. Use `mermaid` only for flowcharts, sequence diagrams, gantt charts, class diagrams, ER diagrams, and state diagrams that can be accurately represented in Mermaid's syntax and styling capabilities. `html` and `svg` should be your default choices for visual explanations, and you should only choose `mermaid` when you are confident the visual can be rendered correctly and clearly in that format. Order of preference for visual output modes is: `html` > `svg` > `mermaid`.
     *   **Mode Availability:** Individual output modes can be disabled in user settings. If the tool rejects a mode as disabled, switch to another suitable enabled mode instead of retrying the same disabled one.
-    *   **Difficulty Routing:** Use `standard` for normal SVG/HTML visuals. Use `expert` for unusually complex, dense, high-stakes, or difficult-to-represent SVG/HTML visuals. `difficulty` is ignored when `output_mode` is `mermaid`.
+    *   **Difficulty Agent:** Use `standard` for normal SVG/HTML visuals. Use `expert` for unusually complex, dense, high-stakes, or difficult-to-represent SVG/HTML visuals. `difficulty` is ignored when `output_mode` is `mermaid`.
     *   **Follow-Up Interactivity:** Set `follow_up_interactivity` to `true` only when an SVG/HTML visual should include clickable elements that call `sendPrompt(text)` and intentionally trigger a follow-up AI message. Leave it `false` for self-contained visuals. `follow_up_interactivity` is ignored when `output_mode` is `mermaid`.
     *   **Response:** When `output_mode` is `mermaid`, the tool returns Mermaid source in `content`. **You MUST embed that source in exactly one fenced Mermaid block: ` ```mermaid ... ``` `.** Do not rewrite the Mermaid unless the tool output is clearly malformed. When `output_mode` is `svg` or `html`, the tool returns a persisted HTML artifact as `artifact_id` plus `artifacts`. Each artifact also includes `embed_code`, which is the exact Markdown link to place in the final answer. **Prefer using the returned `embed_code` directly instead of reconstructing the link yourself.**
     *   **Artifact Discipline:** Use the returned `embed_code` or `artifact_id` exactly as provided for SVG/HTML outputs. If the tool does not return an `artifact_id` for those modes, treat that as a failure instead of inventing one.
@@ -852,7 +850,6 @@ TOOL_VISUALISE_GUIDE = """
 PROMPT_REFERENCES = {
     "PARALLELIZATION_AGGREGATOR_PROMPT": PARALLELIZATION_AGGREGATOR_PROMPT,
     "TITLE_GENERATION_PROMPT": TITLE_GENERATION_PROMPT,
-    "ROUTING_PROMPT": ROUTING_PROMPT,
     "QUALITY_HELPER_PROMPT": QUALITY_HELPER_PROMPT,
     "CONTEXT_MERGER_SUMMARY_PROMPT": CONTEXT_MERGER_SUMMARY_PROMPT,
 }

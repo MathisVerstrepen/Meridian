@@ -28,7 +28,7 @@ export const SETTINGS_TABS = {
     NODE_PRESETS: 'Node Presets',
     PROMPT_IMPROVER: 'Prompt Improver',
     PROMPT_TEMPLATES: 'Prompt Templates',
-    ROUTING: 'Routing',
+    AGENT: 'Agent',
     PARALLELIZATION: 'Parallelization',
     CONTEXT_MERGER: 'Context Merger',
     GENERATION_HISTORY: 'Generation History',
@@ -141,7 +141,7 @@ export const SETTINGS_ENTRY = {
         title: 'Default Node Type',
         description: 'The default node type to use when creating new nodes in chat view.',
         keywords: ['canvas startup', 'node type', 'new node'],
-        options: ['Text to Text', 'Routing', 'Parallelization'],
+        options: ['Text to Text', 'Agent', 'Parallelization'],
     },
     chatThinkingPanels: {
         id: 'chat.thinking_panels',
@@ -278,14 +278,6 @@ export const SETTINGS_ENTRY = {
         title: 'Default Chat Model',
         description: 'The default model is used when creating a new chat or any block using a model.',
         keywords: ['default model', 'chat model'],
-    },
-    modelsRouting: {
-        id: 'models.routing',
-        group: SETTINGS_GROUPS.AI_PROVIDERS_MODELS,
-        tab: SETTINGS_TABS.DEFAULT_MODELS,
-        title: 'Routing Model',
-        description: 'The model used to choose routes for routing nodes.',
-        keywords: ['default models', 'route model'],
     },
     modelsTitleGeneration: {
         id: 'models.title_generation',
@@ -445,14 +437,13 @@ export const SETTINGS_ENTRY = {
             'Create reusable prompt structures with variables to standardize your workflow nodes. Reorder templates via drag-and-drop.',
         keywords: ['template marketplace', 'create template', 'edit template', 'variables', 'fork and edit'],
     },
-    blocksRouting: {
-        id: 'blocks.routing',
+    blocksAgent: {
+        id: 'blocks.agent',
         group: SETTINGS_GROUPS.WORKFLOW_NODES,
-        tab: SETTINGS_TABS.ROUTING,
-        title: 'Routing Configuration',
-        description:
-            'Create and manage route groups to intelligently direct user prompts to the most suitable model based on predefined rules. Each route can have its own model, custom prompt, and behavior. You can set a default group and create specialized groups for different tasks like coding, writing, or analysis.',
-        keywords: ['route groups', 'default route group', 'route models', 'custom prompt', 'duplicate route', 'rename route'],
+        tab: SETTINGS_TABS.AGENT,
+        title: 'Agent Configuration',
+        description: 'Manage reusable Agent profiles, model overrides, prompt layers, tool permissions, private Teams, and marketplace listings.',
+        keywords: ['agents', 'teams', 'subagents', 'marketplace', 'profiles', 'versions'],
     },
     blocksParallelizationAggregatorModel: {
         id: 'blocks.parallelization.aggregator_model',
@@ -523,7 +514,7 @@ export const SETTINGS_ENTRY = {
         tab: SETTINGS_TABS.GENERATION_HISTORY,
         title: 'Saved Generation History',
         description:
-            'Set how many previous generations are kept per text, routing, or parallelization node. Max 100.',
+            'Set how many previous generations are kept per text, agent, or parallelization node. Max 100.',
         keywords: [
             'generation history',
             'history limit',
@@ -638,7 +629,7 @@ export const SETTINGS_ENTRY = {
         group: SETTINGS_GROUPS.TOOLS,
         tab: SETTINGS_TABS.TOOL_DEFAULTS,
         title: 'Default Auto Tool Selection',
-        description: 'Enable auto tool selection by default for new text-to-text and routing nodes.',
+        description: 'Enable auto tool selection by default for new text-to-text and agent nodes.',
         keywords: ['tool defaults', 'auto tools', 'automatic tool selection'],
     },
     toolsSelectedTools: {

@@ -42,7 +42,6 @@ from pydantic import BaseModel
 from services.graph_service import (
     construct_message_history,
     construct_parallelization_aggregator_prompt,
-    construct_routing_prompt,
     get_effective_graph_config,
 )
 from services.inference import get_supported_meridian_tool_names
@@ -91,7 +90,7 @@ AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
         ToolEnum.VISUALISE,
         ToolEnum.ASK_USER,
     ],
-    NodeTypeEnum.ROUTING: [
+    NodeTypeEnum.AGENT: [
         ToolEnum.WEB_SEARCH,
         ToolEnum.LINK_EXTRACTION,
         ToolEnum.IMAGE_GENERATION,
@@ -119,7 +118,11 @@ class AutoToolSelectionSchema(BaseModel):
     selected_tools: list[ToolEnum] = []
 
 
-def _public_stream_error_message(_: Exception) -> str:
+def _public_stream_error_message(exc: Exception) -> str:
+    from fastapi import HTTPException
+
+    if isinstance(exc, HTTPException):
+        return str(exc.detail)
     return GENERIC_STREAM_ERROR_MESSAGE
 
 
@@ -679,6 +682,32 @@ async def resume_tool_response_to_websocket(
         )
         return
 
+    if snapshot.get("node_type") == NodeTypeEnum.AGENT.value:
+        try:
+            from services.agents.continuation import resume_agent
+
+            await resume_agent(
+                websocket=websocket,
+                engine=pg_engine,
+                redis=redis_manager,
+                http_client=http_client,
+                available_models=available_models,
+                user_id=user_id,
+                tool_call=tool_call,
+                snapshot=snapshot,
+                answer=request.answer,
+            )
+        except Exception as exc:
+            from fastapi import HTTPException
+
+            await _send_tool_question_error(
+                websocket,
+                node_id=tool_call.node_id,
+                tool_call_id=request.tool_call_id,
+                message=str(exc.detail) if isinstance(exc, HTTPException) else str(exc),
+            )
+        return
+
     try:
         arguments = AskUserArguments.model_validate(tool_call.arguments)
         answer_payloads = normalize_ask_user_answers(arguments, request.answer)
@@ -849,55 +878,54 @@ async def propagate_stream_to_websocket(
         sandbox_input_files: list[SandboxInputFileReference] = []
         sandbox_input_warnings: list[str] = []
 
-        # --- Branch 1: Routing Logic (Non-streaming request-response) ---
-        if request_data.stream_type == NodeTypeEnum.ROUTING:
-            messages, schema = await construct_routing_prompt(
+        if node_type_enum == NodeTypeEnum.AGENT or request_data.stream_type == NodeTypeEnum.AGENT:
+            from services.agents.execution import AgentExecution
+
+            messages = await construct_message_history(
                 pg_engine=pg_engine,
                 neo4j_driver=neo4j_driver,
                 graph_id=request_data.graph_id,
-                node_id=request_data.node_id,
                 user_id=user_id,
-            )
-
-            inference_req = build_inference_request(
-                credentials=inference_credentials,
-                model=graph_config.routing_model,
-                messages=messages,
-                config=graph_config,
-                user_id=user_id,
-                pg_engine=pg_engine,
                 node_id=request_data.node_id,
-                graph_id=request_data.graph_id,
-                is_title_generation=False,
-                node_type=node_type_enum,
-                schema=schema,
-                stream=False,
                 http_client=http_client,
-                pdf_engine=graph_config.pdf_engine,
-                reasoning_efforts=get_model_reasoning_efforts(
-                    graph_config.routing_model, available_models
+                git_http_client=git_http_client,
+                system_prompt=system_prompt,
+                add_current_node=False,
+                clean_text=(
+                    CleanTextOption.REMOVE_TAGS_ONLY
+                    if graph_config.include_thinking_in_context
+                    else CleanTextOption.REMOVE_TAG_AND_TEXT
                 ),
+                github_auto_pull=graph_config.block_github_auto_pull,
+                available_models=available_models,
             )
-
-            full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
-            routing_result = _parse_structured_response(
-                schema,
-                full_response,
-                f"Routing node {request_data.node_id}",
+            sandbox_input_files, sandbox_input_warnings = await _prepare_execute_code_inputs(
+                pg_engine, neo4j_driver, request_data.graph_id, request_data.node_id, user_id
             )
-
-            await websocket.send_json(
-                {
-                    "type": "routing_response",
-                    "node_id": request_data.node_id,
-                    "payload": routing_result,
-                }
+            messages = _append_execute_code_manifest(
+                messages, sandbox_input_files, sandbox_input_warnings
             )
-            # Signal completion
-            await websocket.send_json(
-                {"type": "stream_end", "node_id": request_data.node_id, "payload": {}}
+            messages, file_hashes = await _prepare_and_inject_cached_annotations(
+                messages, redis_manager, graph_config.pdf_engine
             )
-            return  # End execution for routing
+            execution = AgentExecution(
+                engine=pg_engine,
+                websocket=websocket,
+                request=request_data,
+                user_id=user_id,
+                graph_config=graph_config,
+                credentials=inference_credentials,
+                messages=messages,
+                http_client=http_client,
+                redis_manager=redis_manager,
+                available_models=available_models,
+                sandbox_input_files=sandbox_input_files,
+                sandbox_input_warnings=sandbox_input_warnings,
+                file_hashes=file_hashes,
+                neo4j_driver=neo4j_driver,
+            )
+            await execution.execute()
+            return
 
         # --- Branch 2: Streaming Logic (Chat, Parallelization, etc.) ---
         messages = []
@@ -1378,71 +1406,6 @@ async def handle_parallelization_aggregator_stream(
         stream_inference_response(inference_req, pg_engine, redis_manager),
         media_type="text/plain",
     )
-
-
-async def handle_routing_stream(
-    pg_engine: SQLAlchemyAsyncEngine,
-    neo4j_driver: AsyncDriver,
-    request_data: GenerateRequest,
-    user_id: str,
-    http_client: httpx.AsyncClient,
-    available_models: list[object] | None = None,
-) -> dict:
-    """
-    Handles routing requests by streaming the generated text.
-
-    Args:
-        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy engine for PostgreSQL.
-        neo4j_driver (AsyncDriver): The Neo4j driver for database interactions.
-        request_data (GenerateRequest): The request data containing graph_id, node_id, and model.
-        user_id (str): The user ID from the request headers.
-
-    Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain
-            text format.
-    """
-
-    graph_config, _, inference_credentials = await get_effective_graph_config(
-        pg_engine=pg_engine,
-        graph_id=request_data.graph_id,
-        user_id=user_id,
-    )
-
-    messages, schema = await construct_routing_prompt(
-        pg_engine=pg_engine,
-        neo4j_driver=neo4j_driver,
-        graph_id=request_data.graph_id,
-        node_id=request_data.node_id,
-        user_id=user_id,
-    )
-
-    node = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=request_data.graph_id,
-        node_ids=[request_data.node_id],
-    )
-
-    inference_req = build_inference_request(
-        credentials=inference_credentials,
-        model=graph_config.routing_model,
-        messages=messages,
-        config=graph_config,
-        user_id=user_id,
-        pg_engine=pg_engine,
-        node_id=request_data.node_id,
-        graph_id=request_data.graph_id,
-        is_title_generation=False,
-        node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
-        schema=schema,
-        stream=False,
-        http_client=http_client,
-        pdf_engine=graph_config.pdf_engine,
-        reasoning_efforts=get_model_reasoning_efforts(graph_config.routing_model, available_models),
-    )
-
-    full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
-
-    return _parse_structured_response(schema, full_response, f"Routing node {request_data.node_id}")
 
 
 async def regenerate_title_stream(

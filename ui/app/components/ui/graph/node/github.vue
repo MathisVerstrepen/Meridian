@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<NodeProps<DataGithub> & { presetEditor?: 
     presetEditor: false,
 });
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 

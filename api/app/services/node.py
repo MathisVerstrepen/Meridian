@@ -208,6 +208,11 @@ async def text_to_text_message_builder(
                 text=text_cleaner(reply, clean_text),
             )
         ],
+        data=(
+            {"agentExecution": node.data.get("agentExecution")}
+            if node.type == NodeTypeEnum.AGENT and isinstance(node.data, dict)
+            else None
+        ),
         model=model,
         node_id=node.id,
         type=NodeTypeEnum(node.type),
@@ -268,7 +273,7 @@ async def node_to_message(
     """
 
     match node.type:
-        case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.ROUTING:
+        case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.AGENT:
             return await text_to_text_message_builder(
                 node,
                 clean_text,

@@ -7,7 +7,7 @@ import type {
     DataContextMerger,
     DataParallelization,
     DataPrompt,
-    DataRouting,
+    DataAgent,
     DataTextToText,
     SidebarNode,
 } from '@/types/graph';
@@ -93,8 +93,8 @@ const parallelizationNode = computed<SidebarNode<DataParallelization> | null>(()
         : null,
 );
 
-const routingNode = computed<SidebarNode<DataRouting> | null>(() =>
-    displayNode.value ? (/* SAFETY: Block registry pairs ROUTING nodes with DataRouting; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataRouting>) : null,
+const agentNode = computed<SidebarNode<DataAgent> | null>(() =>
+    displayNode.value ? (/* SAFETY: Block registry pairs AGENT nodes with DataAgent; Vue Flow's base node type erases that data mapping. */ displayNode.value as SidebarNode<DataAgent>) : null,
 );
 
 const contextMergerNode = computed<SidebarNode<DataContextMerger> | null>(() =>
@@ -146,8 +146,8 @@ const handleUpdateUpcomingType = (newType: NodeTypeEnum) => {
 
     if (!defaultData) {
         switch (newType) {
-            case NodeTypeEnum.ROUTING:
-                defaultData = getBlockById('primary-model-routing').defaultData;
+            case NodeTypeEnum.AGENT:
+                defaultData = getBlockById('primary-model-agent').defaultData;
                 break;
             case NodeTypeEnum.PARALLELIZATION:
                 defaultData = getBlockById('primary-model-parallelization').defaultData;
@@ -216,10 +216,10 @@ watch(
                     :set-current-model="setCurrentModel"
                 />
 
-                <!-- Routing Node Settings -->
-                <UiGraphSidebarNodeDataRouting
-                    v-else-if="displayNode.type === NodeTypeEnum.ROUTING && routingNode"
-                    :node="routingNode"
+                <!-- Agent Node Settings -->
+                <UiGraphSidebarNodeDataAgent
+                    v-else-if="displayNode.type === NodeTypeEnum.AGENT && agentNode"
+                    :node="agentNode"
                     :set-node-data-key="setNodeDataKey"
                 />
 

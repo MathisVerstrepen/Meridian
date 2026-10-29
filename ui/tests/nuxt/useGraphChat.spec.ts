@@ -103,7 +103,7 @@ describe('useGraphChat createNodeFromVariant', () => {
         stubs.nodes.value.push(
             graphNode({
                 id: 'direct-child',
-                type: NodeTypeEnum.ROUTING,
+                type: NodeTypeEnum.AGENT,
                 position: { x: 500, y: 600 },
                 dimensions: { width: 350, height: 100 },
             }),
@@ -120,13 +120,13 @@ describe('useGraphChat createNodeFromVariant', () => {
         ];
         const { createNodeFromVariant } = useGraphChat();
 
-        createNodeFromVariant(NodeTypeEnum.ROUTING, 'source-node-id', {
+        createNodeFromVariant(NodeTypeEnum.AGENT, 'source-node-id', {
             submission: { message: 'Prompt text', files: [], githubContext: null },
         });
 
         expect(stubs.placeBlock).toHaveBeenCalledWith(
             expect.objectContaining({
-                blocId: 'primary-model-routing',
+                blocId: 'primary-model-agent',
                 positionFrom: { x: 1000, y: 600 },
             }),
         );

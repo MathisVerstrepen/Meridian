@@ -75,7 +75,7 @@ Generator nodes are the processing units of the graph that perform actions, typi
 
 -   **Text-to-Text**: A standard node for making a call to a Large Language Model.
 -   **Parallelization**: Executes a single prompt against multiple LLMs simultaneously. It then uses a final "aggregator" model to synthesize the parallel responses into a single, comprehensive answer. This is ideal for tasks requiring diverse perspectives or robust fact-checking.
--   **Routing**: Enables conditional logic within the graph. This node can dynamically select the next node or model to use based on the content of the input, allowing for the creation of sophisticated, stateful agents.
+-   **Agents**: Uses an independently selected main model with subagents from one required private Team. The main model can answer directly, delegate tasks in parallel or sequential rounds, then formulate the final answer from their findings.
 
 <p align="center">
     <img src="imgs/key-features-generator-nodes.png" alt="key-features-generator-nodes"/>

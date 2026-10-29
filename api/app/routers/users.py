@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 import sentry_sdk
-from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from const.settings import DEFAULT_SETTINGS
 from database.pg.admin_ops.admin_usage_crud import get_admin_usage_dashboard
 from database.pg.auth_ops.verification_crud import (
     delete_verification_tokens_for_user,
@@ -587,7 +587,6 @@ async def sync_user(
                 block=DEFAULT_SETTINGS.block,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
-                blockRouting=DEFAULT_SETTINGS.blockRouting,
             ).model_dump(),
         )
         # OAuth users are implicitly verified by the provider
@@ -678,16 +677,6 @@ async def req_get_user_settings(
     """
 
     settings = await get_user_settings(request.app.state.pg_engine, user_id)
-
-    defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
-    found = False
-    for i, group in enumerate(settings.blockRouting.routeGroups):
-        if group.id == defaultRouteGroupId:
-            settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
-        found = True
-        break
-    if not found:
-        settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
     if settings.account.openRouterApiKey:
         settings.account.openRouterApiKey = await decrypt_api_key(

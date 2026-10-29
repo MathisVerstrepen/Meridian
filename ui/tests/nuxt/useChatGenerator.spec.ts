@@ -9,13 +9,15 @@ import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/e
 import type { Message } from '@/types/graph';
 import type { useStreamStore } from '@/stores/stream';
 
-const { useFiles: realUseFiles } = await vi.importActual<typeof import('@/composables/useFiles')>(
-    '@/composables/useFiles',
-);
+const { useFiles: realUseFiles } =
+    await vi.importActual<typeof import('@/composables/useFiles')>('@/composables/useFiles');
 
 const stubs = vi.hoisted(() => ({
+    resolveMention: vi.fn(),
+    defaultTeamId: 'default-team',
+    loadLibrary: vi.fn().mockResolvedValue(undefined),
     openChatId: { value: 'existing-chat-id' },
-    upcomingModelData: { value: { data: { model: 'test-model' } } },
+    upcomingModelData: { value: { data: { model: 'test-model', teamId: '' } } },
     addMessage: vi.fn(),
     getLatestMessage: vi.fn(),
     migrateSessionId: vi.fn(),
@@ -37,11 +39,17 @@ const stubs = vi.hoisted(() => ({
     fileToMessageContent: vi.fn(),
 }));
 
+mockNuxtImport('useAgentStore', () => () => ({
+    resolveMention: stubs.resolveMention,
+    defaultTeamId: stubs.defaultTeamId,
+    loadLibrary: stubs.loadLibrary,
+}));
+
 mockNuxtImport('useGraphFlow', () => () => ({
-        getNodes: {
-            value: [{ id: 'generator-node-id', data: { model: 'test-model' } }],
-        },
-    }));
+    getNodes: {
+        value: [{ id: 'generator-node-id', data: { model: 'test-model' } }],
+    },
+}));
 
 mockNuxtImport('useChatStore', () => () => ({
     storeKind: 'chat',
@@ -61,13 +69,15 @@ mockNuxtImport('useStreamStore', () => () => ({
     cancelStream: stubs.cancelStream,
     retrieveCurrentSession: stubs.retrieveCurrentSession,
 }));
-mockNuxtImport('storeToRefs', () => (store: { storeKind: string }) =>
-    store.storeKind === 'chat'
-        ? {
-              openChatId: stubs.openChatId,
-              upcomingModelData: stubs.upcomingModelData,
-          }
-        : { isNodeStreaming: { value: stubs.isNodeStreaming } },
+mockNuxtImport(
+    'storeToRefs',
+    () => (store: { storeKind: string }) =>
+        store.storeKind === 'chat'
+            ? {
+                  openChatId: stubs.openChatId,
+                  upcomingModelData: stubs.upcomingModelData,
+              }
+            : { isNodeStreaming: { value: stubs.isNodeStreaming } },
 );
 mockNuxtImport('useGraphChat', () => () => ({
     createNodeFromVariant: stubs.createNodeFromVariant,
@@ -120,7 +130,9 @@ describe('useChatGenerator prompt identity', () => {
         vi.clearAllMocks();
         vi.useFakeTimers();
         stubs.execute.mockReset().mockResolvedValue(undefined);
-        stubs.fileToMessageContent.mockReset().mockImplementation(realUseFiles().fileToMessageContent);
+        stubs.fileToMessageContent
+            .mockReset()
+            .mockImplementation(realUseFiles().fileToMessageContent);
         stubs.openChatId.value = 'existing-chat-id';
         stubs.createNodeFromVariant.mockReturnValue({
             generatorNodeId: 'generator-node-id',
@@ -135,18 +147,30 @@ describe('useChatGenerator prompt identity', () => {
     });
 
     it.each(['notes.txt', 'report.docx', 'picture.WEBP', 'scan.pdf'])(
-        'executes a first message with %s after preparing its content', async (name) => {
+        'executes a first message with %s after preparing its content',
+        async (name) => {
             stubs.openChatId.value = DEFAULT_NODE_ID;
             const { session, generator } = setupGenerator([]);
             session.value.fromNodeId = DEFAULT_NODE_ID;
-            generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+            generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+                NodeTypeEnum.TEXT_TO_TEXT,
+            );
             const file: FileSystemObject = {
-                id: 'stored-file-id', name, type: 'file', created_at: '', updated_at: '', cached: false,
+                id: 'stored-file-id',
+                name,
+                type: 'file',
+                created_at: '',
+                updated_at: '',
+                cached: false,
             };
 
-            expect(await generator.generateNew(null, {
-                message: 'Read this', files: [file], githubContext: null,
-            })).toBe(true);
+            expect(
+                await generator.generateNew(null, {
+                    message: 'Read this',
+                    files: [file],
+                    githubContext: null,
+                }),
+            ).toBe(true);
 
             expect(session.value.messages[0]?.content).toEqual([
                 { type: MessageContentTypeEnum.TEXT, text: 'Read this' },
@@ -162,15 +186,30 @@ describe('useChatGenerator prompt identity', () => {
 
     it('handles conversion failure before changing graph or chat state', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        stubs.fileToMessageContent.mockImplementationOnce(() => { throw new Error('Conversion failed'); });
+        stubs.fileToMessageContent.mockImplementationOnce(() => {
+            throw new Error('Conversion failed');
+        });
         const { session, generator } = setupGenerator([]);
-        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
 
-        expect(await generator.generateNew(null, {
-            message: 'Keep this draft',
-            files: [{ id: 'file', name: 'notes.txt', type: 'file', created_at: '', updated_at: '', cached: false }],
-            githubContext: null,
-        })).toBe(false);
+        expect(
+            await generator.generateNew(null, {
+                message: 'Keep this draft',
+                files: [
+                    {
+                        id: 'file',
+                        name: 'notes.txt',
+                        type: 'file',
+                        created_at: '',
+                        updated_at: '',
+                        cached: false,
+                    },
+                ],
+                githubContext: null,
+            }),
+        ).toBe(false);
 
         expect(stubs.createNodeFromVariant).not.toHaveBeenCalled();
         expect(stubs.addMessage).not.toHaveBeenCalled();
@@ -187,11 +226,17 @@ describe('useChatGenerator prompt identity', () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         stubs.execute.mockRejectedValueOnce(new Error('No executor registered'));
         const { generator } = setupGenerator([]);
-        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
 
-        await expect(generator.generateNew(null, {
-            message: 'Hello', files: [], githubContext: null,
-        })).resolves.toBe(false);
+        await expect(
+            generator.generateNew(null, {
+                message: 'Hello',
+                files: [],
+                githubContext: null,
+            }),
+        ).resolves.toBe(false);
 
         expect(generator.generationError.value).toContain('Please try again');
         expect(generator.isSubmitting.value).toBe(false);
@@ -200,9 +245,15 @@ describe('useChatGenerator prompt identity', () => {
 
     it('prevents repeated submissions while render readiness is pending', async () => {
         let finishRender = () => {};
-        stubs.waitForRender.mockReturnValueOnce(new Promise<void>((resolve) => { finishRender = resolve; }));
+        stubs.waitForRender.mockReturnValueOnce(
+            new Promise<void>((resolve) => {
+                finishRender = resolve;
+            }),
+        );
         const { generator } = setupGenerator([]);
-        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
         const submission = { message: 'Hello', files: [], githubContext: null };
         const pending = generator.generateNew(null, submission);
 
@@ -220,18 +271,33 @@ describe('useChatGenerator prompt identity', () => {
         let finishOriginal = () => {};
         let finishFork = () => {};
         stubs.execute
-            .mockReturnValueOnce(new Promise<void>((resolve) => { finishOriginal = resolve; }))
-            .mockReturnValueOnce(new Promise<void>((resolve) => { finishFork = resolve; }));
+            .mockReturnValueOnce(
+                new Promise<void>((resolve) => {
+                    finishOriginal = resolve;
+                }),
+            )
+            .mockReturnValueOnce(
+                new Promise<void>((resolve) => {
+                    finishFork = resolve;
+                }),
+            );
         const { session, generator } = setupGenerator([userMessage('answer-a', 'Message A')]);
-        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
         const original = session.value;
         const pendingB = generator.generateNew(null, {
-            message: 'Message B', files: [], githubContext: null,
+            message: 'Message B',
+            files: [],
+            githubContext: null,
         });
         await flushPromises();
         expect(generator.isSubmitting.value).toBe(true);
 
-        session.value = { fromNodeId: 'answer-a', messages: [userMessage('answer-a', 'Message A')] };
+        session.value = {
+            fromNodeId: 'answer-a',
+            messages: [userMessage('answer-a', 'Message A')],
+        };
         stubs.openChatId.value = 'answer-a';
         expect(generator.isStreaming.value).toBe(false);
         expect(generator.isSubmitting.value).toBe(false);
@@ -247,7 +313,9 @@ describe('useChatGenerator prompt identity', () => {
 
         stubs.createNodeFromVariant.mockReturnValueOnce({ generatorNodeId: 'fork-generator' });
         const pendingC = generator.generateNew(null, {
-            message: 'Message C', files: [], githubContext: null,
+            message: 'Message C',
+            files: [],
+            githubContext: null,
         });
         await flushPromises();
         expect(stubs.execute).toHaveBeenLastCalledWith('fork-generator');
@@ -268,12 +336,20 @@ describe('useChatGenerator prompt identity', () => {
 
     it('keeps generation attached to its original session when forking before render is ready', async () => {
         let finishRender = () => {};
-        stubs.waitForRender.mockReturnValueOnce(new Promise<void>((resolve) => { finishRender = resolve; }));
+        stubs.waitForRender.mockReturnValueOnce(
+            new Promise<void>((resolve) => {
+                finishRender = resolve;
+            }),
+        );
         const { session, generator } = setupGenerator([]);
-        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        generator.selectedNodeType.value = useBlocks().getBlockByNodeType(
+            NodeTypeEnum.TEXT_TO_TEXT,
+        );
         const original = session.value;
         const pending = generator.generateNew(null, {
-            message: 'Message B', files: [], githubContext: null,
+            message: 'Message B',
+            files: [],
+            githubContext: null,
         });
         const fork: ChatSession = { fromNodeId: 'answer-a', messages: [] };
         session.value = fork;
@@ -344,5 +420,55 @@ describe('useChatGenerator prompt identity', () => {
             },
         );
         expect(stubs.execute).toHaveBeenCalledWith('generator-node-id');
+    });
+});
+
+describe('Agent mention validation', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        stubs.execute.mockReset().mockResolvedValue(undefined);
+        stubs.openChatId.value = 'existing-chat-id';
+        stubs.createNodeFromVariant.mockReturnValue({
+            generatorNodeId: 'generator-node-id',
+            promptNodeId: 'prompt-node-id',
+        });
+        stubs.ensureSession.mockReturnValue({ type: NodeTypeEnum.AGENT });
+    });
+    it.each(['@unknown task', '@one @two task'])(
+        'rejects %s before graph or message mutations',
+        async (message) => {
+            stubs.resolveMention.mockRejectedValueOnce(new Error('Invalid Agent mention'));
+            const { generator } = setupGenerator([]);
+            generator.selectedNodeType.value = useBlocks().getBlockByNodeType(NodeTypeEnum.AGENT);
+            expect(
+                await generator.generateNew(null, { message, files: [], githubContext: null }),
+            ).toBe(false);
+            expect(stubs.createNodeFromVariant).not.toHaveBeenCalled();
+            expect(stubs.addMessage).not.toHaveBeenCalled();
+            expect(stubs.saveGraph).not.toHaveBeenCalled();
+            expect(stubs.migrateSessionId).not.toHaveBeenCalled();
+        },
+    );
+    it('selects the mentioned Team on the new node while preserving its main model', async () => {
+        stubs.resolveMention.mockResolvedValueOnce({
+            team_id: 'research-team',
+            message: 'Task',
+        });
+        const { generator } = setupGenerator([]);
+        expect(
+            await generator.generateNew(null, {
+                message: '@research Task',
+                files: [],
+                githubContext: null,
+            }),
+        ).toBe(true);
+        expect(stubs.createNodeFromVariant).toHaveBeenCalledWith(
+            NodeTypeEnum.AGENT,
+            'existing-chat-id',
+            {
+                submission: { message: 'Task', files: [], githubContext: null },
+            },
+        );
+        expect(stubs.upcomingModelData.value.data.teamId).toBe('research-team');
     });
 });

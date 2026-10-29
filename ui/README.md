@@ -31,7 +31,7 @@ This folder contains the **complete frontend application** for Meridian, built w
 - **Interactive Graph Canvas**: Powered by [Vue Flow](https://vueflow.dev/) for drag-and-drop node editing, connections, and execution visualization.
 - **Dual-View Chat**: Seamless chat interface integrated with the graph; supports branching, regeneration, and rich content (Markdown, LaTeX, code highlighting, Mermaid diagrams).
 - **Sandbox Artifact Rendering**: Chat can inline static images returned by code execution and render downloadable file actions from sandbox artifact links.
-- **Node System**: Modular blocks for prompts, files/GitHub context, LLMs (Text-to-Text, Parallelization, Routing), and utilities (Context Merger).
+- **Node System**: Modular blocks for prompts, files/GitHub context, LLMs (Text-to-Text, Parallelization, Agents), and utilities (Context Merger).
 - **Real-time Streaming**: WebSocket-driven AI responses with thinking steps, tool calls (web search, link extraction, code execution), and usage tracking.
 - **Theming**: 4 themes (Standard, Light, GitHub Dark, OLED) with custom Tailwind colors and CSS variables.
 - **File Handling**: Drag-and-drop uploads, GitHub repo integration, PDF processing.
@@ -215,7 +215,7 @@ The generic, smoke, and full Playwright scripts are correctness-only and exclude
 Node families in current UI model:
 
 - Input: `prompt`, `filePrompt`, `github`
-- Generator: `textToText`, `parallelization`, `routing`
+- Generator: `textToText`, `parallelization`, `agent`
 - Utility: `contextMerger`
 
 ### Home (`/`)
@@ -241,7 +241,7 @@ Tab groups are built from live settings data and user role:
   - Prompt Templates
   - Attachment
   - Parallelization
-  - Routing
+  - Agents
   - GitHub
   - Context Merger
 - Tools
@@ -293,7 +293,7 @@ Incoming message types handled by UI:
 - `stream_chunk`
 - `stream_end`
 - `stream_error`
-- `routing_response`
+- `agent_run`, `agent_run_chunk`
 - `title_response`
 - `usage_data_update`
 - `node_data_update`

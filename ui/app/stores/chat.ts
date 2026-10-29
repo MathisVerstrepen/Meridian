@@ -93,6 +93,7 @@ interface UpcomingNode {
 }
 
 interface UpcomingModelData {
+    teamId?: string;
     model: string;
     reply: string;
     selectedTools: ToolEnum[];

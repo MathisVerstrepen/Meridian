@@ -121,19 +121,19 @@ describe('calculateGraphAutoLayout', () => {
         const nodes = [
             typedNode('text', NodeTypeEnum.TEXT_TO_TEXT, 220, 120),
             typedNode('parallel', NodeTypeEnum.PARALLELIZATION, 260, 140),
-            typedNode('routing', NodeTypeEnum.ROUTING, 180, 100),
+            typedNode('agent', NodeTypeEnum.AGENT, 180, 100),
         ];
         const positions = calculateGraphAutoLayout(nodes, [
             edge('text-parallel', 'text', 'parallel', null, 'context_parallel'),
-            edge('parallel-routing', 'parallel', 'routing', null, 'context_routing'),
+            edge('parallel-agent', 'parallel', 'agent', null, 'context_agent'),
         ]);
         const centerX = (id: string) =>
             positions.get(id)!.x + nodes.find((candidate) => candidate.id === id)!.width / 2;
 
         expect(centerX('text')).toBe(centerX('parallel'));
-        expect(centerX('parallel')).toBe(centerX('routing'));
+        expect(centerX('parallel')).toBe(centerX('agent'));
         expect(positions.get('parallel')!.y).toBeGreaterThan(positions.get('text')!.y + 120);
-        expect(positions.get('routing')!.y).toBeGreaterThan(positions.get('parallel')!.y + 140);
+        expect(positions.get('agent')!.y).toBeGreaterThan(positions.get('parallel')!.y + 140);
         expectNoOverlaps(nodes, positions);
     });
 
@@ -144,7 +144,7 @@ describe('calculateGraphAutoLayout', () => {
             { type: NodeTypeEnum.GITHUB, category: 'attachment', lateral: true },
             { type: NodeTypeEnum.TEXT_TO_TEXT, category: 'context', lateral: false },
             { type: NodeTypeEnum.PARALLELIZATION, category: 'context', lateral: false },
-            { type: NodeTypeEnum.ROUTING, category: 'context', lateral: false },
+            { type: NodeTypeEnum.AGENT, category: 'context', lateral: false },
             { type: NodeTypeEnum.CONTEXT_MERGER, category: 'context', lateral: false },
         ];
         for (const { type, category, lateral } of cases) {
@@ -234,7 +234,7 @@ describe('calculateGraphAutoLayout', () => {
         const nodes = [
             typedNode('root', NodeTypeEnum.TEXT_TO_TEXT, 200, 100),
             typedNode('branch-a', NodeTypeEnum.PARALLELIZATION, 180, 120),
-            typedNode('branch-b', NodeTypeEnum.ROUTING, 240, 120),
+            typedNode('branch-b', NodeTypeEnum.AGENT, 240, 120),
             typedNode('after-a', NodeTypeEnum.TEXT_TO_TEXT, 220, 100),
             typedNode('after-b', NodeTypeEnum.TEXT_TO_TEXT, 160, 100),
         ];
@@ -256,7 +256,7 @@ describe('calculateGraphAutoLayout', () => {
     it('falls back deterministically for generator cycles and conflicting prompt stages', () => {
         const nodes = [
             typedNode('generator-a', NodeTypeEnum.TEXT_TO_TEXT),
-            typedNode('generator-b', NodeTypeEnum.ROUTING),
+            typedNode('generator-b', NodeTypeEnum.AGENT),
             typedNode('prompt-a', NodeTypeEnum.PROMPT),
             typedNode('prompt-b', NodeTypeEnum.PROMPT),
         ];

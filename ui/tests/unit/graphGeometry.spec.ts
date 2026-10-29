@@ -34,7 +34,7 @@ describe('calculateGeneratorChildPosition', () => {
             },
             {
                 id: 'higher-x-child',
-                type: NodeTypeEnum.ROUTING,
+                type: NodeTypeEnum.AGENT,
                 position: { x: 700, y: 650 },
                 width: 100,
                 height: 100,
@@ -55,7 +55,7 @@ describe('calculateGeneratorChildPosition', () => {
             },
             {
                 id: 'incoming-generator',
-                type: NodeTypeEnum.ROUTING,
+                type: NodeTypeEnum.AGENT,
                 position: { x: 2000, y: 1400 },
                 width: 200,
                 height: 100,
@@ -78,7 +78,7 @@ describe('calculateGeneratorChildPosition', () => {
     it.each([
         NodeTypeEnum.TEXT_TO_TEXT,
         NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.AGENT,
     ])('accepts direct %s children', (type) => {
         const child = {
             id: 'child',

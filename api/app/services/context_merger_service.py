@@ -248,7 +248,7 @@ class ContextMergerService:
         generator_types = {
             NodeTypeEnum.TEXT_TO_TEXT,
             NodeTypeEnum.PARALLELIZATION,
-            NodeTypeEnum.ROUTING,
+            NodeTypeEnum.AGENT,
         }
         for i, history in enumerate(branch_histories):
             if config.mode == ContextMergerMode.LAST_N and config.last_n and config.last_n > 0:

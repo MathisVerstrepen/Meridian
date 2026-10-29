@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { ToolEnum } from '@/types/enums';
-import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
+import type { DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
-    node: SidebarNode<DataTextToText | DataRouting>;
+    node: SidebarNode<DataTextToText>;
     setNodeDataKey: (key: string, value: RuntimeValue) => void;
 }>();
 

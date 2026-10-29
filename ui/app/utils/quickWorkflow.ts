@@ -20,7 +20,7 @@ export interface QuickWorkflowConfig {
 
 const GENERATORS = [
     NodeTypeEnum.TEXT_TO_TEXT,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
     NodeTypeEnum.PARALLELIZATION,
 ] as const;
 const INPUT_OPTIONS = [NodeTypeEnum.PROMPT, NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB] as const;
@@ -74,7 +74,7 @@ const BLOCK_IDS = {
     [NodeTypeEnum.GITHUB]: 'primary-github-context',
     [NodeTypeEnum.TEXT_TO_TEXT]: 'primary-model-text-to-text',
     [NodeTypeEnum.PARALLELIZATION]: 'primary-model-parallelization',
-    [NodeTypeEnum.ROUTING]: 'primary-model-routing',
+    [NodeTypeEnum.AGENT]: 'primary-model-agent',
 } satisfies Partial<Record<NodeTypeEnum, string>>;
 
 export const getQuickWorkflowConfig = (

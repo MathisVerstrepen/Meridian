@@ -7,7 +7,7 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
 
 const nodeTypeOptions = [
     { id: NodeTypeEnum.TEXT_TO_TEXT, name: 'Text to Text', icon: 'FluentCodeText16Filled' },
-    { id: NodeTypeEnum.ROUTING, name: 'Routing', icon: 'MaterialSymbolsAltRouteRounded' },
+    { id: NodeTypeEnum.AGENT, name: 'Agent', icon: 'MaterialSymbolsAltRouteRounded' },
     {
         id: NodeTypeEnum.PARALLELIZATION,
         name: 'Parallelization',

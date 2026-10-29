@@ -123,7 +123,7 @@ describe('useQuickWorkflow availability', () => {
         stubs.nodes.value.push(
             graphNode({
                 id: 'direct-child',
-                type: NodeTypeEnum.ROUTING,
+                type: NodeTypeEnum.AGENT,
                 position: { x: 500, y: 600 },
                 dimensions: { width: 350, height: 100 },
             }),
@@ -146,14 +146,14 @@ describe('useQuickWorkflow availability', () => {
             direction: 'source',
             slot: {
                 name: 'Generator',
-                mainBloc: NodeTypeEnum.ROUTING,
+                mainBloc: NodeTypeEnum.AGENT,
                 options: [],
             },
         });
 
         expect(stubs.placeBlock).toHaveBeenCalledWith(
             expect.objectContaining({
-                blocId: 'block-routing',
+                blocId: 'block-agent',
                 positionFrom: { x: 1000, y: 600 },
                 positionOffset: undefined,
             }),

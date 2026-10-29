@@ -38,12 +38,12 @@ describe('graph quick-action target classification', () => {
     it('uses the configured workflow main block icon and color in informative metadata', () => {
         const slot: WheelSlot = {
             name: 'Summarize first',
-            mainBloc: NodeTypeEnum.ROUTING,
+            mainBloc: NodeTypeEnum.AGENT,
             options: [NodeTypeEnum.PROMPT],
         };
-        const routingBlock = {
-            name: 'Routing',
-            icon: 'routing-icon',
+        const agentBlock = {
+            name: 'Agent',
+            icon: 'agent-icon',
             color: 'var(--color-slate-blue)',
         };
 
@@ -53,12 +53,12 @@ describe('graph quick-action target classification', () => {
                 NodeCategoryEnum.CONTEXT,
                 'source',
                 2,
-                (nodeType) => (nodeType === NodeTypeEnum.ROUTING ? routingBlock : undefined),
+                (nodeType) => (nodeType === NodeTypeEnum.AGENT ? agentBlock : undefined),
             ),
         ).toEqual({
             id: 'workflow-context-source-2',
-            label: 'Context output handle · Routing node',
-            icon: 'routing-icon',
+            label: 'Context output handle · Agent node',
+            icon: 'agent-icon',
             accentColor: 'var(--color-slate-blue)',
             compactHandle: { category: 'context', direction: 'source' },
         });

@@ -24,7 +24,7 @@ const block = computed(
             'bg-terracotta-clay/50 border-terracotta-clay-dark':
                 nodeType === NodeTypeEnum.PARALLELIZATION,
             'bg-olive-grove/50 border-olive-grove-dark': nodeType === NodeTypeEnum.TEXT_TO_TEXT,
-            'bg-sunbaked-sand/50 border-sunbaked-sand-dark': nodeType === NodeTypeEnum.ROUTING,
+            'bg-sunbaked-sand/50 border-sunbaked-sand-dark': nodeType === NodeTypeEnum.AGENT,
             'bg-dried-heather/50 border-dried-heather-dark': nodeType === NodeTypeEnum.FILE_PROMPT,
             'bg-github/50 border-github': nodeType === NodeTypeEnum.GITHUB,
             'bg-golden-ochre/50 border-golden-ochre': nodeType === NodeTypeEnum.CONTEXT_MERGER,

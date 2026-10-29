@@ -48,7 +48,7 @@ const focusToNode = (nodeId: string) => {
                 :class="{
                     'bg-terracotta-clay': step.node_type === NodeTypeEnum.PARALLELIZATION,
                     'bg-olive-grove': step.node_type === NodeTypeEnum.TEXT_TO_TEXT,
-                    'bg-sunbaked-sand-dark': step.node_type === NodeTypeEnum.ROUTING,
+                    'bg-sunbaked-sand-dark': step.node_type === NodeTypeEnum.AGENT,
                 }"
             />
             <span class="mx-2 text-[9px] font-bold">{{ step.node_id.slice(0, 24) }}...</span>

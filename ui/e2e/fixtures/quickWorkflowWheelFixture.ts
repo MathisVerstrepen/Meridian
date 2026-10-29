@@ -13,13 +13,13 @@ const slot = (
 export const QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS: BlockSettings = {
     contextInputWheel: [
         slot('Slot 1', NodeTypeEnum.TEXT_TO_TEXT, [NodeTypeEnum.PROMPT]),
-        slot('Slot 2', NodeTypeEnum.ROUTING, [NodeTypeEnum.PROMPT]),
+        slot('Slot 2', NodeTypeEnum.AGENT, [NodeTypeEnum.PROMPT]),
         slot('Slot 3', NodeTypeEnum.PARALLELIZATION, [NodeTypeEnum.PROMPT]),
         slot('Slot 4', null),
     ],
     contextWheel: [
         slot('Slot 1', NodeTypeEnum.TEXT_TO_TEXT, [NodeTypeEnum.PROMPT]),
-        slot('Slot 2', NodeTypeEnum.ROUTING, [NodeTypeEnum.PROMPT]),
+        slot('Slot 2', NodeTypeEnum.AGENT, [NodeTypeEnum.PROMPT]),
         slot('Slot 3', NodeTypeEnum.PARALLELIZATION, [NodeTypeEnum.PROMPT]),
         slot('Slot 4', null),
     ],
@@ -31,7 +31,7 @@ export const QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS: BlockSettings = {
     ],
     promptOutputWheel: [
         slot('Slot 1', NodeTypeEnum.TEXT_TO_TEXT),
-        slot('Slot 2', NodeTypeEnum.ROUTING),
+        slot('Slot 2', NodeTypeEnum.AGENT),
         slot('Slot 3', NodeTypeEnum.PARALLELIZATION),
         slot('Slot 4', null),
     ],
@@ -43,7 +43,7 @@ export const QUICK_WORKFLOW_FIXTURE_BLOCK_SETTINGS: BlockSettings = {
     ],
     attachmentOutputWheel: [
         slot('Slot 1', NodeTypeEnum.TEXT_TO_TEXT, [NodeTypeEnum.PROMPT]),
-        slot('Slot 2', NodeTypeEnum.ROUTING, [NodeTypeEnum.PROMPT]),
+        slot('Slot 2', NodeTypeEnum.AGENT, [NodeTypeEnum.PROMPT]),
         slot('Slot 3', NodeTypeEnum.PARALLELIZATION, [NodeTypeEnum.PROMPT]),
         slot('Slot 4', null),
     ],

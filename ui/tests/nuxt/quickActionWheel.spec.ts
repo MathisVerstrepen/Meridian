@@ -52,30 +52,30 @@ const multipleFanActions: GraphQuickAction[] = [
         children: [
             {
                 id: 'workflow-context-target-0',
-                label: 'Context input handle · Routing node',
-                icon: 'routing-icon',
+                label: 'Context input handle · Agent node',
+                icon: 'agent-icon',
                 accentColor: '#735f9c',
                 compactHandle: { category: 'context', direction: 'target' },
                 run: () => undefined,
             },
             {
                 id: 'workflow-prompt-source-0',
-                label: 'Prompt output handle · Routing node',
-                icon: 'routing-icon',
+                label: 'Prompt output handle · Agent node',
+                icon: 'agent-icon',
                 compactHandle: { category: 'prompt', direction: 'source' },
                 run: () => undefined,
             },
             {
                 id: 'workflow-attachment-target-0',
-                label: 'Attachment input handle · Routing node',
-                icon: 'routing-icon',
+                label: 'Attachment input handle · Agent node',
+                icon: 'agent-icon',
                 compactHandle: { category: 'attachment', direction: 'target' },
                 run: () => undefined,
             },
             {
                 id: 'workflow-attachment-source-0',
-                label: 'Attachment output handle · Routing node',
-                icon: 'routing-icon',
+                label: 'Attachment output handle · Agent node',
+                icon: 'agent-icon',
                 compactHandle: { category: 'attachment', direction: 'source' },
                 run: () => undefined,
             },
@@ -308,10 +308,10 @@ describe('quickActionWheel', () => {
         const workflowAction = document.querySelector<HTMLButtonElement>(
             '[data-action-id="workflow-context-target-0"]',
         )!;
-        expect(workflowAction.getAttribute('aria-label')).toBe('Context input handle · Routing node');
-        expect(workflowAction.getAttribute('title')).toBe('Context input handle · Routing node');
+        expect(workflowAction.getAttribute('aria-label')).toBe('Context input handle · Agent node');
+        expect(workflowAction.getAttribute('title')).toBe('Context input handle · Agent node');
         expect(workflowAction.style.getPropertyValue('--quick-action-accent')).toBe('#735f9c');
-        expect(workflowAction.querySelector('ui-icon-stub')?.getAttribute('name')).toBe('routing-icon');
+        expect(workflowAction.querySelector('ui-icon-stub')?.getAttribute('name')).toBe('agent-icon');
         expect(workflowAction.querySelector('[data-compact-workflow-label]')?.textContent?.trim()).toBe('');
         const handleIndicator = workflowAction.querySelector<HTMLElement>(
             '[data-workflow-handle-indicator]',

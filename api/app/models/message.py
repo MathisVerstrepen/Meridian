@@ -79,7 +79,7 @@ class NodeTypeEnum(str, Enum):
     PARALLELIZATION = "parallelization"
     PARALLELIZATION_MODELS = "parallelizationModels"
     FILE_PROMPT = "filePrompt"
-    ROUTING = "routing"
+    AGENT = "agent"
     GITHUB = "github"
     CONTEXT_MERGER = "contextMerger"
 

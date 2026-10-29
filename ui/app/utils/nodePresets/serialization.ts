@@ -61,7 +61,9 @@ function sanitizeGeneratorData(
                   (tool): tool is ToolEnum => typeof tool === 'string' && TOOLS.has(tool),
               )
             : [],
-        ...optionalValue(data, 'autoSelectTools', (entry) => (entry === null ? null : entry === true)),
+        ...optionalValue(data, 'autoSelectTools', (entry) =>
+            entry === null ? null : entry === true,
+        ),
         ...optionalValue(data, 'imageModel', (entry) =>
             entry === null ? null : stringValue(entry),
         ),
@@ -121,9 +123,7 @@ function sanitizeGithubData(data: NodePresetUnknownRecord): NodePresetData {
                       }) satisfies GithubIssue,
               )
             : [],
-        ...optionalValue(data, 'branch', (entry) =>
-            entry === null ? null : stringValue(entry),
-        ),
+        ...optionalValue(data, 'branch', (entry) => (entry === null ? null : stringValue(entry))),
     };
 }
 
@@ -167,11 +167,15 @@ function sanitizeData(type: NodePresetNodeType, value: RuntimeValue): NodePreset
                 : [],
         };
     }
-    if (type === 'textToText' || type === 'routing') {
+    if (type === 'textToText' || type === 'agent') {
         const shared = sanitizeGeneratorData(data);
         return type === 'textToText'
             ? { model: stringValue(data.model), ...shared }
-            : { routeGroupId: stringValue(data.routeGroupId), ...shared };
+            : {
+                  model: stringValue(data.model),
+                  ...shared,
+                  teamId: stringValue(data.teamId),
+              };
     }
     if (type === 'parallelization') {
         return {
@@ -193,9 +197,7 @@ function sanitizeData(type: NodePresetNodeType, value: RuntimeValue): NodePreset
                 mode === ContextMergerModeEnum.SUMMARY || mode === ContextMergerModeEnum.LAST_N
                     ? mode
                     : ContextMergerModeEnum.FULL,
-            ...optionalValue(data, 'last_n', (entry) =>
-                entry === null ? null : Number(entry),
-            ),
+            ...optionalValue(data, 'last_n', (entry) => (entry === null ? null : Number(entry))),
             include_user_messages: data.include_user_messages === true,
         };
     }
@@ -208,10 +210,7 @@ function sanitizeData(type: NodePresetNodeType, value: RuntimeValue): NodePreset
     };
 }
 
-function readDimension(
-    node: NodePresetUnknownRecord,
-    dimension: 'width' | 'height',
-): number {
+function readDimension(node: NodePresetUnknownRecord, dimension: 'width' | 'height'): number {
     if (isRuntimeNumber(node[dimension])) return node[dimension];
     if (isRecord(node.dimensions) && isRuntimeNumber(node.dimensions[dimension])) {
         return node.dimensions[dimension];
@@ -241,14 +240,16 @@ export function normalizeNodePresetGeometry(preset: NodePreset): NodePreset {
 export function serializeNodePreset(input: NodePresetDraftInput): NodePresetResult<NodePreset> {
     const nodes: NodePresetNode[] = input.nodes.map((node) => {
         const record = isRecord(node) ? node : {};
-        const type = /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that node-type check. */ stringValue(record.type) as NodePresetNodeType;
+        const type =
+            /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that node-type check. */ stringValue(
+                record.type,
+            ) as NodePresetNodeType;
         const position = isRecord(record.position) ? record.position : {};
-        const parentId =
-            isRuntimeString(record.parentId)
-                ? record.parentId
-                : isRuntimeString(record.parentNode)
-                  ? record.parentNode
-                  : undefined;
+        const parentId = isRuntimeString(record.parentId)
+            ? record.parentId
+            : isRuntimeString(record.parentNode)
+              ? record.parentNode
+              : undefined;
         const serializedNode = {
             id: stringValue(record.id),
             type,
@@ -262,17 +263,17 @@ export function serializeNodePreset(input: NodePresetDraftInput): NodePresetResu
     });
     const edges: NodePresetEdge[] = input.edges.map((edge) => {
         const record = isRecord(edge) ? edge : {};
-        const categoryValue =
-            isRuntimeString(record.category)
-                ? record.category
-                : isRuntimeString(record.sourceHandle)
-                  ? record.sourceHandle.split('_')[0]
-                  : '';
+        const categoryValue = isRuntimeString(record.category)
+            ? record.category
+            : isRuntimeString(record.sourceHandle)
+              ? record.sourceHandle.split('_')[0]
+              : '';
         return {
             id: stringValue(record.id),
             source: stringValue(record.source),
             target: stringValue(record.target),
-            category: /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that edge-category check. */ categoryValue as NodePresetEdgeCategory,
+            category:
+                /* SAFETY: This untrusted candidate is passed directly to validateNodePresetSettings; assertion does not bypass that edge-category check. */ categoryValue as NodePresetEdgeCategory,
         };
     });
     const normalized = normalizeNodePresetGeometry({

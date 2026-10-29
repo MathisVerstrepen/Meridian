@@ -28,7 +28,7 @@ export enum NodeTypeEnum {
     TEXT_TO_TEXT = 'textToText',
     PARALLELIZATION = 'parallelization',
     PARALLELIZATION_MODELS = 'parallelizationModels',
-    ROUTING = 'routing',
+    AGENT = 'agent',
     STREAMING = 'streaming',
     CONTEXT_MERGER = 'contextMerger',
 }

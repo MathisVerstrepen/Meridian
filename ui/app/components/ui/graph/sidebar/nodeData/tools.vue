@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { TOOLS } from '@/constants/tools';
 import type { ToolEnum } from '@/types/enums';
-import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
+import type { DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
-    node: SidebarNode<DataRouting | DataTextToText>;
+    node: SidebarNode<DataTextToText>;
     setNodeDataKey: (key: string, value: RuntimeValue) => void;
     availableTools?: ToolEnum[];
     disabled?: boolean;
@@ -42,9 +42,11 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
         <template v-for="tool in TOOLS" :key="tool.type">
             <button
                 v-if="availableTools?.includes(tool.type)"
+                type="button"
+                :aria-pressed="node.data.selectedTools?.includes(tool.type) ?? false"
                 class="group relative flex h-16 w-full cursor-pointer flex-col items-center
                     justify-center gap-1 rounded-lg p-2 text-center text-sm font-bold ring-2
-                    transition-all duration-200 ease-in-out"
+                    transition-all duration-200 ease-in-out focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ember-glow"
                 :title="tool.description"
                 :disabled="disabled"
                 :class="[

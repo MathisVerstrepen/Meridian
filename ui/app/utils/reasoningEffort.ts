@@ -14,9 +14,8 @@ export const REASONING_EFFORT_LABELS = {
     [ReasoningEffortEnum.NONE]: 'None',
 } satisfies Readonly<Record<ReasoningEffortEnum, string>>;
 
-export const isKnownReasoningEffortsMask = (
-    value: number | null | undefined,
-): value is number => Number.isInteger(value) && value >= 0 && value <= ALL_REASONING_EFFORTS;
+export const isKnownReasoningEffortsMask = (value: number | null | undefined): value is number =>
+    Number.isInteger(value) && value >= 0 && value <= ALL_REASONING_EFFORTS;
 
 export const reasoningEffortBit = (effort: ReasoningEffortEnum): number => {
     const index = REASONING_EFFORTS.indexOf(effort);
@@ -74,7 +73,7 @@ export const getCanvasModelIds = (nodes: ReadonlyArray<CanvasNode>): string[] =>
     const modelIds = new Set<string>();
 
     for (const node of nodes) {
-        if (node.type === NodeTypeEnum.TEXT_TO_TEXT || node.type === NodeTypeEnum.ROUTING) {
+        if (node.type === NodeTypeEnum.TEXT_TO_TEXT || node.type === NodeTypeEnum.AGENT) {
             const modelId = getModelId(node.data);
             if (modelId) modelIds.add(modelId);
             continue;

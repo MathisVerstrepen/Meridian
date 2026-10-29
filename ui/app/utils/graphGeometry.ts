@@ -59,7 +59,7 @@ export interface WheelSectorGeometry {
 const GENERATOR_NODE_TYPES = new Set<string>([
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ]);
 
 export const calculateGeneratorChildPosition = (

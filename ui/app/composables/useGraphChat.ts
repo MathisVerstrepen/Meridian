@@ -238,18 +238,18 @@ export const useGraphChat = () => {
         return newParallelizationNode?.id;
     };
 
-    const addRoutingFromEmptyGraph = (input: string, forcedRoutingNodeId: string | null) => {
-        const newRoutingNode = placeBlock({
+    const addAgentFromEmptyGraph = (input: string, forcedAgentNodeId: string | null) => {
+        const newAgentNode = placeBlock({
             graphId: graphId.value,
-            blocId: 'primary-model-routing',
+            blocId: 'primary-model-agent',
             positionFrom: { x: 0, y: 350 },
-            forcedId: forcedRoutingNodeId,
+            forcedId: forcedAgentNodeId,
             data: {
                 ...upcomingModelData.value.data,
             },
         });
 
-        return newRoutingNode?.id;
+        return newAgentNode?.id;
     };
 
     const addParallelizationInputNode = (
@@ -284,20 +284,20 @@ export const useGraphChat = () => {
         return newParallelizationNode?.id;
     };
 
-    const addRoutingInputNode = (
+    const addAgentInputNode = (
         input: string,
         fromNodeId: string | null,
-        forcedRoutingNodeId: string | null = null,
+        forcedAgentNodeId: string | null = null,
     ) => {
-        if (!fromNodeId || forcedRoutingNodeId || fromNodeId === DEFAULT_NODE_ID) {
-            return addRoutingFromEmptyGraph(input, forcedRoutingNodeId);
+        if (!fromNodeId || forcedAgentNodeId || fromNodeId === DEFAULT_NODE_ID) {
+            return addAgentFromEmptyGraph(input, forcedAgentNodeId);
         }
 
         const position = getGeneratorPlacement(fromNodeId);
 
-        const newRoutingNode = placeBlock({
+        const newAgentNode = placeBlock({
             graphId: graphId.value,
-            blocId: 'primary-model-routing',
+            blocId: 'primary-model-agent',
             fromNodeId: fromNodeId,
             positionFrom: position,
             data: {
@@ -308,12 +308,12 @@ export const useGraphChat = () => {
         placeEdge(
             graphId.value,
             fromNodeId,
-            newRoutingNode?.id,
+            newAgentNode?.id,
             null,
-            'context_' + newRoutingNode?.id,
+            'context_' + newAgentNode?.id,
         );
 
-        return newRoutingNode?.id;
+        return newAgentNode?.id;
     };
 
     const updatePromptNodeText = (nodeId: string, text: string) => {
@@ -355,8 +355,8 @@ export const useGraphChat = () => {
             case NodeTypeEnum.PARALLELIZATION:
                 newNodeId = addParallelizationInputNode(submission.message, fromNodeId, forcedNodeId);
                 break;
-            case NodeTypeEnum.ROUTING:
-                newNodeId = addRoutingInputNode(submission.message, fromNodeId, forcedNodeId);
+            case NodeTypeEnum.AGENT:
+                newNodeId = addAgentInputNode(submission.message, fromNodeId, forcedNodeId);
                 break;
             default:
                 console.warn(`Unknown node variant: ${generatorNode}`);

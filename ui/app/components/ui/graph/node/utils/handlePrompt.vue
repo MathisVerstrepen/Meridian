@@ -31,7 +31,7 @@ const handleCategory = NodeCategoryEnum.PROMPT;
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
     NodeTypeEnum.PROMPT,
 ];
 const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];

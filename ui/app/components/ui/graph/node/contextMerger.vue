@@ -11,7 +11,7 @@ const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:un
 const { getBlockById } = useBlocks();
 const blockDefinition = getBlockById('primary-context-merger');
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 

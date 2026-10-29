@@ -33,7 +33,7 @@ const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 

@@ -19,7 +19,7 @@ const { nodeRef, isVisible } = useNodeVisibility();
 const graphEvents = useGraphEvents();
 const promptTemplateStore = usePromptTemplateStore();
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 
@@ -141,7 +141,7 @@ const doneAction = async (generateNext: boolean) => {
     }
     const nodes = await searchNode(graphId.value, props.id, 'downstream', [
         NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.AGENT,
         NodeTypeEnum.TEXT_TO_TEXT,
     ]);
     const jobs = [];

@@ -32,9 +32,10 @@ const DATA_KEYS = {
         'visualiseModes',
     ],
     parallelization: ['models', 'aggregator', 'defaultModel'],
-    routing: [
-        'routeGroupId',
+    agent: [
+        'model',
         'selectedTools',
+        'teamId',
         'autoSelectTools',
         'imageModel',
         'videoModel',
@@ -100,7 +101,12 @@ function validatePromptData(
     if (!requireRecord(data.templateVariables, variablesPath, issues)) return;
     const entries = Object.entries(data.templateVariables);
     if (entries.length > 100) {
-        addIssue(issues, variablesPath, 'too_many_items', 'At most 100 template variables are allowed.');
+        addIssue(
+            issues,
+            variablesPath,
+            'too_many_items',
+            'At most 100 template variables are allowed.',
+        );
     }
     entries.forEach(([key, value]) => {
         validateString(key, [...variablesPath, key], issues, 128, {
@@ -128,7 +134,17 @@ function validateFilePromptData(
         if (!requireRecord(file, filePath, issues)) return;
         forbidExtraKeys(
             file,
-            ['id', 'name', 'path', 'type', 'size', 'content_type', 'created_at', 'updated_at', 'cached'],
+            [
+                'id',
+                'name',
+                'path',
+                'type',
+                'size',
+                'content_type',
+                'created_at',
+                'updated_at',
+                'cached',
+            ],
             filePath,
             issues,
         );
@@ -142,8 +158,12 @@ function validateFilePromptData(
         validateString(file.content_type, [...filePath, 'content_type'], issues, 255, {
             nullable: true,
         });
-        validateString(file.created_at, [...filePath, 'created_at'], issues, 64, { required: true });
-        validateString(file.updated_at, [...filePath, 'updated_at'], issues, 64, { required: true });
+        validateString(file.created_at, [...filePath, 'created_at'], issues, 64, {
+            required: true,
+        });
+        validateString(file.updated_at, [...filePath, 'updated_at'], issues, 64, {
+            required: true,
+        });
         validateBoolean(file.cached, [...filePath, 'cached'], issues, { required: true });
     });
 }
@@ -157,7 +177,12 @@ function validateParallelData(
         addIssue(issues, [...path, 'models'], 'invalid_type', 'Must be an array.');
     } else {
         if (data.models.length > 16) {
-            addIssue(issues, [...path, 'models'], 'too_many_items', 'At most 16 models are allowed.');
+            addIssue(
+                issues,
+                [...path, 'models'],
+                'too_many_items',
+                'At most 16 models are allowed.',
+            );
         }
         data.models.forEach((model, index) => {
             const modelPath = [...path, 'models', index];
@@ -207,13 +232,22 @@ function validateRepository(
         required: true,
         nullable: true,
     });
-    validateString(value.clone_url_ssh, [...path, 'clone_url_ssh'], issues, 4_096, { required: true });
+    validateString(value.clone_url_ssh, [...path, 'clone_url_ssh'], issues, 4_096, {
+        required: true,
+    });
     validateString(value.clone_url_https, [...path, 'clone_url_https'], issues, 4_096, {
         required: true,
     });
-    validateInteger(value.stargazers_count, [...path, 'stargazers_count'], issues, 0, Number.MAX_VALUE, {
-        nullable: true,
-    });
+    validateInteger(
+        value.stargazers_count,
+        [...path, 'stargazers_count'],
+        issues,
+        0,
+        Number.MAX_VALUE,
+        {
+            nullable: true,
+        },
+    );
 }
 
 function validateGithubIssue(
@@ -241,14 +275,21 @@ function validateGithubIssue(
         issues,
     );
     validateInteger(value.id, [...path, 'id'], issues, 0, Number.MAX_VALUE, { required: true });
-    validateInteger(value.number, [...path, 'number'], issues, 0, Number.MAX_VALUE, { required: true });
+    validateInteger(value.number, [...path, 'number'], issues, 0, Number.MAX_VALUE, {
+        required: true,
+    });
     validateString(value.title, [...path, 'title'], issues, 512, { required: true });
-    validateString(value.body, [...path, 'body'], issues, 100_000, { required: true, nullable: true });
+    validateString(value.body, [...path, 'body'], issues, 100_000, {
+        required: true,
+        nullable: true,
+    });
     if (value.state !== 'open' && value.state !== 'closed') {
         addIssue(issues, [...path, 'state'], 'invalid_value', 'Must be open or closed.');
     }
     validateString(value.html_url, [...path, 'html_url'], issues, 4_096, { required: true });
-    validateBoolean(value.is_pull_request, [...path, 'is_pull_request'], issues, { required: true });
+    validateBoolean(value.is_pull_request, [...path, 'is_pull_request'], issues, {
+        required: true,
+    });
     validateString(value.user_login, [...path, 'user_login'], issues, 255, { required: true });
     validateString(value.user_avatar, [...path, 'user_avatar'], issues, 4_096, {
         required: true,
@@ -268,7 +309,12 @@ function validateGithubData(
         addIssue(issues, [...path, 'files'], 'invalid_type', 'Must be an array.');
     } else {
         if (data.files.length > 200) {
-            addIssue(issues, [...path, 'files'], 'too_many_items', 'At most 200 files are allowed.');
+            addIssue(
+                issues,
+                [...path, 'files'],
+                'too_many_items',
+                'At most 200 files are allowed.',
+            );
         }
         data.files.forEach((file, index) => {
             const filePath = [...path, 'files', index];
@@ -276,7 +322,12 @@ function validateGithubData(
             forbidExtraKeys(file, ['name', 'type', 'path'], filePath, issues);
             validateString(file.name, [...filePath, 'name'], issues, 255, { required: true });
             if (file.type !== 'file' && file.type !== 'directory') {
-                addIssue(issues, [...filePath, 'type'], 'invalid_value', 'Must be file or directory.');
+                addIssue(
+                    issues,
+                    [...filePath, 'type'],
+                    'invalid_value',
+                    'Must be file or directory.',
+                );
             }
             validateString(file.path, [...filePath, 'path'], issues, 4_096, { required: true });
         });
@@ -309,8 +360,16 @@ export function validateNodeData(
     forbidExtraKeys(value, DATA_KEYS[type], path, issues);
     if (type === 'prompt') validatePromptData(value, path, issues);
     else if (type === 'filePrompt') validateFilePromptData(value, path, issues);
-    else if (type === 'textToText' || type === 'routing') {
-        const primary = type === 'textToText' ? 'model' : 'routeGroupId';
+    else if (type === 'agent') {
+        validateString(value.model, [...path, 'model'], issues, 256, { required: true });
+        validateTools(value.selectedTools, [...path, 'selectedTools'], issues);
+        validateOptionalStringFields(value, path, issues);
+        validateString(value.teamId, [...path, 'teamId'], issues, 256, {
+            required: true,
+            nonEmpty: true,
+        });
+    } else if (type === 'textToText') {
+        const primary = 'model';
         validateString(value[primary], [...path, primary], issues, 256, { required: true });
         validateTools(value.selectedTools, [...path, 'selectedTools'], issues);
         validateOptionalStringFields(value, path, issues);
@@ -342,9 +401,16 @@ export function validateNodeData(
             );
         }
         validateString(value.comment, [...path, 'comment'], issues, 4_000, { required: true });
-        validateInteger(value.colorIndex, [...path, 'colorIndex'], issues, 0, NODE_GROUP_COLORS.length - 1, {
-            required: true,
-        });
+        validateInteger(
+            value.colorIndex,
+            [...path, 'colorIndex'],
+            issues,
+            0,
+            NODE_GROUP_COLORS.length - 1,
+            {
+                required: true,
+            },
+        );
     }
 }
 import { isRuntimeString } from '@/utils/runtimeTypes';

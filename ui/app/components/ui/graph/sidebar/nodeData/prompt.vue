@@ -123,7 +123,7 @@ const doneAction = async (generateNext: boolean) => {
     }
     const nodes = await searchNode(props.graphId, props.node.id, 'downstream', [
         NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.AGENT,
         NodeTypeEnum.TEXT_TO_TEXT,
     ]);
     const jobs = [];

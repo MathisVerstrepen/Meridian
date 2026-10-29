@@ -84,11 +84,10 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
                 activeGenerationHistoryId: undefined,
             };
         }
-        if (type === 'routing') {
+        if (type === 'agent') {
             return {
                 ...merged,
-                model: '',
-                selectedRouteId: '',
+                agentExecution: undefined,
                 reply: '',
                 usageData: null,
                 activeGenerationHistoryId: undefined,
@@ -225,7 +224,7 @@ export function useNodePresetEditor(options: UseNodePresetEditorOptions) {
         }
         const contextIntoGenerator =
             category === 'context' &&
-            ['textToText', 'parallelization', 'routing'].includes(
+            ['textToText', 'parallelization', 'agent'].includes(
                 getNodes.value.find((node) => node.id === connection.target)?.type ?? '',
             );
         const existingContext = getEdges.value.filter(

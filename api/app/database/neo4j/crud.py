@@ -311,7 +311,7 @@ async def get_connected_prompt_nodes(
 
     This function finds all incoming paths of "prompt-like" nodes that lead to the
     specified generator node. The search stops and excludes any path that contains
-    another generator node (TEXT_TO_TEXT, PARALLELIZATION, ROUTING) as an
+    another generator node (TEXT_TO_TEXT, PARALLELIZATION, AGENT) as an
     intermediate step.
 
     Args:
@@ -337,7 +337,7 @@ async def get_connected_prompt_nodes(
     generator_types = [
         NodeTypeEnum.TEXT_TO_TEXT,
         NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.AGENT,
     ]
 
     try:
@@ -576,7 +576,7 @@ async def get_execution_plan(
     executable_types = [
         NodeTypeEnum.TEXT_TO_TEXT,
         NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.AGENT,
     ]
 
     params: dict = {"executable_types": executable_types}

@@ -35,7 +35,7 @@
 
 Meridian is an open-source, graph-based platform for building, visualizing, and interacting with complex AI workflows. Instead of traditional linear chats, Meridian uses a visual canvas where you can connect different AI models, data sources, structured tools, and logic blocks to create powerful and dynamic conversational agents.
 
-This graph-based approach allows for sophisticated context management, branching conversations, advanced execution patterns like parallel model querying and conditional routing, and richer tool-assisted workflows. It provides both a powerful visual graph for building workflows and a clean, feature-rich chat interface for interacting with them.
+This graph-based approach allows for sophisticated context management, branching conversations, advanced execution patterns like parallel model querying and model-directed Agent delegation, and richer tool-assisted workflows. It provides both a powerful visual graph for building workflows and a clean, feature-rich chat interface for interacting with them.
 
 <p align="center">
     <img src="docs/imgs/main-canvas-view.png" alt="main-canvas-view"/>
@@ -59,7 +59,7 @@ This graph-based approach allows for sophisticated context management, branching
     *   **Generator Nodes**: The processing units of the graph.
         *   `Text-to-Text`: A standard Large Language Model (LLM) call.
         *   `Parallelization`: Executes a prompt against multiple LLMs simultaneously and uses an aggregator model to synthesize the results into a single, comprehensive answer.
-        *   `Routing`: Dynamically selects the next node or model based on the input, enabling conditional logic in your workflows.
+        *   `Agents`: Executes one reusable primary Agent, optionally with a private Team of available subagents. The primary model chooses direct responses, parallel tasks, or dependent delegation rounds.
 
     <p align="center">
         <img src="docs/imgs/key-features-generator-nodes.png" alt="key-features-generator-nodes"/>

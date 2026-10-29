@@ -11,7 +11,7 @@ import {
     UiSettingsSectionBlocks,
     UiSettingsSectionBlocksPromptImprover,
     UiSettingsSectionBlocksParallelization,
-    UiSettingsSectionBlocksRouting,
+    UiSettingsSectionBlocksAgent,
     UiSettingsSectionBlocksContextMerger,
     UiSettingsSectionBlocksGenerationHistory,
     UiSettingsSectionBlocksPromptTemplates,
@@ -80,7 +80,7 @@ enum TabNames {
     NODE_PRESETS = 'Node Presets',
     PROMPT_IMPROVER = 'Prompt Improver',
     PROMPT_TEMPLATES = 'Prompt Templates',
-    ROUTING = 'Routing',
+    AGENT = 'Agent',
     PARALLELIZATION = 'Parallelization',
     CONTEXT_MERGER = 'Context Merger',
     GENERATION_HISTORY = 'Generation History',
@@ -292,9 +292,9 @@ const groups = computed<ISettingsGroup[]>(() => {
                 ),
                 createTab(
                     GroupNames.WORKFLOW_NODES,
-                    TabNames.ROUTING,
+                    TabNames.AGENT,
                     'MaterialSymbolsAltRouteRounded',
-                    UiSettingsSectionBlocksRouting,
+                    UiSettingsSectionBlocksAgent,
                 ),
                 createTab(
                     GroupNames.WORKFLOW_NODES,
@@ -805,7 +805,7 @@ onMounted(() => {
                     </nav>
 
                     <button
-                        v-if="isMounted"
+                        v-if="isMounted && selectedTab.name !== TabNames.AGENT"
                         class="bg-ember-glow hover:bg-ember-glow/80 focus:shadow-outline
                             text-soft-silk mt-3 w-full rounded-lg px-4 py-2 text-sm font-bold
                             duration-200 ease-in-out hover:cursor-pointer focus:outline-none

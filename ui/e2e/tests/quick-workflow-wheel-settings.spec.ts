@@ -143,12 +143,12 @@ test('keeps selector, editor, slot detail, and tabs flat at desktop and 390px', 
 
 test('derives the exact ordered main and linked choices for every wheel', async ({ page }) => {
     const cases = [
-        [/Context Input/i, ['Text to Text', 'Routing', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
-        [/Context Output/i, ['Text to Text', 'Routing', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
+        [/Context Input/i, ['Text to Text', 'Agent', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
+        [/Context Output/i, ['Text to Text', 'Agent', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
         [/Prompt Input/i, ['Prompt'], []],
-        [/Prompt Output/i, ['Text to Text', 'Routing', 'Parallelization'], ['Attachment', 'GitHub']],
+        [/Prompt Output/i, ['Text to Text', 'Agent', 'Parallelization'], ['Attachment', 'GitHub']],
         [/Attachment Input/i, ['Attachment', 'GitHub'], []],
-        [/Attachment Output/i, ['Text to Text', 'Routing', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
+        [/Attachment Output/i, ['Text to Text', 'Agent', 'Parallelization'], ['Prompt', 'Attachment', 'GitHub']],
     ] as const;
 
     for (const [wheel, mains, linked] of cases) {
@@ -190,10 +190,10 @@ test('keeps native choice inputs accessible with immediate, distinct card feedba
         footprints.every(({ height, position, width }) => height <= 1 && width <= 1 && position === 'absolute'),
     ).toBe(true);
 
-    const routing = panel.getByRole('radio', { name: 'Routing main block' });
-    const routingCard = routing.locator('..');
+    const agent = panel.getByRole('radio', { name: 'Agent main block' });
+    const agentCard = agent.locator('..');
     const readFeedback = () =>
-        routingCard.evaluate((element) => {
+        agentCard.evaluate((element) => {
             const style = getComputedStyle(element);
             return {
                 background: style.backgroundColor,
@@ -202,23 +202,23 @@ test('keeps native choice inputs accessible with immediate, distinct card feedba
             };
         });
     const finishFeedback = () =>
-        routingCard.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+        agentCard.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
 
-    await routing.focus();
-    await expect(routing).toBeFocused();
-    expect(await routingCard.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe('none');
+    await agent.focus();
+    await expect(agent).toBeFocused();
+    expect(await agentCard.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe('none');
 
     const idle = await readFeedback();
     const durations = idle.transitionDuration.split(',').map((duration) => Number.parseFloat(duration));
     expect(durations.every((duration) => duration >= 0.075 && duration <= 0.1)).toBe(true);
-    await routingCard.hover();
+    await agentCard.hover();
     await finishFeedback();
     const uncheckedHover = await readFeedback();
     expect(uncheckedHover.background).not.toBe(idle.background);
     expect(uncheckedHover.border).not.toBe(idle.border);
 
-    await routingCard.click();
-    await expect(routing).toBeChecked();
+    await agentCard.click();
+    await expect(agent).toBeChecked();
     await finishFeedback();
     const selectedHover = await readFeedback();
     await panel.getByRole('radio', { name: 'Text to Text main block' }).locator('..').hover();
@@ -245,7 +245,7 @@ test('disables linked choices until the slot has an allowed main block without c
     await expect(panel.getByRole('checkbox')).toHaveCount(3);
     for (const checkbox of await panel.getByRole('checkbox').all()) await expect(checkbox).toBeDisabled();
 
-    await panel.getByRole('radio', { name: 'Routing main block' }).check();
+    await panel.getByRole('radio', { name: 'Agent main block' }).check();
     for (const checkbox of await panel.getByRole('checkbox').all()) await expect(checkbox).toBeEnabled();
 
     await seedInvalidQuickWorkflowSettings(page);
@@ -303,7 +303,7 @@ test('makes controlled independent edits and marks global settings dirty', { tag
     const before = await readQuickWorkflowState(page);
     let panel = await activeWheelPanel(page);
     await panel.getByRole('tab', { name: /Slot 4/ }).click();
-    await panel.getByRole('radio', { name: 'Routing main block' }).check();
+    await panel.getByRole('radio', { name: 'Agent main block' }).check();
     await panel.getByRole('checkbox', { name: 'GitHub linked block' }).check();
 
     await selectWheel(page, /Prompt Output/i);
@@ -312,7 +312,7 @@ test('makes controlled independent edits and marks global settings dirty', { tag
     await panel.getByRole('radio', { name: 'Parallelization main block' }).check();
     const after = await readQuickWorkflowState(page);
     expect(after.hasChanged).toBe(true);
-    expect(after.wheels.contextWheel?.[3]).toEqual({ name: 'Slot 4', mainBloc: 'routing', options: ['github'] });
+    expect(after.wheels.contextWheel?.[3]).toEqual({ name: 'Slot 4', mainBloc: 'agent', options: ['github'] });
     expect(after.wheels.promptOutputWheel?.[3]).toEqual({ name: 'Slot 4', mainBloc: 'parallelization', options: [] });
     for (const key of Object.keys(before.wheels).filter((key) => !['contextWheel', 'promptOutputWheel'].includes(key))) {
         expect(after.wheels[key]).toEqual(before.wheels[key]);
@@ -336,7 +336,7 @@ test('does not normalize invalid data until explicit Clear or Repair', async ({ 
     await expect(panel.getByRole('button', { name: 'Clear Slot 3' })).toBeFocused();
     expect((await readQuickWorkflowState(page)).wheels.contextWheel?.[2]).toEqual({
         name: 'Slot 3',
-        mainBloc: 'routing',
+        mainBloc: 'agent',
         options: ['prompt'],
     });
 

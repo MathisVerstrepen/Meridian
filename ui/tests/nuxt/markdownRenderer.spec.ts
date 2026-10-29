@@ -1,6 +1,7 @@
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import type { DOMWrapper } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
+import { defineComponent, h } from 'vue';
 import MarkdownRenderer from '@/components/ui/chat/markdownRenderer.vue';
 import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
@@ -155,5 +156,56 @@ describe('markdownRenderer legacy context display', () => {
         } finally {
             wrapper.unmount();
         }
+    });
+});
+
+
+describe('assistant activity placement', () => {
+    it('places subagent activity after thoughts and before the main answer', async () => {
+        const message = {
+            ...createMessage('[THINK]Check the evidence[!THINK]\nFinal answer'),
+            role: MessageRoleEnum.assistant,
+            type: NodeTypeEnum.AGENT,
+        };
+        const wrapper = await mountSuspended(MarkdownRenderer, {
+            props: { message, editMode: false },
+            slots: { activity: () => h('div', { 'data-testid': 'agent-activity' }, 'Subagent') },
+        });
+        try {
+            await vi.waitFor(() =>
+                expect(wrapper.get('[data-testid="markdown-renderer-response"]').text())
+                    .toContain('Final answer'),
+            );
+            const thinking = wrapper.get('[data-testid="thinking-disclosure-button"]').element;
+            const activity = wrapper.get('[data-testid="agent-activity"]').element;
+            const answer = wrapper.get('[data-testid="markdown-renderer-response"]').element;
+            expect(
+                thinking.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING,
+            ).toBeTruthy();
+            expect(
+                activity.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING,
+            ).toBeTruthy();
+        } finally {
+            wrapper.unmount();
+        }
+    });
+});
+
+
+describe('concurrent Agent renderers', () => {
+    it('keeps diagnostics isolated when multiple results share a graph node', async () => {
+        const message = { ...createMessage('Shared node output'), role: MessageRoleEnum.assistant };
+        const ConcurrentResponses = defineComponent(() => () => h('div', [
+            h(MarkdownRenderer, { message, editMode: false }),
+            h(MarkdownRenderer, { message, editMode: false }),
+        ]));
+        const wrapper = await mountSuspended(ConcurrentResponses);
+        try {
+            await vi.waitFor(() => {
+                const responses = wrapper.findAll('[data-testid="markdown-renderer-response"]');
+                expect(responses).toHaveLength(2);
+                expect(responses.every((response) => response.text() === 'Shared node output')).toBe(true);
+            });
+        } finally { wrapper.unmount(); }
     });
 });

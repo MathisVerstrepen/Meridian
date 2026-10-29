@@ -83,6 +83,7 @@ RUN cd /app/openai_codex_runtime && npm ci --omit=dev --ignore-scripts
 COPY --chown=appuser:appuser ./api/app .
 COPY --chown=appuser:appuser ./api/alembic.ini .
 COPY --chown=appuser:appuser ./api/migrations ./migrations
+COPY --chown=appuser:appuser ./api/scripts/cutover_agents.py ./scripts/cutover_agents.py
 COPY --chown=appuser:appuser ./ui/shared/mermaid/runtime.mjs /app/ui/shared/mermaid/runtime.mjs
 COPY --chown=appuser:appuser ./ui/shared/mermaid/validate.mjs /app/ui/shared/mermaid/validate.mjs
 COPY --chown=appuser:appuser ./ui/shared/mermaid/runtime.smoke.mjs /app/ui/shared/mermaid/runtime.smoke.mjs

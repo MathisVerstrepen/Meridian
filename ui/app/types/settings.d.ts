@@ -40,7 +40,6 @@ export interface SystemPrompt {
 
 export interface ModelsSettings {
     defaultModel: string;
-    routingModel: string;
     titleGenerationModel: string;
     autoToolSelectionModel: string;
     excludeReasoning: boolean;
@@ -107,28 +106,6 @@ export interface BlockParallelizationSettings {
         prompt: string;
         model: string;
     };
-}
-
-export interface Route {
-    id: string;
-    name: string;
-    description: string;
-    modelId: string;
-    icon: string;
-    customPrompt: string;
-    overrideGlobalPrompt: boolean;
-}
-
-export interface RouteGroup {
-    id: string;
-    name: string;
-    routes: Route[];
-    isLocked: boolean;
-    isDefault: boolean;
-}
-
-export interface BlockRoutingSettings {
-    routeGroups: RouteGroup[];
 }
 
 export interface BlockGithubSettings {
@@ -212,7 +189,6 @@ export interface Settings {
     blockPrompt: BlockPromptSettings;
     blockAttachment: BlockAttachmentSettings;
     blockParallelization: BlockParallelizationSettings;
-    blockRouting: BlockRoutingSettings;
     blockGithub: BlockGithubSettings;
     blockContextMerger: BlockContextMergerSettings;
     generationHistory: GenerationHistorySettings;

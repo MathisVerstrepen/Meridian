@@ -38,12 +38,12 @@ const handleCategory = NodeCategoryEnum.CONTEXT;
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ];
 const compatibleTargetNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ];
 
 // --- Computed ---

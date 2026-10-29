@@ -9,7 +9,6 @@ import type {
     BlockSettings,
     BlockPromptSettings,
     BlockParallelizationSettings,
-    BlockRoutingSettings,
     BlockGithubSettings,
     Settings,
     BlockAttachmentSettings,
@@ -60,9 +59,6 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockParallelizationSettings = computed<Partial<BlockParallelizationSettings>>(
         () => settings.value?.blockParallelization ?? {},
-    );
-    const blockRoutingSettings = computed<Partial<BlockRoutingSettings>>(
-        () => settings.value?.blockRouting ?? {},
     );
     const blockGithubSettings = computed<Partial<BlockGithubSettings>>(
         () => settings.value?.blockGithub ?? {},
@@ -212,7 +208,6 @@ export const useSettingsStore = defineStore('settings', () => {
         blockPromptSettings,
         blockAttachmentSettings,
         blockParallelizationSettings,
-        blockRoutingSettings,
         blockGithubSettings,
         blockContextMergerSettings,
         generationHistorySettings,

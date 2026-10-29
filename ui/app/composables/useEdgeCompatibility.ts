@@ -3,7 +3,7 @@ import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 
 const acceptedMapping = {
     prompt: ['prompt'],
-    context: ['textToText', 'parallelization', 'routing', 'contextMerger'],
+    context: ['textToText', 'parallelization', 'agent', 'contextMerger'],
     attachment: ['filePrompt', 'github'],
 } satisfies Record<string, string[]>;
 

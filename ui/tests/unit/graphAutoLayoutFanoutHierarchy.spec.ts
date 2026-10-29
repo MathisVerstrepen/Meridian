@@ -72,7 +72,7 @@ const screenshotCohort = () => {
         node('upper', NodeTypeEnum.TEXT_TO_TEXT, 240, 110),
         node('shared-prompt', NodeTypeEnum.PROMPT, 180, 80),
         node('child-a', NodeTypeEnum.TEXT_TO_TEXT, 170, 100),
-        node('child-b', NodeTypeEnum.ROUTING, 220, 120),
+        node('child-b', NodeTypeEnum.AGENT, 220, 120),
         node('child-c', NodeTypeEnum.PARALLELIZATION, 260, 130),
         ...[1, 2, 3, 4].flatMap((index) => [
             node(`nested-prompt-${index}`, NodeTypeEnum.PROMPT, 120 + index * 20, 70),
@@ -184,7 +184,7 @@ describe('graph auto-layout fan-out hierarchy', () => {
             const nodes = [
                 node('parent', NodeTypeEnum.TEXT_TO_TEXT, 220, 100),
                 node('a', NodeTypeEnum.TEXT_TO_TEXT, 140, 90),
-                node('b', NodeTypeEnum.ROUTING, 260, 120),
+                node('b', NodeTypeEnum.AGENT, 260, 120),
                 node('c', NodeTypeEnum.PARALLELIZATION, 180, 100),
             ];
             const edges = ['a', 'b', 'c'].map((id) => edge(`parent-${id}`, 'parent', id, 'context'));
@@ -209,7 +209,7 @@ describe('graph auto-layout fan-out hierarchy', () => {
         const nodes = [
             node('prompt-parent', NodeTypeEnum.PROMPT, 190, 80),
             node('a', NodeTypeEnum.TEXT_TO_TEXT, 140, 90),
-            node('b', NodeTypeEnum.ROUTING, 250, 110),
+            node('b', NodeTypeEnum.AGENT, 250, 110),
             node('c', NodeTypeEnum.PARALLELIZATION, 180, 100),
             node('tail', NodeTypeEnum.TEXT_TO_TEXT, 300, 120),
         ];

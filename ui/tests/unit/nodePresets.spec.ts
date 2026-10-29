@@ -79,14 +79,14 @@ describe('node preset contract constants', () => {
             filePrompt: { width: 500, height: 275 },
             textToText: { width: 600, height: 300 },
             parallelization: { width: 660, height: 450 },
-            routing: { width: 600, height: 300 },
+            agent: { width: 600, height: 300 },
             github: { width: 500, height: 250 },
             contextMerger: { width: 285, height: 135 },
             group: { width: 40, height: 40 },
         });
         expect(NODE_PRESET_EDGE_TYPE_RULES.attachment).toEqual({
             sources: ['filePrompt', 'github'],
-            targets: ['textToText', 'parallelization', 'routing'],
+            targets: ['textToText', 'parallelization', 'agent'],
         });
         expect(NODE_GROUP_COLORS).toHaveLength(11);
     });

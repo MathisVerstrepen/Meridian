@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), ".."
 
 # Import all models here so that Alembic can see them
 from database.pg import models  # noqa
+from database.pg.agent_ops import tables  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

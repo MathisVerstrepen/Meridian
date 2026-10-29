@@ -202,3 +202,7 @@ test-ui-e2e-performance: ## Run serial frontend Playwright performance budgets; 
 
 build: ## Build and start local Docker images in the background.
 	cd "$(DOCKER_DIR)" && ./run.sh build -d
+
+.PHONY: agents-cutover
+agents-cutover: check-api-python ## Explicit offline Agent cutover; requires ARGS=--maintenance-confirmed.
+	cd "$(API_DIR)" && ./run-dev.sh agents-cutover $(ARGS)

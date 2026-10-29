@@ -20,10 +20,24 @@ async def persist_pending_tool_continuation(
     req: Any,
     messages: list[dict[str, Any]],
 ) -> None:
+    from services.agents.runtime import current_policy
+
+    policy = current_policy.get()
     await redis_manager.set_pending_tool_continuation(
         public_tool_call_id,
         {
             "messages": messages,
+            "agent_execution": (
+                {
+                    "orchestration_version": 3,
+                    "execution_id": policy.execution_id,
+                    "run_id": policy.run_id,
+                    "agent_id": policy.agent_id,
+                    "version": policy.version,
+                }
+                if policy
+                else None
+            ),
             "model": req.model,
             "model_id": req.model_id,
             "config": req.config.model_dump(mode="json"),

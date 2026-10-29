@@ -28,7 +28,7 @@ const LINKED_NODE_OFFSETS = {
 const GENERATOR_NODE_TYPES = [
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ] as const;
 
 export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
@@ -56,7 +56,7 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
             [
                 NodeTypeEnum.TEXT_TO_TEXT,
                 NodeTypeEnum.PARALLELIZATION,
-                NodeTypeEnum.ROUTING,
+                NodeTypeEnum.AGENT,
             ].includes(anchorType);
         if (acceptsMultipleInputEdges(payload.category, anchor.type, explicitMultiple)) return true;
         const handleId = getQuickWorkflowHandleId(payload.category, anchor.id);

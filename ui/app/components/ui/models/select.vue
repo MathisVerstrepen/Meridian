@@ -42,7 +42,7 @@ const {
 const props = defineProps<{
     model: string;
     setModel: (model: string) => void;
-    variant: 'green' | 'grey' | 'terracotta';
+    variant: 'green' | 'grey' | 'terracotta' | 'sand';
     disabled: boolean;
     to: 'right' | 'left';
     from: 'top' | 'bottom';
@@ -589,6 +589,7 @@ onUnmounted(() => {
                     variant === 'grey',
                 [`dark:bg-soft-silk/50 border-terracotta-clay-dark dark:text-terracotta-clay-dark
                 text-anthracite bg-[#612411]/50`]: variant === 'terracotta',
+                'bg-soft-silk/50 border-obsidian/30 text-obsidian': variant === 'sand',
                 'cursor-not-allowed opacity-50': disabled,
                 'cursor-pointer': !disabled,
             }"
@@ -613,7 +614,7 @@ onUnmounted(() => {
                         tracking-tight focus:ring-0 focus:outline-none"
                     :value="inputValue"
                     :class="{
-                        'py-1': variant === 'green' || variant === 'terracotta',
+                        'py-1': variant === 'green' || variant === 'terracotta' || variant === 'sand',
                         'py-2': variant === 'grey',
                         'cursor-not-allowed': disabled,
                     }"

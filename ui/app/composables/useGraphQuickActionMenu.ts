@@ -23,7 +23,7 @@ interface UseGraphQuickActionMenuOptions {
 const GENERATOR_TYPES = new Set<string>([
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ]);
 const QUICK_WORKFLOW_ACTION_GROUPS: ReadonlyArray<
     readonly [NodeCategoryEnum, QuickWorkflowDirection]

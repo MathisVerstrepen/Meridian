@@ -60,12 +60,7 @@ def _data(node_type: str) -> dict:
             "aggregator": {"prompt": "Combine", "model": "provider/aggregate"},
             "defaultModel": "provider/default",
         },
-        "routing": {
-            "routeGroupId": "route-group",
-            "selectedTools": ["execute_code"],
-            "autoSelectTools": True,
-            "visualiseModes": {"enableSvg": True},
-        },
+        "agent": {"model": "provider/main", "selectedTools": [], "teamId": "team-id"},
         "github": {
             "repo": {
                 "provider": "github",
@@ -123,7 +118,7 @@ def _preset(*, name: str = "Starter", preset_id: int = 1) -> dict:
         _node(12, "filePrompt"),
         _node(13, "textToText"),
         _node(14, "parallelization"),
-        _node(15, "routing"),
+        _node(15, "agent"),
         _node(16, "github"),
         _node(17, "contextMerger"),
     ]
@@ -195,7 +190,7 @@ def test_valid_version_one_round_trip_covers_every_supported_node_data_shape():
         "filePrompt",
         "textToText",
         "parallelization",
-        "routing",
+        "agent",
         "github",
         "contextMerger",
         "group",
@@ -431,7 +426,7 @@ def test_node_and_edge_count_limits_and_duplicate_ids():
         ("github", "height", 249.99),
         ("textToText", "width", 599.99),
         ("parallelization", "width", 659.99),
-        ("routing", "height", 299.99),
+        ("agent", "height", 299.99),
         ("contextMerger", "width", 284.99),
         ("group", "height", 39.99),
         ("prompt", "width", 4_000.01),
@@ -474,11 +469,11 @@ def test_parent_structure_rejects_dangling_nested_and_empty_groups():
 @pytest.mark.parametrize(
     ("source_type", "target_type", "category"),
     [
-        ("textToText", "routing", "prompt"),
+        ("textToText", "agent", "prompt"),
         ("prompt", "filePrompt", "prompt"),
         ("prompt", "textToText", "context"),
         ("contextMerger", "prompt", "context"),
-        ("textToText", "routing", "attachment"),
+        ("textToText", "agent", "attachment"),
         ("filePrompt", "contextMerger", "attachment"),
     ],
 )
@@ -534,7 +529,7 @@ def test_edges_reject_self_dangling_group_duplicate_and_prompt_multiplicity():
 def test_multiple_context_and_attachment_inputs_and_cycles_are_allowed():
     source_one = _node(1, "textToText")
     source_two = _node(2, "contextMerger")
-    target = _node(3, "routing")
+    target = _node(3, "agent")
     file_source = _node(4, "filePrompt")
     github_source = _node(5, "github")
     preset = {
@@ -570,7 +565,7 @@ def test_multiple_context_and_attachment_inputs_and_cycles_are_allowed():
         ("textToText", lambda data: data.update(selectedTools=["unknown_tool"])),
         ("parallelization", lambda data: data.update(models=[{"model": "m"} for _ in range(17)])),
         ("parallelization", lambda data: data["aggregator"].update(prompt="x" * 100_001)),
-        ("routing", lambda data: data.update(routeGroupId="x" * 257)),
+        ("agent", lambda data: data.update(routeGroupId="x" * 257)),
         (
             "github",
             lambda data: data.update(files=[{"name": "a", "type": "file", "path": "a"}] * 201),

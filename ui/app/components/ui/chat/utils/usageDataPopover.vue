@@ -202,7 +202,7 @@ const tabs = computed<TabItem[]>(() => {
         }
     } else if (
         props.message.type === NodeTypeEnum.TEXT_TO_TEXT ||
-        props.message.type === NodeTypeEnum.ROUTING
+        props.message.type === NodeTypeEnum.AGENT
     ) {
         requestBreakdown.value.forEach((request) => {
             list.push({

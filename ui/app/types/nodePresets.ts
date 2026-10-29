@@ -19,7 +19,7 @@ export const NODE_PRESET_NODE_TYPES = [
     'filePrompt',
     'textToText',
     'parallelization',
-    'routing',
+    'agent',
     'github',
     'contextMerger',
     'group',
@@ -27,9 +27,7 @@ export const NODE_PRESET_NODE_TYPES = [
 
 export type NodePresetNodeType = (typeof NODE_PRESET_NODE_TYPES)[number];
 
-export const isNodePresetNodeType = <Value>(
-    value: Value,
-): value is Value & NodePresetNodeType =>
+export const isNodePresetNodeType = <Value>(value: Value): value is Value & NodePresetNodeType =>
     isRuntimeString(value) && NODE_PRESET_NODE_TYPES.some((nodeType) => nodeType === value);
 
 export const NODE_PRESET_EDGE_CATEGORIES = ['prompt', 'context', 'attachment'] as const;
@@ -45,27 +43,24 @@ export const NODE_PRESET_MINIMUM_DIMENSIONS = {
     filePrompt: { width: 500, height: 275 },
     textToText: { width: 600, height: 300 },
     parallelization: { width: 660, height: 450 },
-    routing: { width: 600, height: 300 },
+    agent: { width: 600, height: 300 },
     github: { width: 500, height: 250 },
     contextMerger: { width: 285, height: 135 },
     group: { width: 40, height: 40 },
-} satisfies Record<
-    NodePresetNodeType,
-    Readonly<{ width: number; height: number }>
->;
+} satisfies Record<NodePresetNodeType, Readonly<{ width: number; height: number }>>;
 
 export const NODE_PRESET_EDGE_TYPE_RULES = {
     prompt: {
         sources: ['prompt'],
-        targets: ['prompt', 'textToText', 'parallelization', 'routing'],
+        targets: ['prompt', 'textToText', 'parallelization', 'agent'],
     },
     context: {
-        sources: ['textToText', 'parallelization', 'routing', 'contextMerger'],
-        targets: ['textToText', 'parallelization', 'routing', 'contextMerger'],
+        sources: ['textToText', 'parallelization', 'agent', 'contextMerger'],
+        targets: ['textToText', 'parallelization', 'agent', 'contextMerger'],
     },
     attachment: {
         sources: ['filePrompt', 'github'],
-        targets: ['textToText', 'parallelization', 'routing'],
+        targets: ['textToText', 'parallelization', 'agent'],
     },
 } satisfies Record<
     NodePresetEdgeCategory,
@@ -120,13 +115,8 @@ export interface NodePresetParallelizationData {
     defaultModel: string;
 }
 
-export interface NodePresetRoutingData {
-    routeGroupId: string;
-    selectedTools: ToolEnum[];
-    autoSelectTools?: boolean | null;
-    imageModel?: string | null;
-    videoModel?: string | null;
-    visualiseModes?: NodePresetVisualiseModes | null;
+export interface NodePresetAgentData extends NodePresetTextToTextData {
+    teamId: string;
 }
 
 export interface NodePresetGithubFile {
@@ -159,7 +149,7 @@ export type NodePresetData =
     | NodePresetFilePromptData
     | NodePresetTextToTextData
     | NodePresetParallelizationData
-    | NodePresetRoutingData
+    | NodePresetAgentData
     | NodePresetGithubData
     | NodePresetContextMergerData
     | NodePresetGroupData;

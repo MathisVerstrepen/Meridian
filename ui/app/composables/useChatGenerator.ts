@@ -70,7 +70,7 @@ export const useChatGenerator = (
         const finalText = finalSession?.response || '';
         const finalType = finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT;
         const finalModel =
-            finalType === NodeTypeEnum.TEXT_TO_TEXT
+            finalType === NodeTypeEnum.TEXT_TO_TEXT || finalType === NodeTypeEnum.AGENT
                 ? getCurrentModelTextFromNodeId(nodeId)
                 : getCurrentModelText(finalType);
 
@@ -107,7 +107,9 @@ export const useChatGenerator = (
     };
 
     const addToLastAssistantMessage = (
-        text: string, modelId: string | undefined, targetSession = session.value,
+        text: string,
+        modelId: string | undefined,
+        targetSession = session.value,
     ) => {
         if (modelId) return;
         const lastMessage = targetSession.messages[targetSession.messages.length - 1];
@@ -124,8 +126,8 @@ export const useChatGenerator = (
                 return runtimeString(upcomingModelData.value.data.model);
             case NodeTypeEnum.PARALLELIZATION:
                 return 'parallelization';
-            case NodeTypeEnum.ROUTING:
-                return 'routing';
+            case NodeTypeEnum.AGENT:
+                return runtimeString(upcomingModelData.value.data.model);
             default:
                 return runtimeString(upcomingModelData.value.data.model);
         }
@@ -165,23 +167,24 @@ export const useChatGenerator = (
             triggerScroll();
         }
 
-        addMessage({
-            role: MessageRoleEnum.assistant,
-            content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
-            model: getCurrentModelTextFromNodeId(nodeId) || '',
-            node_id: nodeId,
-            type: currentStream?.type || NodeTypeEnum.TEXT_TO_TEXT,
-            data: null,
-            usageData: null,
-        }, nodeId);
+        addMessage(
+            {
+                role: MessageRoleEnum.assistant,
+                content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
+                model: getCurrentModelTextFromNodeId(nodeId) || '',
+                node_id: nodeId,
+                type: currentStream?.type || NodeTypeEnum.TEXT_TO_TEXT,
+                data: null,
+                usageData: null,
+            },
+            nodeId,
+        );
         if (session.value === targetSession) goBackToBottom('auto');
 
         await saveGraph();
 
-        setChatCallback(
-            nodeId,
-            NodeTypeEnum.TEXT_TO_TEXT,
-            (text, modelId) => addToLastAssistantMessage(text, modelId, targetSession),
+        setChatCallback(nodeId, NodeTypeEnum.TEXT_TO_TEXT, (text, modelId) =>
+            addToLastAssistantMessage(text, modelId, targetSession),
         );
         setOnFinishedCallback(nodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
             saveGraph();
@@ -198,7 +201,27 @@ export const useChatGenerator = (
     ) => {
         const targetSession = session.value;
         let generatorNodeId: string | undefined;
+        let mentionedTeam: string | null = null;
+        const mentionInput =
+            submission?.message ?? (forcedNodeId ? getTextFromMessage(getLatestMessage()!) : '');
+        let resolvedMentionText: string | null = null;
+        if (mentionInput.trimStart().startsWith('@')) {
+            const resolved = await useAgentStore().resolveMention(mentionInput);
+            resolvedMentionText = resolved.message;
+            mentionedTeam = resolved.team_id;
+            if (mentionedTeam) {
+                selectedNodeType.value = getBlockByNodeType(NodeTypeEnum.AGENT) ?? null;
+                if (submission) submission = { ...submission, message: resolved.message };
+            }
+        }
         syncUpcomingModelDefaults();
+        if (selectedNodeType.value?.nodeType === NodeTypeEnum.AGENT || mentionedTeam) {
+            const agents = useAgentStore();
+            if (!agents.defaultTeamId) await agents.loadLibrary();
+            upcomingModelData.value.data.teamId =
+                mentionedTeam ??
+                (runtimeString(upcomingModelData.value.data.teamId) || agents.defaultTeamId);
+        }
 
         if (forcedNodeId) {
             const currentChatId = openChatId.value;
@@ -209,14 +232,18 @@ export const useChatGenerator = (
             }
 
             const storedSubmission: ChatInputSubmission = {
-                message: getTextFromMessage(lastestMessage),
+                message: resolvedMentionText ?? getTextFromMessage(lastestMessage),
                 files: lastestMessage.data?.files ?? [],
                 githubContext: lastestMessage.data?.githubContext ?? null,
             };
-            const createdNodes = createNodeFromVariant(lastestMessage.type, currentChatId, {
-                submission: storedSubmission,
-                forcedNodeId,
-            });
+            const createdNodes = createNodeFromVariant(
+                mentionedTeam ? NodeTypeEnum.AGENT : lastestMessage.type,
+                currentChatId,
+                {
+                    submission: storedSubmission,
+                    forcedNodeId,
+                },
+            );
             generatorNodeId = createdNodes.generatorNodeId;
             if (createdNodes.promptNodeId) {
                 lastestMessage.prompt_node_id = createdNodes.promptNodeId;
@@ -257,6 +284,13 @@ export const useChatGenerator = (
             throw new Error('No generator node is available.');
         }
 
+        if (selectedNodeType.value?.nodeType === NodeTypeEnum.AGENT || mentionedTeam) {
+            const agents = useAgentStore();
+            const node = getNodes.value.find((candidate) => candidate.id === generatorNodeId);
+            if (node)
+                node.data.teamId =
+                    mentionedTeam ?? (runtimeString(node.data.teamId) || agents.defaultTeamId);
+        }
         targetSession.fromNodeId = generatorNodeId;
 
         if (openChatId.value && openChatId.value !== generatorNodeId) {
@@ -267,7 +301,8 @@ export const useChatGenerator = (
         await waitForRender();
 
         setTimeout(() => {
-            if (session.value === targetSession) teleportViewportToNode(graphId.value, generatorNodeId);
+            if (session.value === targetSession)
+                teleportViewportToNode(graphId.value, generatorNodeId);
         }, 100);
 
         await generate(targetSession);
@@ -287,7 +322,7 @@ export const useChatGenerator = (
         } catch (err) {
             console.error('Failed to submit chat message:', err);
             if (session.value === targetSession) {
-                generationError.value = 'Could not send your message because generation could not start. Please try again.';
+                generationError.value = `${runtimeErrorDetail(err) ?? (err instanceof Error ? err.message : 'Could not start generation.')} Please try again.`;
             }
             return false;
         } finally {
@@ -295,10 +330,7 @@ export const useChatGenerator = (
         }
     };
 
-    const generateFollowUp = async (
-        message: string,
-        files: FileSystemObject[] | null = null,
-    ) => {
+    const generateFollowUp = async (message: string, files: FileSystemObject[] | null = null) => {
         const normalizedMessage = message.trim();
         if (!normalizedMessage) {
             return;
@@ -309,7 +341,7 @@ export const useChatGenerator = (
                 .reverse()
                 .find((entry) => entry.role === MessageRoleEnum.assistant)?.type;
             const supportedType =
-                lastAssistantType === NodeTypeEnum.ROUTING ||
+                lastAssistantType === NodeTypeEnum.AGENT ||
                 lastAssistantType === NodeTypeEnum.PARALLELIZATION
                     ? lastAssistantType
                     : NodeTypeEnum.TEXT_TO_TEXT;
@@ -376,10 +408,8 @@ export const useChatGenerator = (
                 ? 'parallelization'
                 : undefined,
         );
-        setChatCallback(
-            session.value.fromNodeId!,
-            NodeTypeEnum.TEXT_TO_TEXT,
-            (text, modelId) => addToLastAssistantMessage(text, modelId, targetSession),
+        setChatCallback(session.value.fromNodeId!, NodeTypeEnum.TEXT_TO_TEXT, (text, modelId) =>
+            addToLastAssistantMessage(text, modelId, targetSession),
         );
     };
 

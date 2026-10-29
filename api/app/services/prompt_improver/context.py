@@ -232,7 +232,7 @@ async def resolve_targets(
         node_type=[
             NodeTypeEnum.TEXT_TO_TEXT.value,
             NodeTypeEnum.PARALLELIZATION.value,
-            NodeTypeEnum.ROUTING.value,
+            NodeTypeEnum.AGENT.value,
         ],
     )
     downstream_nodes = await get_nodes_by_ids(pg_engine, graph_id, downstream_node_ids or [])
@@ -254,11 +254,9 @@ async def resolve_targets(
             models = node.data.get("models", [])
             model_count = len(models) if isinstance(models, list) else 0
             label_suffix = f" • {model_count} parallel model(s)"
-        elif node.type == NodeTypeEnum.ROUTING:
+        elif node.type == NodeTypeEnum.AGENT:
             model_id = cast(Optional[str], node.data.get("model"))
-            route_group_id = cast(Optional[str], node.data.get("routeGroupId"))
-            if route_group_id:
-                label_suffix = f" • Route group {route_group_id}"
+            label_suffix = f" • Main model {node.data.get('model') or 'unconfigured'}"
 
         model_name, tools_support = resolve_model_metadata(model_id, available_models)
         label = f"{node.type} node {node.id}"

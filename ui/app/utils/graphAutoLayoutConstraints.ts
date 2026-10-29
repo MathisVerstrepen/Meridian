@@ -32,7 +32,7 @@ const KNOWN_CATEGORIES: LayoutEdgeCategory[] = ['attachment', 'context', 'prompt
 const GENERATOR_TYPES = new Set<string>([
     NodeTypeEnum.TEXT_TO_TEXT,
     NodeTypeEnum.PARALLELIZATION,
-    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.AGENT,
 ]);
 
 const canonicalCategory = (handle: string | null | undefined): LayoutEdgeCategory | undefined => {
@@ -51,7 +51,7 @@ const categoryForNodeType = (nodeType: string | undefined): LayoutEdgeCategory |
     if (
         nodeType === NodeTypeEnum.TEXT_TO_TEXT ||
         nodeType === NodeTypeEnum.PARALLELIZATION ||
-        nodeType === NodeTypeEnum.ROUTING ||
+        nodeType === NodeTypeEnum.AGENT ||
         nodeType === NodeTypeEnum.CONTEXT_MERGER
     ) {
         return 'context';

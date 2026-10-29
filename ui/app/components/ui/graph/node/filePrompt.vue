@@ -11,7 +11,7 @@ const { getBlockById } = useBlocks();
 const graphEvents = useGraphEvents();
 const { nodeRef, isVisible } = useNodeVisibility();
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const graphId = computed(() => firstRouteString(route.params.id) ?? '');
 

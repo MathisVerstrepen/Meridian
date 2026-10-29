@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 import httpx
 import sentry_sdk
-from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
     NodeRecord,
     get_ancestor_by_types,
@@ -28,7 +27,7 @@ from models.message import (
     NodeTypeEnum,
 )
 from neo4j import AsyncDriver
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from services.context_merger_service import ContextMergerService
 from services.inference import get_user_inference_credentials
 from services.node import (
@@ -68,7 +67,7 @@ async def construct_message_history(
     Constructs a series of messages representing a conversation based on a node and its ancestors
     in a graph.
 
-    This function retrieves generator ancestor nodes (TEXT_TO_TEXT, PARALLELIZATION, ROUTING)
+    This function retrieves generator ancestor nodes (TEXT_TO_TEXT, PARALLELIZATION, AGENT)
     of a specified node in a graph, then for each generator node fetches its connected prompt nodes
     (PROMPT, FILE_PROMPT, GITHUB) to construct the conversation messages.
 
@@ -104,7 +103,7 @@ async def construct_message_history(
         generator_types = [
             NodeTypeEnum.TEXT_TO_TEXT,
             NodeTypeEnum.PARALLELIZATION,
-            NodeTypeEnum.ROUTING,
+            NodeTypeEnum.AGENT,
             NodeTypeEnum.CONTEXT_MERGER,
         ]
 
@@ -409,111 +408,6 @@ async def construct_parallelization_aggregator_prompt(
     return messages
 
 
-async def construct_routing_prompt(
-    pg_engine: SQLAlchemyAsyncEngine,
-    neo4j_driver: AsyncDriver,
-    graph_id: str,
-    node_id: str,
-    user_id: str,
-) -> tuple[list[Message], type[BaseModel]]:
-    """
-    Constructs a routing prompt for a specific node in a graph.
-
-    This function retrieves the parent prompt node, gathers the current node's data, and constructs
-    a routing prompt by appending the current node's data. It then creates a list of `Message`
-    objects, including a system message with the constructed prompt and a user message with the
-    parent prompt content.
-
-    Args:
-        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
-            database access.
-        neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
-        graph_id (str): The identifier of the graph.
-        node_id (str): The identifier of the current node.
-        system_prompt (str): The system prompt to prepend to the routing prompt.
-
-    Returns:
-        list[Message]: A list of `Message` objects representing the constructed prompt and the
-            parent prompt.
-
-    Raises:
-        ValueError: If the parent prompt node cannot be found.
-    """
-    parent_prompt_id = await get_parent_node_of_type(
-        neo4j_driver=neo4j_driver,
-        graph_id=graph_id,
-        node_id=node_id,
-        node_type=NodeTypeEnum.PROMPT,
-    )
-    if not parent_prompt_id:
-        raise ValueError(f"Parent prompt node not found for node ID {node_id}")
-
-    parent_prompt_node = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-        node_ids=[parent_prompt_id],
-    )
-
-    if not parent_prompt_node:
-        raise ValueError(f"Parent prompt node with ID {parent_prompt_id} not found.")
-
-    nodes = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-        node_ids=[node_id],
-    )
-
-    user_settings = await get_user_settings(pg_engine, user_id)
-
-    node = nodes[0]
-    if not isinstance(node.data, dict):
-        raise ValueError("node.data is not a dict")
-    routes = {
-        route.id: route.description
-        for route in next(
-            (
-                routeGroup
-                for routeGroup in user_settings.blockRouting.routeGroups
-                if routeGroup.id == node.data.get("routeGroupId", "")
-            )
-        ).routes
-    }
-
-    if not isinstance(parent_prompt_node[0].data, dict):
-        raise ValueError("parent_prompt_node[0].data is not a dict")
-    routing_prompt = ROUTING_PROMPT.format(
-        user_query=parent_prompt_node[0].data.get("prompt", ""),
-        routes=routes,
-    )
-
-    class Schema(BaseModel):
-        route: str
-
-        @field_validator("route")
-        def validate_route(cls, v):
-            if v not in routes:
-                raise ValueError(f"Invalid route: {v}. Must be one of {list(routes.keys())}")
-            return v
-
-    messages = []
-    if system_message := system_message_builder(f"{routing_prompt}"):
-        messages.append(system_message)
-
-    messages.append(
-        Message(
-            role=MessageRoleEnum.user,
-            content=[
-                MessageContent(
-                    type=MessageContentTypeEnum.text,
-                    text=parent_prompt_node[0].data.get("prompt", ""),
-                )
-            ],
-        )
-    )
-
-    return messages, Schema
-
-
 class ExecutionPlanNode(BaseModel):
     node_id: str
     node_type: str
@@ -634,7 +528,6 @@ async def get_effective_graph_config(
         canvas_config.block_context_merger_summarizer_model = (
             user_settings.blockContextMerger.summarizer_model
         )
-        canvas_config.routing_model = user_settings.models.routingModel
         canvas_config.title_generation_model = user_settings.models.titleGenerationModel
         canvas_config.auto_tool_selection_model = user_settings.models.autoToolSelectionModel
 

@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@vue-flow/core';
-import type { NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum, ToolEnum } from '@/types/enums';
 import type { RepositoryInfo } from '@/types/github';
 
 interface Folder {
@@ -171,7 +171,7 @@ export interface BlockDefinition {
         | DataFilePrompt
         | DataTextToText
         | DataParallelization
-        | DataRouting
+        | DataAgent
         | DataGithub
         | DataContextMerger;
     minSize: Record<string, number>;
@@ -221,18 +221,9 @@ export interface DataParallelization {
     activeGenerationHistoryId?: string;
 }
 
-export interface DataRouting {
-    routeGroupId: string;
-    model: string;
-    reply: string;
-    activeGenerationHistoryId?: string;
-    selectedRouteId: string;
-    usageData?: UsageData | null;
-    selectedTools: ToolEnum[];
-    autoSelectTools?: boolean;
-    imageModel?: string;
-    videoModel?: string;
-    visualiseModes?: VisualiseNodeModes;
+export interface DataAgent extends DataTextToText {
+    teamId: string;
+    agentExecution?: JsonObject;
 }
 
 export interface DataGithub {

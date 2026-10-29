@@ -105,6 +105,8 @@ async def update_graph_with_nodes_and_edges(
     user_uuid = _parse_uuid_or_400(user_id, "user ID")
 
     for node in nodes:
+        if node.type not in {entry.value for entry in NodeTypeEnum} | {"group"}:
+            raise HTTPException(status_code=422, detail="Unsupported node type.")
         node.graph_id = graph_uuid
         node.width = _normalize_node_dimension(node.width)
         node.height = _normalize_node_dimension(node.height)
@@ -157,6 +159,10 @@ async def update_graph_with_nodes_and_edges(
                     reasoning_effort=graph_update_data.reasoning_effort,
                 )
                 session.add(db_graph)
+
+            from services.agents.teams import configure_agent_nodes
+
+            await configure_agent_nodes(session, user_uuid, nodes)
 
             with session.no_autoflush:
                 existing_nodes_stmt = (

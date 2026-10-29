@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { NodeTypeEnum } from '@/types/enums';
+import { NodeTypeEnum } from '@/types/enums';
 import type { ChatInputSubmission } from '@/types/chat';
 import type { BlockDefinition } from '@/types/graph';
 
@@ -28,6 +28,28 @@ const { githubContext, openGithubContext, removeGithubContext } = useChatGithubC
 const textareaRef = ref<HTMLDivElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
+const agentStore = useAgentStore();
+const mentionSuggestions = computed(() => {
+    const match = /^@([a-zA-Z0-9_-]*)$/.exec(message.value);
+    return match ? agentStore.teams.filter(team => team.handle.startsWith(match[1] ?? '')).slice(0, 8) : [];
+});
+watch(message, (value) => {
+    if (value.startsWith('@') && !agentStore.teams.length) agentStore.loadLibrary().catch(() => {});
+});
+const chooseMention = (handle: string) => {
+    message.value = `@${handle} `;
+    if (textareaRef.value) {
+        textareaRef.value.innerText = message.value;
+        textareaRef.value.focus();
+        const range = document.createRange();
+        range.selectNodeContents(textareaRef.value);
+        range.collapse(false);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+    }
+    isEmpty.value = false;
+    emit('selectNodeType', useBlocks().getBlockByNodeType(NodeTypeEnum.AGENT)!);
+};
 const files = ref<FileSystemObject[]>([]);
 const isDraggingOver = ref(false);
 
@@ -253,6 +275,11 @@ onMounted(() => {
                 </template>
             </UiChatAttachmentUploadButton>
 
+            <div v-if="mentionSuggestions.length" role="listbox" aria-label="Team mentions" class="bg-anthracite absolute bottom-full left-4 z-20 flex max-h-64 flex-col overflow-auto rounded-lg p-2 shadow-lg">
+                <button v-for="team in mentionSuggestions" :key="team.id" role="option" :aria-selected="false" class="hover:bg-stone-gray/20 rounded-lg px-3 py-2 text-left text-sm" @click="chooseMention(team.handle)">
+                    @{{ team.handle }} · {{ team.name }}
+                </button>
+            </div>
             <div
                 ref="textareaRef"
                 contenteditable

@@ -11,8 +11,8 @@ const nodeTypeLabel = computed(() => {
             return 'Parallelization';
         case NodeTypeEnum.TEXT_TO_TEXT:
             return 'Text to Text';
-        case NodeTypeEnum.ROUTING:
-            return 'Routing';
+        case NodeTypeEnum.AGENT:
+            return 'Agent';
         default:
             return '';
     }
@@ -26,7 +26,7 @@ const nodeTypeLabel = computed(() => {
         :class="{
             'bg-terracotta-clay': nodeType === NodeTypeEnum.PARALLELIZATION,
             'bg-olive-grove': nodeType === NodeTypeEnum.TEXT_TO_TEXT,
-            'bg-sunbaked-sand-dark': nodeType === NodeTypeEnum.ROUTING,
+            'bg-sunbaked-sand-dark': nodeType === NodeTypeEnum.AGENT,
         }"
     >
         {{ nodeTypeLabel }}

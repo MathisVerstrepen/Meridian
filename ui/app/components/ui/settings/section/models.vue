@@ -11,7 +11,6 @@ const modelStore = useModelStore();
 const { modelsSettings } = storeToRefs(settingsStore);
 const { models } = storeToRefs(modelStore);
 const defaultChatEntry = SETTINGS_ENTRY.modelsDefaultChat;
-const routingEntry = SETTINGS_ENTRY.modelsRouting;
 const titleGenerationEntry = SETTINGS_ENTRY.modelsTitleGeneration;
 const toolSelectionEntry = SETTINGS_ENTRY.modelsToolSelection;
 const excludeReasoningEntry = SETTINGS_ENTRY.reasoningExclude;
@@ -57,33 +56,7 @@ const defaultModelReasoningEfforts = computed(() =>
             </div>
         </div>
 
-        <!-- Setting: Default Routing Model -->
-        <div class="flex items-center justify-between py-6">
-            <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">{{ routingEntry.title }}</h3>
-                <p class="text-stone-gray/80 mt-1 text-sm">
-                    {{ routingEntry.description }}
-                </p>
-            </div>
-            <div class="ml-6 shrink-0">
-                <UiModelsSelect
-                    id="models-routing-model"
-                    :model="modelsSettings.routingModel"
-                    :set-model="
-                        (model: string) => {
-                            modelsSettings.routingModel = model;
-                        }
-                    "
-                    :disabled="false"
-                    to="right"
-                    from="bottom"
-                    variant="grey"
-                    class="h-10 w-[20rem]"
-                    require-structured-outputs
-                    hide-tool
-                />
-            </div>
-        </div>
+
 
         <!-- Setting: Default Title Generation Model -->
         <div class="flex items-center justify-between py-6">

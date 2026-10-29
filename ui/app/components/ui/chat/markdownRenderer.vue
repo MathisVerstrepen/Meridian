@@ -409,7 +409,7 @@ const createPerfRecorder = (
     }
 
     const nodeId = props.message.node_id ?? null;
-    const prefix = `${PERF_MARK_NAMESPACE}:${nodeId ?? 'unknown'}:${parseId}`;
+    const prefix = `${PERF_MARK_NAMESPACE}:${markdownResponseScope}:${nodeId ?? 'unknown'}:${parseId}`;
     const marks = new Set<string>();
     const measures = new Set<string>();
     const run: MarkdownRendererPerfRun = {
@@ -959,6 +959,8 @@ onBeforeUnmount(() => {
             </button>
         </div>
     </div>
+
+    <slot v-if="!isUserMessage" name="activity" />
 
     <!-- Final Assistant Response -->
     <template v-if="!isUserMessage && !isError">

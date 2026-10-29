@@ -724,9 +724,9 @@ onUnmounted(() => {
                         @update:unlink-node="unlinkNodeFromGroup"
                     />
                 </template>
-                <template #node-routing="routingNodeProps">
-                    <UiGraphNodeRouting
-                        v-bind="routingNodeProps"
+                <template #node-agent="agentNodeProps">
+                    <UiGraphNodeAgent
+                        v-bind="agentNodeProps"
                         :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"

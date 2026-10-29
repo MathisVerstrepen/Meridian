@@ -15,7 +15,7 @@ const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 // --- Actions/Methods from Stores ---
 const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSaveStore;
 
-// --- Routing ---
+// --- Agent ---
 const route = useRoute();
 const id = firstRouteString(route.params.id) ?? '';
 

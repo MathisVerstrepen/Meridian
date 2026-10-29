@@ -428,12 +428,12 @@ const fileIcons: FileIcons = {
             ],
         },
         {
-            name: 'routing',
+            name: 'agent',
             fileExtensions: [
-                'routing.ts',
-                'routing.tsx',
-                'routing.js',
-                'routing.jsx',
+                'agent.ts',
+                'agent.tsx',
+                'agent.js',
+                'agent.jsx',
                 'route.ts',
                 'route.tsx',
                 'route.js',

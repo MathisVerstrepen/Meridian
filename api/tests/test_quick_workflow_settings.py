@@ -13,13 +13,13 @@ from services import settings as settings_service
 EXPECTED_WHEELS = {
     "contextInputWheel": [
         {"name": "Slot 1", "mainBloc": "textToText", "options": ["prompt"]},
-        {"name": "Slot 2", "mainBloc": "routing", "options": ["prompt"]},
+        {"name": "Slot 2", "mainBloc": "agent", "options": ["prompt"]},
         {"name": "Slot 3", "mainBloc": "parallelization", "options": ["prompt"]},
         {"name": "Slot 4", "mainBloc": None, "options": []},
     ],
     "contextWheel": [
         {"name": "Slot 1", "mainBloc": "textToText", "options": ["prompt"]},
-        {"name": "Slot 2", "mainBloc": "routing", "options": ["prompt"]},
+        {"name": "Slot 2", "mainBloc": "agent", "options": ["prompt"]},
         {"name": "Slot 3", "mainBloc": "parallelization", "options": ["prompt"]},
         {"name": "Slot 4", "mainBloc": None, "options": []},
     ],
@@ -31,7 +31,7 @@ EXPECTED_WHEELS = {
     ],
     "promptOutputWheel": [
         {"name": "Slot 1", "mainBloc": "textToText", "options": []},
-        {"name": "Slot 2", "mainBloc": "routing", "options": []},
+        {"name": "Slot 2", "mainBloc": "agent", "options": []},
         {"name": "Slot 3", "mainBloc": "parallelization", "options": []},
         {"name": "Slot 4", "mainBloc": None, "options": []},
     ],
@@ -43,14 +43,14 @@ EXPECTED_WHEELS = {
     ],
     "attachmentOutputWheel": [
         {"name": "Slot 1", "mainBloc": "textToText", "options": ["prompt"]},
-        {"name": "Slot 2", "mainBloc": "routing", "options": ["prompt"]},
+        {"name": "Slot 2", "mainBloc": "agent", "options": ["prompt"]},
         {"name": "Slot 3", "mainBloc": "parallelization", "options": ["prompt"]},
         {"name": "Slot 4", "mainBloc": None, "options": []},
     ],
 }
 
 CUSTOM_CONTEXT_WHEEL = [
-    {"name": "Custom 1", "mainBloc": "routing", "options": ["github"]},
+    {"name": "Custom 1", "mainBloc": "agent", "options": ["github"]},
     {"name": "Custom 2", "mainBloc": None, "options": []},
 ]
 

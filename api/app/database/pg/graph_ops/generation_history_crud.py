@@ -22,7 +22,7 @@ DEFAULT_HISTORY_LIMIT = 10
 ACTIVE_HISTORY_ID_KEY = "activeGenerationHistoryId"
 SUPPORTED_GENERATION_HISTORY_TYPES = {
     NodeTypeEnum.TEXT_TO_TEXT.value,
-    NodeTypeEnum.ROUTING.value,
+    NodeTypeEnum.AGENT.value,
     NodeTypeEnum.PARALLELIZATION.value,
 }
 
@@ -78,7 +78,7 @@ def _extract_generation_snapshot(
     if node_type not in SUPPORTED_GENERATION_HISTORY_TYPES or not isinstance(data, dict):
         return None
 
-    if node_type in {NodeTypeEnum.TEXT_TO_TEXT.value, NodeTypeEnum.ROUTING.value}:
+    if node_type in {NodeTypeEnum.TEXT_TO_TEXT.value, NodeTypeEnum.AGENT.value}:
         reply = data.get("reply")
         if not isinstance(reply, str) or not reply.strip():
             return None

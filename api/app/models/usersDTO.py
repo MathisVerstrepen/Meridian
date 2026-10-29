@@ -71,7 +71,6 @@ class SystemPrompt(BaseModel):
 
 class ModelsSettings(BaseModel):
     defaultModel: str
-    routingModel: str = "xiaomi/mimo-v2.5"
     titleGenerationModel: str = "deepseek/deepseek-v4-flash"
     autoToolSelectionModel: str = "xiaomi/mimo-v2.5"
     excludeReasoning: bool
@@ -119,7 +118,7 @@ def _generator_with_prompt_wheel_defaults() -> List[WheelSlot]:
         ),
         WheelSlot(
             name="Slot 2",
-            mainBloc=NodeTypeEnum.ROUTING,
+            mainBloc=NodeTypeEnum.AGENT,
             options=[NodeTypeEnum.PROMPT],
         ),
         WheelSlot(
@@ -143,7 +142,7 @@ def _prompt_input_wheel_defaults() -> List[WheelSlot]:
 def _generator_wheel_defaults() -> List[WheelSlot]:
     return [
         WheelSlot(name="Slot 1", mainBloc=NodeTypeEnum.TEXT_TO_TEXT, options=[]),
-        WheelSlot(name="Slot 2", mainBloc=NodeTypeEnum.ROUTING, options=[]),
+        WheelSlot(name="Slot 2", mainBloc=NodeTypeEnum.AGENT, options=[]),
         WheelSlot(name="Slot 3", mainBloc=NodeTypeEnum.PARALLELIZATION, options=[]),
         WheelSlot(name="Slot 4", mainBloc=None, options=[]),
     ]
@@ -197,28 +196,6 @@ class BlockParallelizationAggregatorSettings(BaseModel):
 class BlockParallelizationSettings(BaseModel):
     models: List[BlockParallelizationModelSettings]
     aggregator: BlockParallelizationAggregatorSettings
-
-
-class Route(BaseModel):
-    id: str
-    name: str
-    description: str
-    modelId: str
-    icon: str
-    customPrompt: str
-    overrideGlobalPrompt: bool
-
-
-class RouteGroup(BaseModel):
-    id: str
-    name: str
-    routes: List[Route]
-    isLocked: bool
-    isDefault: bool
-
-
-class BlockRoutingSettings(BaseModel):
-    routeGroups: List[RouteGroup]
 
 
 class BlockGithubSettings(BaseModel):
@@ -281,7 +258,6 @@ class SettingsDTO(BaseModel):
     blockPrompt: BlockPromptSettings = BlockPromptSettings()
     blockAttachment: BlockAttachmentSettings = BlockAttachmentSettings(pdf_engine="default")
     blockParallelization: BlockParallelizationSettings
-    blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)
     blockContextMerger: BlockContextMergerSettings = BlockContextMergerSettings()
     generationHistory: GenerationHistorySettings = GenerationHistorySettings()

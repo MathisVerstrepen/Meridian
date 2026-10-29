@@ -30,8 +30,8 @@ This folder contains the **complete backend API** for Meridian, built with **Fas
 
 - **Graph Persistence**: Hybrid storage with **PostgreSQL** (structured data) + **Neo4j** (nodes/edges traversal, execution plans).
 - **Real-time Streaming**: WebSocket-driven AI responses with tool calls (web search, page extraction, code execution), reasoning tags (`[THINK]`), and usage tracking.
-- **Node System**: Supports **Text-to-Text**, **Parallelization** (multi-LLM), **Routing**, **Context Merger**, **GitHub/GitLab**, attachments (PDFs via OpenRouter).
-- **Advanced Execution**: Upstream/downstream plans, conditional routing, branch merging, parallel querying.
+- **Node System**: Supports **Text-to-Text**, **Parallelization** (multi-LLM), **Agents**, **Context Merger**, **GitHub/GitLab**, attachments (PDFs via OpenRouter).
+- **Advanced Execution**: Upstream/downstream plans, model-directed Agent delegation, branch merging, parallel querying.
 - **Authentication**: JWT access tokens + refresh token rotation (replay attack detection), OAuth (GitHub/Google/userpass).
 - **File & Repo Handling**: Secure uploads, PDF annotation caching (Redis), Git clone/pull with SSH/HTTPS.
 - **Sandbox Artifacts**: Code execution can now persist bounded files written to `MERIDIAN_OUTPUT_DIR` and surface them back to chat as inline images or downloads.
@@ -308,7 +308,7 @@ All under `/prompt-templates`:
 - `stream_chunk`
 - `stream_end`
 - `stream_error`
-- `routing_response`
+- `agent_run`, `agent_run_chunk`
 - `usage_data_update`
 - `node_data_update` (ContextMerger metadata updates)
 
@@ -350,7 +350,7 @@ Redis:
   to clear them; they never enter response text/history. Cancelling also interrupts backoff.
   Existing per-request timeouts still apply; the 90-second limit covers waiting, not generation.
   An accepted request that times out before output may still incur provider charges on retry.
-- **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Routing (JSON select), ContextMerger (branches).
+- **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Agents (main model with one private Team of subagents), ContextMerger (branches).
 
 From `const/plans.py`:
 
