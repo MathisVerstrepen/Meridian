@@ -28,28 +28,12 @@ const { githubContext, openGithubContext, removeGithubContext } = useChatGithubC
 const textareaRef = ref<HTMLDivElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
-const agentStore = useAgentStore();
-const mentionSuggestions = computed(() => {
-    const match = /^@([a-zA-Z0-9_-]*)$/.exec(message.value);
-    return match ? agentStore.teams.filter(team => team.handle.startsWith(match[1] ?? '')).slice(0, 8) : [];
-});
-watch(message, (value) => {
-    if (value.startsWith('@') && !agentStore.teams.length) agentStore.loadLibrary().catch(() => {});
-});
-const chooseMention = (handle: string) => {
-    message.value = `@${handle} `;
-    if (textareaRef.value) {
-        textareaRef.value.innerText = message.value;
-        textareaRef.value.focus();
-        const range = document.createRange();
-        range.selectNodeContents(textareaRef.value);
-        range.collapse(false);
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(range);
-    }
+const mentions = useTeamMentions(textareaRef, (text) => {
+    message.value = text.trim();
     isEmpty.value = false;
-    emit('selectNodeType', useBlocks().getBlockByNodeType(NodeTypeEnum.AGENT)!);
-};
+    const block = useBlocks().getBlockByNodeType(NodeTypeEnum.AGENT);
+    if (block) emit('selectNodeType', block);
+});
 const files = ref<FileSystemObject[]>([]);
 const isDraggingOver = ref(false);
 
@@ -84,6 +68,7 @@ const onInput = () => {
     if (!el) return;
     emit('triggerScroll');
     message.value = el.innerText.trim();
+    mentions.sync();
     isEmpty.value = message.value.length === 0;
 };
 
@@ -96,6 +81,7 @@ const sendMessage = async () => {
     };
 
     message.value = '';
+    mentions.clear();
     files.value = [];
     githubContext.value = null;
     isEmpty.value = true;
@@ -162,6 +148,33 @@ const handlePaste = (event: ClipboardEvent) => {
 const handleShiftSpace = () => {
     document.execCommand('insertText', false, ' ');
     onInput();
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (mentions.keydown(event)) return;
+    if (
+        event.key === 'Enter' &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+    ) {
+        event.preventDefault();
+        void sendMessage();
+    } else if (
+        event.key === ' ' &&
+        event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+    ) {
+        event.preventDefault();
+        handleShiftSpace();
+    }
+};
+const updateMentionCaret = (event: KeyboardEvent) => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) mentions.sync(false);
 };
 
 const openCloudSelect = () => {
@@ -251,7 +264,7 @@ onMounted(() => {
 
         <!-- Main input text bar -->
         <div
-            class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-280 items-end
+            class="border-stone-gray/10 relative flex h-fit max-h-full w-[80%] max-w-280 items-end
                 justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
                 'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0 && !githubContext,
@@ -275,18 +288,33 @@ onMounted(() => {
                 </template>
             </UiChatAttachmentUploadButton>
 
-            <div v-if="mentionSuggestions.length" role="listbox" aria-label="Team mentions" class="bg-anthracite absolute bottom-full left-4 z-20 flex max-h-64 flex-col overflow-auto rounded-lg p-2 shadow-lg">
-                <button v-for="team in mentionSuggestions" :key="team.id" role="option" :aria-selected="false" class="hover:bg-stone-gray/20 rounded-lg px-3 py-2 text-left text-sm" @click="chooseMention(team.handle)">
-                    @{{ team.handle }} · {{ team.name }}
-                </button>
-            </div>
+            <UiChatTeamMentionMenu
+                v-if="mentions.open.value"
+                :teams="mentions.suggestions.value"
+                :active-index="mentions.activeIndex.value"
+                :list-id="mentions.listId"
+                :query="mentions.query.value"
+                :loading="mentions.loading.value"
+                :error="mentions.error.value"
+                :member-count="mentions.memberCount"
+                @choose="mentions.choose"
+                @active="mentions.activeIndex.value = $event"
+                @retry="mentions.retry"
+            />
             <div
                 ref="textareaRef"
                 contenteditable
+                role="textbox"
+                aria-label="Chat message"
+                aria-multiline="true"
+                :aria-expanded="mentions.open.value"
+                :aria-controls="mentions.open.value ? mentions.listId : undefined"
+                :aria-activedescendant="mentions.activeId.value"
+                :aria-autocomplete="mentions.open.value ? 'list' : undefined"
                 class="contenteditable text-soft-silk/80 custom_scroll mx-2 field-sizing-content
                     h-full w-full resize-none overflow-hidden overflow-y-auto rounded-xl border-2
-                    border-dashed border-transparent bg-transparent px-1 py-2.5 transition-all
-                    duration-200 ease-in-out outline-none"
+                    border-dashed border-transparent bg-transparent px-1 py-2.5 wrap-break-word
+                    whitespace-pre-wrap transition-all duration-200 ease-in-out outline-none"
                 data-placeholder="Type your message here..."
                 :class="{
                     'show-placeholder': isEmpty,
@@ -295,8 +323,11 @@ onMounted(() => {
                 autofocus
                 @input="onInput"
                 @wheel.passive="handleInputWheel"
-                @keydown.enter.exact.prevent="sendMessage"
-                @keydown.space.shift.exact.prevent="handleShiftSpace"
+                @keydown="handleKeydown"
+                @keyup="updateMentionCaret"
+                @click="mentions.sync(false)"
+                @focus="mentions.sync()"
+                @blur="mentions.blur"
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"

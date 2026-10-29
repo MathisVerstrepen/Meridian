@@ -18,15 +18,31 @@ const isEmptyLibrary = computed(
 const formHost = ref<HTMLElement | null>(null);
 const showTeams = ref(useRoute().query.view === 'teams');
 const preview = ref<AgentRecord>();
+const previewHost = ref<HTMLElement | null>(null);
+const previewPanelId = `agent-preview-${useId()}`;
+const actionPending = ref(false);
+let previewTrigger: HTMLElement | null = null;
+const openPreview = (agent: AgentRecord) => {
+    previewTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    preview.value = agent;
+    error.value = '';
+    nextTick(() => previewHost.value?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+};
+const closePreview = () => {
+    preview.value = undefined;
+    nextTick(() => {
+        if (previewTrigger?.isConnected) previewTrigger.focus();
+    });
+};
 const error = ref('');
 const views = [
-    ['my', 'My Agents'],
-    ['bookmarked', 'Bookmarked'],
-    ['forked', 'Forked'],
-    ['recent', 'Recently Used'],
-    ['team', 'Team Agents'],
-    ['marketplace', 'Marketplace'],
-    ['drafts', 'Drafts'],
+    ['my', 'My Agents', 'RiBrain2Line'],
+    ['bookmarked', 'Bookmarked', 'MdiBookmarkOutline'],
+    ['forked', 'Forked', 'MaterialSymbolsForkRightRounded'],
+    ['recent', 'Recently Used', 'MaterialSymbolsHistory'],
+    ['team', 'Team Agents', 'MaterialSymbolsAltRouteRounded'],
+    ['marketplace', 'Marketplace', 'MdiWeb'],
+    ['drafts', 'Drafts', 'MaterialSymbolsEditNoteOutlineRounded'],
 ];
 const refresh = () =>
     store.search({
@@ -48,11 +64,21 @@ onMounted(async () => {
 });
 const perform = async <T,>(action: () => Promise<T>) => {
     error.value = '';
+    actionPending.value = true;
     try {
         await action();
         await Promise.all([refresh(), store.loadLibrary()]);
+        if (preview.value) {
+            const id = preview.value.id;
+            preview.value =
+                store.items.find((item) => item.id === id) ??
+                store.library.find((item) => item.id === id) ??
+                preview.value;
+        }
     } catch (err) {
         error.value = runtimeErrorDetail(err) ?? 'Could not complete this action.';
+    } finally {
+        actionPending.value = false;
     }
 };
 const edit = (agent?: AgentRecord) => {
@@ -115,17 +141,18 @@ const importFile = async (event: Event) => {
                 </div>
                 <button
                     v-if="!showTeams"
-                    class="bg-ember-glow hover:bg-ember-glow/85 rounded-xl px-4 py-2.5 text-sm
-                        font-semibold transition-colors"
+                    aria-label="+ Create Agent"
+                    class="bg-ember-glow hover:bg-ember-glow/85 inline-flex items-center gap-2
+                        rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors"
                     @click="edit()"
                 >
-                    + Create Agent
+                    <UiIcon name="Fa6SolidPlus" class="size-3.5" /> Create Agent
                 </button>
                 <label
                     v-if="!showTeams"
-                    class="border-stone-gray/20 text-stone-gray hover:bg-stone-gray/5 cursor-pointer
-                        rounded-xl border px-4 py-2.5 text-sm"
-                    >Import JSON
+                    class="border-stone-gray/20 text-stone-gray hover:bg-stone-gray/5 inline-flex
+                        cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm"
+                    ><UiIcon name="MdiFolderUploadOutline" class="size-4" />Import JSON
                     <input
                         type="file"
                         accept="application/json,.json"
@@ -133,10 +160,14 @@ const importFile = async (event: Event) => {
                         @change="importFile"
                 /></label>
                 <button
-                    class="border-stone-gray/20 text-stone-gray hover:bg-stone-gray/5 rounded-xl
-                        border px-4 py-2.5 text-sm"
+                    class="border-stone-gray/20 text-stone-gray hover:bg-stone-gray/5 inline-flex
+                        items-center gap-2 rounded-xl border px-4 py-2.5 text-sm"
                     @click="showTeams = !showTeams"
                 >
+                    <UiIcon
+                        :name="showTeams ? 'RiBrain2Line' : 'MaterialSymbolsAltRouteRounded'"
+                        class="size-4"
+                    />
                     {{ showTeams ? 'Agent library' : 'Manage Teams' }}
                 </button>
             </div>
@@ -144,46 +175,60 @@ const importFile = async (event: Event) => {
             <template v-else>
                 <nav aria-label="Agent library views" class="flex flex-wrap gap-2">
                     <button
-                        v-for="[value, label] in views"
+                        v-for="[value, label, icon] in views"
                         :key="value"
-                        class="rounded-lg px-3 py-2 text-sm"
+                        class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
                         :class="view === value ? 'bg-ember-glow' : 'bg-anthracite'"
                         :aria-current="view === value ? 'page' : undefined"
                         @click="view = value ?? 'my'"
                     >
-                        {{ label }}
+                        <UiIcon :name="icon ?? 'RiBrain2Line'" class="size-4" />{{ label }}
                     </button>
                 </nav>
                 <div v-if="!isEmptyLibrary" class="flex flex-wrap items-center gap-3">
-                    <input
-                        v-model="q"
-                        aria-label="Search Agents"
-                        placeholder="Search your Agents…"
-                        class="bg-anthracite/25 border-stone-gray/20 focus:border-ember-glow/70
-                            min-w-48 flex-1 rounded-xl border px-3.5 py-2.5 text-sm outline-none"
-                    />
+                    <div class="relative min-w-48 flex-1">
+                        <UiIcon
+                            name="MdiMagnify"
+                            class="text-stone-gray/55 pointer-events-none absolute top-1/2 left-3
+                                size-4 -translate-y-1/2"
+                        />
+                        <input
+                            v-model="q"
+                            aria-label="Search Agents"
+                            placeholder="Search Agents…"
+                            class="bg-anthracite/25 border-stone-gray/20 focus:border-ember-glow/70
+                                w-full rounded-xl border py-2.5 pr-3.5 pl-9 text-sm outline-none"
+                        />
+                    </div>
                     <button
-                        class="border-stone-gray/20 text-stone-gray rounded-xl border px-3 py-2.5
-                            text-sm"
+                        class="border-stone-gray/20 text-stone-gray inline-flex items-center gap-2
+                            rounded-xl border px-3 py-2.5 text-sm"
                         :aria-expanded="filtersOpen"
                         @click="filtersOpen = !filtersOpen"
                     >
-                        Filters
+                        <UiIcon name="MdiFilterOutline" class="size-4" /> Filters
                     </button>
-                    <select
-                        v-model="sort"
-                        aria-label="Sort Agents"
-                        class="bg-anthracite/25 border-stone-gray/20 text-stone-gray rounded-xl
-                            border p-2.5 text-sm"
-                    >
-                        <option value="updated">Recently updated</option>
-                        <option value="newest">Newest</option>
-                        <option value="name">Name</option>
-                        <option value="rating">Highest rated</option>
-                        <option value="bookmarks">Most bookmarked</option>
-                        <option value="forks">Most forked</option>
-                        <option value="usage">Most used</option>
-                    </select>
+                    <div class="relative">
+                        <UiIcon
+                            name="HeroiconsChevronUpDown16Solid"
+                            class="text-stone-gray/60 pointer-events-none absolute top-1/2 left-3
+                                size-4 -translate-y-1/2"
+                        />
+                        <select
+                            v-model="sort"
+                            aria-label="Sort Agents"
+                            class="bg-anthracite/25 border-stone-gray/20 text-stone-gray rounded-xl
+                                border py-2.5 pr-2.5 pl-9 text-sm"
+                        >
+                            <option value="updated">Recently updated</option>
+                            <option value="newest">Newest</option>
+                            <option value="name">Name</option>
+                            <option value="rating">Highest rated</option>
+                            <option value="bookmarks">Most bookmarked</option>
+                            <option value="forks">Most forked</option>
+                            <option value="usage">Most used</option>
+                        </select>
+                    </div>
                 </div>
                 <div v-if="filtersOpen" class="grid gap-3 sm:grid-cols-3">
                     <label
@@ -231,13 +276,32 @@ const importFile = async (event: Event) => {
                 <p v-else-if="!store.items.length && !isEmptyLibrary">
                     No Agents found. Create an Agent or adjust your filters.
                 </p>
+                <div v-if="preview" ref="previewHost" class="scroll-mt-5">
+                    <UiLibraryAgentPreview
+                        :id="previewPanelId"
+                        :key="preview.id"
+                        :agent="preview"
+                        :owned="store.library.some((item) => item.id === preview?.id)"
+                        :admin="user?.is_admin"
+                        :pending="actionPending"
+                        :error="error || store.error"
+                        @close="closePreview"
+                        @edit="edit(preview)"
+                        @fork="perform(() => store.fork(preview!.id))"
+                        @bookmark="perform(() => store.bookmark(preview!))"
+                        @rate="(rating) => perform(() => store.rate(preview!.id, rating))"
+                        @verify="perform(() => store.verify(preview!.id, !preview!.verified))"
+                    />
+                </div>
                 <div class="grid gap-4 lg:grid-cols-2">
                     <UiLibraryAgentCard
                         v-for="agent in store.items"
                         :key="agent.id"
                         :agent="agent"
                         :owned="store.library.some((item) => item.id === agent.id)"
-                        @preview="preview = agent"
+                        :selected="preview?.id === agent.id"
+                        :preview-id="previewPanelId"
+                        @preview="openPreview(agent)"
                         @edit="edit(agent)"
                         @fork="perform(() => store.fork(agent.id))"
                         @bookmark="perform(() => store.bookmark(agent))"
@@ -277,54 +341,8 @@ const importFile = async (event: Event) => {
                         Next
                     </button>
                 </div>
-                <details v-if="preview" open class="border-stone-gray/20 rounded-xl border p-5">
-                    <summary class="font-semibold">{{ preview.profile.name }} · Preview</summary>
-                    <p class="mt-2">{{ preview.profile.description }}</p>
-                    <p class="mt-2 text-sm">
-                        Model: {{ preview.profile.model_settings.model }} · Tools:
-                        {{ preview.profile.tools.join(', ') || 'None' }}
-                    </p>
-                    <p v-if="preview.source_id" class="mt-2 text-xs">
-                        Forked from {{ preview.source_id }} v{{ preview.source_version }}
-                    </p>
-                    <div
-                        v-for="(layer, index) in preview.profile.prompt_stack"
-                        :key="index"
-                        class="mt-3"
-                    >
-                        <strong>{{ layer.name }} {{ layer.enabled ? '' : '(disabled)' }}</strong>
-                        <p class="text-sm whitespace-pre-wrap">{{ layer.text }}</p>
-                    </div>
-                    <label class="mt-4 block"
-                        >Your rating
-                        <select
-                            :value="preview.my_rating ?? ''"
-                            class="bg-anthracite rounded-lg p-2"
-                            @change="
-                                perform(() =>
-                                    store.rate(
-                                        preview!.id,
-                                        Number(($event.target as HTMLSelectElement).value),
-                                    ),
-                                )
-                            "
-                        >
-                            <option value="" disabled>Rate 1–5</option>
-                            <option v-for="rating in 5" :key="rating" :value="rating">
-                                {{ rating }}
-                            </option>
-                        </select>
-                    </label>
-                    <button
-                        v-if="user?.is_admin"
-                        class="mt-3 underline"
-                        @click="perform(() => store.verify(preview!.id, !preview!.verified))"
-                    >
-                        {{ preview.verified ? 'Remove verification' : 'Verify by Meridian' }}
-                    </button>
-                </details>
             </template>
-            <p v-if="error || store.error" role="alert" class="text-red-400">
+            <p v-if="(error || store.error) && !preview" role="alert" class="text-red-400">
                 {{ error || store.error }}
             </p>
         </template>

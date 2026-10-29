@@ -15,7 +15,7 @@ export const AGENT_TOOLS = [
     {
         value: ToolEnum.WEB_SEARCH,
         name: 'Web search',
-        icon: 'MdiLinkVariant',
+        icon: 'MdiWeb',
         description: 'Find current information and read the sources.',
     },
     {

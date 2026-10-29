@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import type { AgentRecord } from '../../app/types/agent';
+import { ToolEnum } from '../../app/types/enums';
 import { createAgentDraft } from '../../app/utils/agentEditor';
 import { isJsonObject } from '../../app/utils/runtimeTypes';
 import {
@@ -369,4 +371,157 @@ test('description generation is available after instructions and preserves manua
     await generate.click();
     await expect(editor.getByRole('alert')).toHaveText('Please try again.');
     await expect(description).toHaveValue('Researches reliable sources and cites evidence.');
+});
+
+test('editing shows a visibility chip and a responsive save bar with pending feedback @smoke', async ({
+    page,
+}, testInfo) => {
+    await page.setViewportSize({ width: 1360, height: 900 });
+    await mockSettings(page, { existing: true });
+    const entry = record();
+    await page.route(`**/api/agents/${entry.id}/versions`, (r) => r.fulfill({ json: [] }));
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route(`**/api/agents/${entry.id}`, async (r) => {
+        const body: JsonValue = r.request().postDataJSON();
+        await pending;
+        return r.fulfill({ json: { ...entry, profile: body, version: 2 } });
+    });
+    await mountSettings(page);
+    await page.getByRole('button', { name: 'Edit Agent', exact: true }).click();
+    const editor = page.getByRole('form', { name: 'Agent editor' });
+    const preview = editor.getByRole('complementary', { name: 'Agent preview' });
+    const privateChip = preview.getByLabel('Agent visibility: Private');
+    await expect(privateChip).toHaveText('Private');
+    await expect(privateChip.locator('svg')).toHaveCount(1);
+    await expect(preview).not.toContainText('Only you can access');
+    await expect(preview).not.toContainText('Default Team');
+    await editor.locator('summary').filter({ hasText: 'Visibility & availability' }).click();
+    await editor.getByRole('combobox', { name: /^Visibility/ }).selectOption('public');
+    await expect(preview.getByLabel('Agent visibility: Public')).toHaveText('Public');
+    await expect(preview.getByLabel('Agent visibility: Public').locator('svg')).toHaveCount(1);
+    const bar = editor.locator('footer[aria-label="Agent save actions"]');
+    const save = bar.getByRole('button', { name: 'Save changes', exact: true });
+    await expect(bar).toHaveCSS('position', 'sticky');
+    await expect(bar).toHaveCSS('backdrop-filter', 'none');
+    await expect(bar).toContainText('Editing v1');
+    await editor
+        .getByRole('button', { name: 'Agent library', exact: true })
+        .scrollIntoViewIfNeeded();
+    await expect(save).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath('agent-save-bar-desktop.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await save.scrollIntoViewIfNeeded();
+    await expect(save).toBeInViewport();
+    await expect(bar.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
+    expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('agent-save-bar-mobile.png') });
+    await save.click();
+    await expect(bar.getByRole('status')).toHaveText('Saving your Agent…');
+    await expect(bar.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+    await expect(bar.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    release?.();
+    await expect(page.getByRole('heading', { name: 'Your Agent library' })).toBeVisible();
+});
+
+test('library preview shows readable metadata and updates ratings and bookmarks @smoke', async ({
+    page,
+}, testInfo) => {
+    await mockSettings(page, { existing: true });
+    let current: AgentRecord = {
+        ...record(),
+        usage_count: 12,
+        profile: {
+            ...existingProfile,
+            description: 'Researches sources and summarizes the evidence.',
+            tags: ['research'],
+            tools: [ToolEnum.WEB_SEARCH, ToolEnum.LINK_EXTRACTION],
+            prompt_stack: [
+                {
+                    name: 'Research instructions',
+                    text: Array.from(
+                        { length: 100 },
+                        (_, i) => `Research step ${i + 1}: verify the evidence.`,
+                    ).join('\n'),
+                    enabled: true,
+                },
+                { name: 'Optional style', text: 'Use short paragraphs.', enabled: false },
+            ],
+        },
+    };
+    await page.route('**/api/agents?**', (r) =>
+        r.fulfill({ json: { items: [current], total: 1 } }),
+    );
+    await page.route(`**/api/agents/${current.id}/bookmark`, (r) => {
+        current = { ...current, bookmarked: r.request().method() === 'PUT' };
+        return r.fulfill({ json: { bookmarked: current.bookmarked } });
+    });
+    await page.route(`**/api/agents/${current.id}/rating`, (r) => {
+        const body: JsonValue = r.request().postDataJSON();
+        if (!isJsonObject(body)) throw new Error('Expected rating');
+        const value = Number(body.value);
+        current = { ...current, my_rating: value, rating_average: value, rating_count: 1 };
+        return r.fulfill({ json: { rating: value } });
+    });
+    await mountSettings(page);
+    const card = page
+        .locator('article')
+        .filter({ has: page.getByRole('button', { name: 'Preview Web Researcher', exact: true }) });
+    await expect(
+        card.getByRole('button', { name: 'Edit Agent', exact: true }).locator('svg'),
+    ).toHaveCount(1);
+    await expect(card).not.toContainText('@web-researcher');
+    const trigger = card.getByRole('button', { name: 'Preview', exact: true });
+    await trigger.click();
+    const preview = page.getByRole('region', { name: 'Agent preview', exact: true });
+    await expect(
+        preview.getByRole('heading', { name: 'Web Researcher', exact: true }),
+    ).toBeFocused();
+    await expect(preview.getByRole('region', { name: 'Agent model preview' })).toContainText(
+        'Meridian Balanced',
+    );
+    await expect(preview.getByRole('region', { name: 'Agent tools preview' })).toContainText(
+        'Web search',
+    );
+    await expect(preview).not.toContainText('link_extraction');
+    const instructions = preview
+        .getByRole('region', { name: 'Agent instructions preview' })
+        .locator('.overflow-y-auto');
+    const dimensions = await instructions.evaluate((el) => ({
+        client: el.clientHeight,
+        scroll: el.scrollHeight,
+    }));
+    expect(dimensions.client).toBeLessThanOrEqual(288);
+    expect(dimensions.scroll).toBeGreaterThan(dimensions.client);
+    await preview.getByRole('button', { name: 'Rate 4 of 5', exact: true }).click();
+    await expect(preview.getByRole('button', { name: 'Rate 4 of 5', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+    );
+    await expect(preview).toContainText('4.0 / 5');
+    await preview.getByRole('button', { name: 'Bookmark', exact: true }).click();
+    await expect(preview.getByRole('button', { name: 'Bookmarked', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+    );
+    await preview.getByRole('button', { name: 'Rate 2 of 5', exact: true }).click();
+    await expect(preview).toContainText('2.0 / 5');
+    expect(current.rating_count).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath('agent-library-preview.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await preview.getByRole('button', { name: 'Close Agent preview' }).click();
+    await expect(preview).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    const more = card.locator('summary');
+    await more.click();
+    await expect(card.getByRole('button', { name: 'Export JSON', exact: true })).toBeVisible();
+    await more.press('Escape');
+    await expect(card.getByRole('button', { name: 'Export JSON', exact: true })).not.toBeVisible();
 });

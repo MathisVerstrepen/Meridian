@@ -40,7 +40,7 @@ const dateLabel = (date: string) =>
 <template>
     <form
         ref="form"
-        class="text-soft-silk mx-auto w-full max-w-5xl"
+        class="text-soft-silk mx-auto w-full max-w-5xl pb-4"
         aria-label="Agent editor"
         @submit.prevent="!generatingDescription && save(props.agent ? null : 'active')"
     >
@@ -228,9 +228,26 @@ const dateLabel = (date: string) =>
                     p-5 xl:block"
                 aria-label="Agent preview"
             >
-                <p class="text-stone-gray/45 mb-5 text-xs font-medium tracking-wider uppercase">
-                    Your Agent
-                </p>
+                <div class="mb-5 flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-stone-gray/45 text-xs font-medium tracking-wider uppercase">
+                        Your Agent
+                    </p>
+                    <span
+                        class="border-stone-gray/15 bg-stone-gray/5 text-stone-gray inline-flex
+                            items-center gap-1.5 rounded-full border px-2 py-1 text-xs"
+                        :aria-label="`Agent visibility: ${profile.visibility === 'private' ? 'Private' : 'Public'}`"
+                    >
+                        <UiIcon
+                            :name="
+                                profile.visibility === 'private'
+                                    ? 'MaterialSymbolsLockOutline'
+                                    : 'MdiWeb'
+                            "
+                            class="size-3.5"
+                        />
+                        {{ profile.visibility === 'private' ? 'Private' : 'Public' }}
+                    </span>
+                </div>
                 <div
                     class="mb-4 flex size-12 items-center justify-center rounded-2xl"
                     :style="{
@@ -261,33 +278,51 @@ const dateLabel = (date: string) =>
                                 : 'Responds without external tools'
                         }}
                     </p>
-                    <p class="text-stone-gray/55">
-                        {{
-                            profile.visibility === 'private'
-                                ? 'Only you can access this Agent.'
-                                : 'Visible in the Agent marketplace.'
-                        }}
-                    </p>
                 </div>
-                <p class="text-stone-gray/50 mt-5 text-xs leading-relaxed">
-                    Available through your Default Team. Add it to other Teams in your library.
-                </p>
             </aside>
         </div>
         <footer
-            class="bg-obsidian/95 border-stone-gray/15 sticky -bottom-1 z-10 mt-8 flex flex-wrap
-                items-center justify-between gap-3 border-t py-4 backdrop-blur-xl"
+            aria-label="Agent save actions"
+            class="bg-anthracite border-stone-gray/20 sticky bottom-3 z-10 mt-8 flex flex-wrap
+                items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-xl"
         >
-            <p v-if="error" role="alert" class="w-full text-sm text-red-400">{{ error }}</p>
-            <span class="text-stone-gray/60 text-xs"
-                >{{
-                    profile.visibility === 'private'
-                        ? 'Private to your library'
-                        : 'Shared in the marketplace'
-                }}
-                · {{ props.agent ? 'Saves a new version' : 'Ready to use after creation' }}</span
+            <p
+                v-if="error"
+                role="alert"
+                class="w-full rounded-lg bg-red-400/5 px-3 py-2 text-sm text-red-400"
             >
-            <div class="ml-auto flex items-center gap-3">
+                {{ error }}
+            </p>
+            <p class="text-stone-gray/80 flex items-center gap-2 text-xs" role="status">
+                <UiIcon
+                    :name="props.agent ? 'MaterialSymbolsHistory' : 'RiBrain2Line'"
+                    class="size-4 shrink-0"
+                />
+                {{
+                    generatingDescription
+                        ? 'Generating description…'
+                        : saving
+                          ? 'Saving your Agent…'
+                          : props.agent
+                            ? `Editing v${props.agent.version} · Saves a new version`
+                            : 'Ready to use after creation'
+                }}
+            </p>
+            <div
+                class="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:ml-auto
+                    sm:flex sm:w-auto"
+            >
+                <button
+                    v-if="props.agent"
+                    type="button"
+                    :disabled="saving || generatingDescription"
+                    class="text-stone-gray hover:text-soft-silk border-stone-gray/20
+                        hover:bg-stone-gray/5 rounded-xl border px-4 py-2.5 text-sm
+                        transition-colors disabled:opacity-40"
+                    @click="emit('close')"
+                >
+                    Cancel
+                </button>
                 <button
                     v-if="!props.agent"
                     type="button"
@@ -301,14 +336,16 @@ const dateLabel = (date: string) =>
                 <button
                     type="submit"
                     :disabled="saving || generatingDescription"
-                    class="bg-ember-glow hover:bg-ember-glow/85 flex items-center gap-2 rounded-xl
-                        px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-wait
-                        disabled:opacity-50"
+                    class="bg-ember-glow hover:bg-ember-glow/85 focus-visible:outline-ember-glow
+                        flex min-w-36 items-center justify-center gap-2 rounded-xl px-5 py-2.5
+                        text-sm font-semibold transition-colors focus-visible:outline-2
+                        focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-50"
                 >
                     <UiIcon
-                        :name="saving ? 'MynauiSparklesSolid' : 'MaterialSymbolsCheckSmallRounded'"
+                        :name="
+                            saving ? 'LineMdLoadingTwotoneLoop' : 'MaterialSymbolsCheckSmallRounded'
+                        "
                         class="size-5"
-                        :class="saving ? 'animate-pulse' : ''"
                     />
                     {{
                         saving && saveIntent !== 'draft'

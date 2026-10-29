@@ -289,3 +289,92 @@ test('Agent canvas restores the original sand palette and keeps tools off the no
     await expect(node.getByTestId('subagent-disclosure-panel')).toHaveCount(0);
     await node.screenshot({ path: testInfo.outputPath('agent-node-sand.png') });
 });
+
+test('Team mention picker supports arrows Tab Enter and Escape without premature submission @smoke', async ({
+    page,
+}, testInfo) => {
+    const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+    const menu = page.getByTestId('team-mention-menu');
+    await input.fill('@');
+    await expect(menu).toBeVisible();
+    await expect(menu).toContainText('Tab / ↵');
+    const defaultTeam = page.getByRole('option', { name: '@default · Default Team', exact: true });
+    const research = page.getByRole('option', { name: '@research · Research Team', exact: true });
+    await expect(defaultTeam).toHaveAttribute('aria-selected', 'true');
+    await input.press('ArrowDown');
+    await expect(research).toHaveAttribute('aria-selected', 'true');
+    await expect(input).toHaveAttribute(
+        'aria-activedescendant',
+        (await research.getAttribute('id')) ?? '',
+    );
+    await input.press('Tab');
+    await expect(input).toBeFocused();
+    await expect(input).toHaveText('@research');
+    await expect(menu).toHaveCount(0);
+    await expect(page.getByTestId('mutation-count')).toHaveText('0');
+    await input.pressSequentially('Find sources');
+    await expect(input).toHaveText('@research Find sources');
+    await input.fill('@def');
+    await input.press('Enter');
+    await expect(input).toHaveText('@default');
+    await expect(menu).toHaveCount(0);
+    await expect(page.getByTestId('mutation-count')).toHaveText('0');
+    await input.fill('@res');
+    await input.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await input.press('Tab');
+    await expect(input).not.toBeFocused();
+    await input.fill('hello @');
+    await expect(menu).toHaveCount(0);
+    await input.fill('@');
+    await input.evaluate((el) =>
+        el.dispatchEvent(
+            new KeyboardEvent('keydown', {
+                key: 'Enter',
+                isComposing: true,
+                bubbles: true,
+                cancelable: true,
+            }),
+        ),
+    );
+    await expect(input).toHaveText('@');
+    await expect(menu).toBeVisible();
+    await expect(page.getByTestId('mutation-count')).toHaveText('0');
+    await menu.screenshot({ path: testInfo.outputPath('team-mention-menu.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const menuBox = await menu.boundingBox();
+    expect(menuBox).toBeTruthy();
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(390);
+});
+
+test('Team mention completion preserves existing task text and accepts case-insensitive queries @smoke', async ({
+    page,
+}) => {
+    const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+    await input.fill('@RES');
+    await expect(
+        page.getByRole('option', { name: '@research · Research Team', exact: true }),
+    ).toBeVisible();
+    await input.press('Tab');
+    await expect(input).toHaveText('@research');
+    await input.fill('@res existing task');
+    await input.evaluate((el) => {
+        const range = document.createRange();
+        range.setStart(el.firstChild!, 4);
+        range.collapse(true);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await expect(page.getByRole('listbox', { name: 'Team mentions' })).toBeVisible();
+    await input.press('Tab');
+    await expect(input).toHaveText('@research existing task');
+    await input.pressSequentially('new ');
+    await expect(input).toHaveText('@research new existing task');
+    await input.fill('@unknown');
+    await expect(page.getByTestId('team-mention-menu')).toContainText('No Teams match @unknown');
+    await input.press('Enter');
+    await expect(page.getByTestId('mutation-count')).toHaveText('0');
+    await expect(input).toHaveText('@unknown');
+});
